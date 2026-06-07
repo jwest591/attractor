@@ -1,0 +1,6 @@
+build/
+vcpkg_installed/
+.cache/
+*.swp
+*.swo
+.DS_Store

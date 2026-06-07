@@ -1,0 +1,7 @@
+#ifndef ATTRACTOR_BACKENDS_NOOP_BACKEND_HPP
+#define ATTRACTOR_BACKENDS_NOOP_BACKEND_HPP
+
+namespace attractor {
+}  // namespace attractor
+
+#endif  // ATTRACTOR_BACKENDS_NOOP_BACKEND_HPP

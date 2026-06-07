@@ -1,0 +1,12 @@
+{
+  "name": "attractor",
+  "version": "0.1.0",
+  "dependencies": [
+    "type-safe",
+    "nlohmann-json",
+    "cli11",
+    "snitch",
+    "stdexec",
+    "cpp-httplib"
+  ]
+}
