@@ -1,9 +1,18 @@
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(type_safe CONFIG REQUIRED)
 
+# vcpkg's type_safe port creates 'type_safe'; local source-install creates 'type_safe::type_safe'
+if(TARGET type_safe::type_safe)
+    set(TYPE_SAFE_TARGET type_safe::type_safe)
+else()
+    set(TYPE_SAFE_TARGET type_safe)
+endif()
+
 add_library(attractor STATIC
     attractor.cpp
     types.cpp
+    graph.cpp
+    dot_parser.cpp
 )
 
 add_library(attractor::attractor ALIAS attractor)
@@ -17,7 +26,7 @@ target_include_directories(attractor
 target_link_libraries(attractor
     PUBLIC
         nlohmann_json::nlohmann_json
-        type_safe::type_safe
+        ${TYPE_SAFE_TARGET}
 )
 
 set_target_properties(attractor PROPERTIES

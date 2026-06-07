@@ -2,6 +2,7 @@ find_package(snitch CONFIG REQUIRED)
 
 # ── Unit test executable ──────────────────────────────────────────────────────
 add_executable(attractor_unit_tests
+    support/main_stub.cpp
     unit/types_test.cpp
     unit/dot_parser_test.cpp
     unit/graph_model_test.cpp
@@ -46,6 +47,7 @@ target_include_directories(attractor_unit_tests
 
 # ── Integration test executable ───────────────────────────────────────────────
 add_executable(attractor_integration_tests
+    support/main_stub.cpp
     integration/smoke_test.cpp
     integration/parity_matrix_test.cpp
 )
