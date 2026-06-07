@@ -9,53 +9,138 @@ namespace attractor {
 
 void to_json(nlohmann::json& j, const NodeId& v) { j = type_safe::get(v); }
 
-void from_json(const nlohmann::json& j, NodeId& v) { v = NodeId{j.get<std::string>()}; }
+void from_json(const nlohmann::json& j, NodeId& v)
+{
+    if (!j.is_string()) {
+        throw nlohmann::json::type_error::create(302, "NodeId requires a string, got: " + std::string{j.type_name()},
+                                                 &j);
+    }
+    v = NodeId{j.get<std::string>()};
+}
 
 void to_json(nlohmann::json& j, const EdgeLabel& v) { j = type_safe::get(v); }
 
-void from_json(const nlohmann::json& j, EdgeLabel& v) { v = EdgeLabel{j.get<std::string>()}; }
+void from_json(const nlohmann::json& j, EdgeLabel& v)
+{
+    if (!j.is_string()) {
+        throw nlohmann::json::type_error::create(302, "EdgeLabel requires a string, got: " + std::string{j.type_name()},
+                                                 &j);
+    }
+    v = EdgeLabel{j.get<std::string>()};
+}
 
 void to_json(nlohmann::json& j, const ArtifactId& v) { j = type_safe::get(v); }
 
-void from_json(const nlohmann::json& j, ArtifactId& v) { v = ArtifactId{j.get<std::string>()}; }
+void from_json(const nlohmann::json& j, ArtifactId& v)
+{
+    if (!j.is_string()) {
+        throw nlohmann::json::type_error::create(
+            302, "ArtifactId requires a string, got: " + std::string{j.type_name()}, &j);
+    }
+    v = ArtifactId{j.get<std::string>()};
+}
 
 void to_json(nlohmann::json& j, const HandlerTypeName& v) { j = type_safe::get(v); }
 
-void from_json(const nlohmann::json& j, HandlerTypeName& v) { v = HandlerTypeName{j.get<std::string>()}; }
+void from_json(const nlohmann::json& j, HandlerTypeName& v)
+{
+    if (!j.is_string()) {
+        throw nlohmann::json::type_error::create(
+            302, "HandlerTypeName requires a string, got: " + std::string{j.type_name()}, &j);
+    }
+    v = HandlerTypeName{j.get<std::string>()};
+}
 
 void to_json(nlohmann::json& j, const ContextKey& v) { j = type_safe::get(v); }
 
-void from_json(const nlohmann::json& j, ContextKey& v) { v = ContextKey{j.get<std::string>()}; }
+void from_json(const nlohmann::json& j, ContextKey& v)
+{
+    if (!j.is_string()) {
+        throw nlohmann::json::type_error::create(
+            302, "ContextKey requires a string, got: " + std::string{j.type_name()}, &j);
+    }
+    v = ContextKey{j.get<std::string>()};
+}
 
 void to_json(nlohmann::json& j, const ThreadId& v) { j = type_safe::get(v); }
 
-void from_json(const nlohmann::json& j, ThreadId& v) { v = ThreadId{j.get<std::string>()}; }
+void from_json(const nlohmann::json& j, ThreadId& v)
+{
+    if (!j.is_string()) {
+        throw nlohmann::json::type_error::create(302, "ThreadId requires a string, got: " + std::string{j.type_name()},
+                                                 &j);
+    }
+    v = ThreadId{j.get<std::string>()};
+}
 
 void to_json(nlohmann::json& j, const PromptText& v) { j = type_safe::get(v); }
 
-void from_json(const nlohmann::json& j, PromptText& v) { v = PromptText{j.get<std::string>()}; }
+void from_json(const nlohmann::json& j, PromptText& v)
+{
+    if (!j.is_string()) {
+        throw nlohmann::json::type_error::create(
+            302, "PromptText requires a string, got: " + std::string{j.type_name()}, &j);
+    }
+    v = PromptText{j.get<std::string>()};
+}
 
 void to_json(nlohmann::json& j, const GoalText& v) { j = type_safe::get(v); }
 
-void from_json(const nlohmann::json& j, GoalText& v) { v = GoalText{j.get<std::string>()}; }
+void from_json(const nlohmann::json& j, GoalText& v)
+{
+    if (!j.is_string()) {
+        throw nlohmann::json::type_error::create(302, "GoalText requires a string, got: " + std::string{j.type_name()},
+                                                 &j);
+    }
+    v = GoalText{j.get<std::string>()};
+}
 
 void to_json(nlohmann::json& j, const LogsRoot& v) { j = type_safe::get(v); }
 
-void from_json(const nlohmann::json& j, LogsRoot& v) { v = LogsRoot{j.get<std::string>()}; }
+void from_json(const nlohmann::json& j, LogsRoot& v)
+{
+    if (!j.is_string()) {
+        throw nlohmann::json::type_error::create(302, "LogsRoot requires a string, got: " + std::string{j.type_name()},
+                                                 &j);
+    }
+    v = LogsRoot{j.get<std::string>()};
+}
 
 // ── Int constrained types ─────────────────────────────────────────────────────
 
 void to_json(nlohmann::json& j, const MaxRetries& v) { j = v.get_value(); }
 
-void from_json(const nlohmann::json& j, MaxRetries& v) { v = MaxRetries{j.get<int>()}; }
+void from_json(const nlohmann::json& j, MaxRetries& v)
+{
+    auto val = j.get<int>();
+    if (!max_retries_constraint{}(val)) {
+        throw nlohmann::json::other_error::create(501, "MaxRetries value must be >= 0, got: " + std::to_string(val),
+                                                  &j);
+    }
+    v = MaxRetries{val};
+}
 
 void to_json(nlohmann::json& j, const Weight& v) { j = v.get_value(); }
 
-void from_json(const nlohmann::json& j, Weight& v) { v = Weight{j.get<int>()}; }
+void from_json(const nlohmann::json& j, Weight& v)
+{
+    auto val = j.get<int>();
+    if (!weight_constraint{}(val)) {
+        throw nlohmann::json::other_error::create(501, "Weight value must be >= 0, got: " + std::to_string(val), &j);
+    }
+    v = Weight{val};
+}
 
 void to_json(nlohmann::json& j, const Port& v) { j = v.get_value(); }
 
-void from_json(const nlohmann::json& j, Port& v) { v = Port{j.get<int>()}; }
+void from_json(const nlohmann::json& j, Port& v)
+{
+    auto val = j.get<int>();
+    if (!port_constraint{}(val)) {
+        throw nlohmann::json::other_error::create(501, "Port value must be 1-65535, got: " + std::to_string(val), &j);
+    }
+    v = Port{val};
+}
 
 // ── TimeoutDuration: serialize as int64 milliseconds ─────────────────────────
 
@@ -63,7 +148,12 @@ void to_json(nlohmann::json& j, const TimeoutDuration& v) { j = v.get_value().co
 
 void from_json(const nlohmann::json& j, TimeoutDuration& v)
 {
-    v = TimeoutDuration{std::chrono::milliseconds{j.get<int64_t>()}};
+    auto ms = std::chrono::milliseconds{j.get<int64_t>()};
+    if (!positive_duration_constraint{}(ms)) {
+        throw nlohmann::json::other_error::create(
+            501, "TimeoutDuration must be > 0 ms, got: " + std::to_string(ms.count()), &j);
+    }
+    v = TimeoutDuration{ms};
 }
 
 // ── Enum classes ──────────────────────────────────────────────────────────────
@@ -78,23 +168,25 @@ static const std::pair<StageStatus, std::string_view> k_stage_status_map[] = {
 
 void to_json(nlohmann::json& j, StageStatus v)
 {
-    for (const auto& [enumerator, name] : k_stage_status_map)
+    for (const auto& [enumerator, name] : k_stage_status_map) {
         if (enumerator == v) {
             j = name;
             return;
         }
+    }
     j = nullptr;
 }
 
 void from_json(const nlohmann::json& j, StageStatus& v)
 {
     auto s = j.get<std::string>();
-    for (const auto& [enumerator, name] : k_stage_status_map)
+    for (const auto& [enumerator, name] : k_stage_status_map) {
         if (name == s) {
             v = enumerator;
             return;
         }
-    v = k_stage_status_map[0].first;
+    }
+    throw nlohmann::json::other_error::create(501, "unknown StageStatus: " + s, &j);
 }
 
 static const std::pair<Severity, std::string_view> k_severity_map[] = {
@@ -105,23 +197,25 @@ static const std::pair<Severity, std::string_view> k_severity_map[] = {
 
 void to_json(nlohmann::json& j, Severity v)
 {
-    for (const auto& [enumerator, name] : k_severity_map)
+    for (const auto& [enumerator, name] : k_severity_map) {
         if (enumerator == v) {
             j = name;
             return;
         }
+    }
     j = nullptr;
 }
 
 void from_json(const nlohmann::json& j, Severity& v)
 {
     auto s = j.get<std::string>();
-    for (const auto& [enumerator, name] : k_severity_map)
+    for (const auto& [enumerator, name] : k_severity_map) {
         if (name == s) {
             v = enumerator;
             return;
         }
-    v = k_severity_map[0].first;
+    }
+    throw nlohmann::json::other_error::create(501, "unknown Severity: " + s, &j);
 }
 
 static const std::pair<QuestionType, std::string_view> k_question_type_map[] = {
@@ -133,23 +227,25 @@ static const std::pair<QuestionType, std::string_view> k_question_type_map[] = {
 
 void to_json(nlohmann::json& j, QuestionType v)
 {
-    for (const auto& [enumerator, name] : k_question_type_map)
+    for (const auto& [enumerator, name] : k_question_type_map) {
         if (enumerator == v) {
             j = name;
             return;
         }
+    }
     j = nullptr;
 }
 
 void from_json(const nlohmann::json& j, QuestionType& v)
 {
     auto s = j.get<std::string>();
-    for (const auto& [enumerator, name] : k_question_type_map)
+    for (const auto& [enumerator, name] : k_question_type_map) {
         if (name == s) {
             v = enumerator;
             return;
         }
-    v = k_question_type_map[0].first;
+    }
+    throw nlohmann::json::other_error::create(501, "unknown QuestionType: " + s, &j);
 }
 
 static const std::pair<FidelityMode, std::string_view> k_fidelity_mode_map[] = {
@@ -163,23 +259,25 @@ static const std::pair<FidelityMode, std::string_view> k_fidelity_mode_map[] = {
 
 void to_json(nlohmann::json& j, FidelityMode v)
 {
-    for (const auto& [enumerator, name] : k_fidelity_mode_map)
+    for (const auto& [enumerator, name] : k_fidelity_mode_map) {
         if (enumerator == v) {
             j = name;
             return;
         }
+    }
     j = nullptr;
 }
 
 void from_json(const nlohmann::json& j, FidelityMode& v)
 {
     auto s = j.get<std::string>();
-    for (const auto& [enumerator, name] : k_fidelity_mode_map)
+    for (const auto& [enumerator, name] : k_fidelity_mode_map) {
         if (name == s) {
             v = enumerator;
             return;
         }
-    v = k_fidelity_mode_map[0].first;
+    }
+    throw nlohmann::json::other_error::create(501, "unknown FidelityMode: " + s, &j);
 }
 
 }  // namespace attractor

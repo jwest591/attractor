@@ -289,3 +289,72 @@ SNITCH_TEST_CASE("[types] all FidelityMode values exist")
     [[maybe_unused]] auto f5 = FidelityMode::summary_medium;
     [[maybe_unused]] auto f6 = FidelityMode::summary_high;
 }
+
+// from_json error paths: unknown enum strings throw
+
+SNITCH_TEST_CASE("[types] StageStatus from_json unknown string throws")
+{
+    using namespace attractor;
+    nlohmann::json j = "bogus";
+    StageStatus v{};
+    SNITCH_CHECK_THROWS_AS(from_json(j, v), nlohmann::json::exception);
+}
+
+SNITCH_TEST_CASE("[types] Severity from_json unknown string throws")
+{
+    using namespace attractor;
+    nlohmann::json j = "bogus";
+    Severity v{};
+    SNITCH_CHECK_THROWS_AS(from_json(j, v), nlohmann::json::exception);
+}
+
+SNITCH_TEST_CASE("[types] QuestionType from_json unknown string throws")
+{
+    using namespace attractor;
+    nlohmann::json j = "bogus";
+    QuestionType v{};
+    SNITCH_CHECK_THROWS_AS(from_json(j, v), nlohmann::json::exception);
+}
+
+SNITCH_TEST_CASE("[types] FidelityMode from_json unknown string throws")
+{
+    using namespace attractor;
+    nlohmann::json j = "bogus";
+    FidelityMode v{};
+    SNITCH_CHECK_THROWS_AS(from_json(j, v), nlohmann::json::exception);
+}
+
+// from_json error paths: constrained type violations throw
+
+SNITCH_TEST_CASE("[types] MaxRetries from_json negative value throws")
+{
+    using namespace attractor;
+    nlohmann::json j = -1;
+    MaxRetries v{0};
+    SNITCH_CHECK_THROWS_AS(from_json(j, v), nlohmann::json::exception);
+}
+
+SNITCH_TEST_CASE("[types] Weight from_json negative value throws")
+{
+    using namespace attractor;
+    nlohmann::json j = -1;
+    Weight v{0};
+    SNITCH_CHECK_THROWS_AS(from_json(j, v), nlohmann::json::exception);
+}
+
+SNITCH_TEST_CASE("[types] Port from_json out-of-range value throws")
+{
+    using namespace attractor;
+    nlohmann::json j = 0;
+    Port v{1};
+    SNITCH_CHECK_THROWS_AS(from_json(j, v), nlohmann::json::exception);
+}
+
+SNITCH_TEST_CASE("[types] TimeoutDuration from_json zero value throws")
+{
+    using namespace attractor;
+    using namespace std::chrono;
+    nlohmann::json j = int64_t{0};
+    TimeoutDuration v{milliseconds{1}};
+    SNITCH_CHECK_THROWS_AS(from_json(j, v), nlohmann::json::exception);
+}
