@@ -12,23 +12,23 @@ namespace attractor {
 
 struct Node {
     NodeId id;
-    std::string label;
-    std::string shape{"box"};
+    NodeLabel label;
+    NodeShape shape{"box"};
     HandlerTypeName node_type;
     PromptText prompt;
     std::optional<MaxRetries> max_retries;
-    bool goal_gate{false};
+    ts::boolean goal_gate{false};
     NodeId retry_target;
     NodeId fallback_retry_target;
     std::optional<FidelityMode> fidelity;
     std::optional<ThreadId> thread_id;
-    std::string css_class;
+    CssClass css_class;
     std::optional<TimeoutDuration> timeout;
-    std::string llm_model;
-    std::string llm_provider;
-    std::string reasoning_effort;
-    bool auto_status{false};
-    bool allow_partial{false};
+    LlmModel llm_model;
+    LlmProvider llm_provider;
+    std::optional<ReasoningEffort> reasoning_effort;
+    ts::boolean auto_status{false};
+    ts::boolean allow_partial{false};
     NodeId human_default_choice;
 };
 
@@ -36,26 +36,26 @@ struct Edge {
     NodeId from;
     NodeId to;
     EdgeLabel label;
-    std::string condition;
+    ConditionExpr condition;
     Weight weight{0};
     std::optional<FidelityMode> fidelity;
     std::optional<ThreadId> thread_id;
-    bool loop_restart{false};
+    ts::boolean loop_restart{false};
 };
 
 struct Graph {
-    std::string digraph_id;
+    GraphId digraph_id;
     GoalText goal;
-    std::string label;
-    std::string model_stylesheet;
+    GraphLabel label;
+    StylesheetId model_stylesheet;
     MaxRetries default_max_retries{0};
     std::optional<FidelityMode> default_fidelity;
     NodeId retry_target;
     NodeId fallback_retry_target;
-    std::string stack_child_dotfile;
-    std::string stack_child_workdir;
-    std::string tool_hooks_pre;
-    std::string tool_hooks_post;
+    DotfilePath stack_child_dotfile;
+    WorkDir stack_child_workdir;
+    ShellCommand tool_hooks_pre;
+    ShellCommand tool_hooks_post;
     std::vector<Node> nodes;
     std::vector<Edge> edges;
 };

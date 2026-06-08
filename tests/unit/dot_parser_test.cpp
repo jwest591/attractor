@@ -24,7 +24,7 @@ SNITCH_TEST_CASE("[dot_parser] linear pipeline parses correctly")
     SNITCH_CHECK(g.nodes.size() == 3u);
     SNITCH_CHECK(g.edges.size() == 2u);
     SNITCH_CHECK(type_safe::get(g.goal) == "Test goal");
-    SNITCH_CHECK(g.label == "My Pipeline");
+    SNITCH_CHECK(type_safe::get(g.label) == "My Pipeline");
 }
 
 // ── AC2: Chained edges ────────────────────────────────────────────────────────
@@ -55,7 +55,7 @@ SNITCH_TEST_CASE("[dot_parser] subgraph class derived from label")
     )");
     SNITCH_REQUIRE(result.has_value());
     SNITCH_REQUIRE(!result->nodes.empty());
-    SNITCH_CHECK(result->nodes[0].css_class.find("loop-a") != std::string::npos);
+    SNITCH_CHECK(type_safe::get(result->nodes[0].css_class).find("loop-a") != std::string::npos);
 }
 
 // ── AC4: Comments stripped ────────────────────────────────────────────────────
@@ -81,7 +81,7 @@ SNITCH_TEST_CASE("[dot_parser] block comment does not strip quoted string conten
     )");
     SNITCH_REQUIRE(result.has_value());
     SNITCH_REQUIRE(!result->nodes.empty());
-    SNITCH_CHECK(result->nodes[0].label == "// not a comment");
+    SNITCH_CHECK(type_safe::get(result->nodes[0].label) == "// not a comment");
 }
 
 // ── AC5: Rejected inputs ──────────────────────────────────────────────────────
@@ -220,9 +220,9 @@ SNITCH_TEST_CASE("[dot_parser] graph-level attributes")
     )");
     SNITCH_REQUIRE(result.has_value());
     SNITCH_CHECK(type_safe::get(result->goal) == "Automate the thing");
-    SNITCH_CHECK(result->model_stylesheet == "minimal");
+    SNITCH_CHECK(type_safe::get(result->model_stylesheet) == "minimal");
     SNITCH_CHECK(result->default_max_retries.get_value() == 3);
-    SNITCH_CHECK(result->digraph_id == "pipeline");
+    SNITCH_CHECK(type_safe::get(result->digraph_id) == "pipeline");
 }
 
 SNITCH_TEST_CASE("[dot_parser] edge attributes")
@@ -236,7 +236,7 @@ SNITCH_TEST_CASE("[dot_parser] edge attributes")
     SNITCH_REQUIRE(result->edges.size() == 1u);
     const auto& e = result->edges[0];
     SNITCH_CHECK(type_safe::get(e.label) == "next");
-    SNITCH_CHECK(e.condition == "outcome=success");
+    SNITCH_CHECK(type_safe::get(e.condition) == "outcome=success");
     SNITCH_CHECK(e.weight.get_value() == 5);
 }
 
@@ -265,16 +265,16 @@ SNITCH_TEST_CASE("[dot_parser] node and edge defaults scoped correctly")
     };
     auto* a = find("A");
     SNITCH_REQUIRE(a != nullptr);
-    SNITCH_CHECK(a->shape == "diamond");
+    SNITCH_CHECK(type_safe::get(a->shape) == "diamond");
 
     auto* c = find("C");
     SNITCH_REQUIRE(c != nullptr);
-    SNITCH_CHECK(c->shape == "box");
+    SNITCH_CHECK(type_safe::get(c->shape) == "box");
 
     // D is after subgraph — defaults should revert to diamond
     auto* d = find("D");
     SNITCH_REQUIRE(d != nullptr);
-    SNITCH_CHECK(d->shape == "diamond");
+    SNITCH_CHECK(type_safe::get(d->shape) == "diamond");
 }
 
 SNITCH_TEST_CASE("[dot_parser] multi-line attribute block")
@@ -291,7 +291,7 @@ SNITCH_TEST_CASE("[dot_parser] multi-line attribute block")
     SNITCH_REQUIRE(result.has_value());
     SNITCH_REQUIRE(!result->nodes.empty());
     const auto& n = result->nodes[0];
-    SNITCH_CHECK(n.label == "Multi-line node");
+    SNITCH_CHECK(type_safe::get(n.label) == "Multi-line node");
     SNITCH_CHECK(n.goal_gate == true);
 }
 
@@ -304,7 +304,7 @@ SNITCH_TEST_CASE("[dot_parser] class attribute applied directly to node")
     )");
     SNITCH_REQUIRE(result.has_value());
     SNITCH_REQUIRE(!result->nodes.empty());
-    SNITCH_CHECK(result->nodes[0].css_class == "my-class");
+    SNITCH_CHECK(type_safe::get(result->nodes[0].css_class) == "my-class");
 }
 
 SNITCH_TEST_CASE("[dot_parser] class attribute appended to subgraph css class")
@@ -319,8 +319,8 @@ SNITCH_TEST_CASE("[dot_parser] class attribute appended to subgraph css class")
     )");
     SNITCH_REQUIRE(result.has_value());
     SNITCH_REQUIRE(!result->nodes.empty());
-    SNITCH_CHECK(result->nodes[0].css_class.find("extra") != std::string::npos);
-    SNITCH_CHECK(result->nodes[0].css_class.find("group-a") != std::string::npos);
+    SNITCH_CHECK(type_safe::get(result->nodes[0].css_class).find("extra") != std::string::npos);
+    SNITCH_CHECK(type_safe::get(result->nodes[0].css_class).find("group-a") != std::string::npos);
 }
 
 SNITCH_TEST_CASE("[dot_parser] node auto-created from edge endpoint")
@@ -341,7 +341,7 @@ SNITCH_TEST_CASE("[dot_parser] quoted and unquoted attribute values")
     SNITCH_REQUIRE(result.has_value());
     SNITCH_REQUIRE(!result->nodes.empty());
     const auto& n = result->nodes[0];
-    SNITCH_CHECK(n.shape == "box");
+    SNITCH_CHECK(type_safe::get(n.shape) == "box");
     SNITCH_CHECK(n.goal_gate == true);
-    SNITCH_CHECK(n.label == "quoted label");
+    SNITCH_CHECK(type_safe::get(n.label) == "quoted label");
 }

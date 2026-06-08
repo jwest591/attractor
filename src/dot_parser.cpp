@@ -447,6 +447,14 @@ static auto parse_duration(std::string_view s) -> std::optional<TimeoutDuration>
     return TimeoutDuration{ms};
 }
 
+static auto parse_reasoning_effort(std::string_view s) -> std::optional<ReasoningEffort>
+{
+    if (s == "low") return ReasoningEffort::low;
+    if (s == "medium") return ReasoningEffort::medium;
+    if (s == "high") return ReasoningEffort::high;
+    return std::nullopt;
+}
+
 static auto parse_fidelity_mode(std::string_view s) -> std::optional<FidelityMode>
 {
     if (s == "full") {
@@ -551,10 +559,10 @@ static auto apply_attrs_to_node(Node& node,
 {
     for (const auto& [key, val] : attrs) {
         if (key == "label") {
-            node.label = val;
+            node.label = NodeLabel{val};
         }
         else if (key == "shape") {
-            node.shape = val;
+            node.shape = NodeShape{val};
         }
         else if (key == "type") {
             node.node_type = HandlerTypeName{val};
@@ -589,11 +597,11 @@ static auto apply_attrs_to_node(Node& node,
             node.thread_id = ThreadId{val};
         }
         else if (key == "class") {
-            if (node.css_class.empty()) {
-                node.css_class = val;
+            if (type_safe::get(node.css_class).empty()) {
+                node.css_class = CssClass{val};
             }
             else {
-                node.css_class += ' ' + val;
+                type_safe::get(node.css_class) += ' ' + val;
             }
         }
         else if (key == "timeout") {
@@ -604,13 +612,17 @@ static auto apply_attrs_to_node(Node& node,
             node.timeout = d;
         }
         else if (key == "llm_model") {
-            node.llm_model = val;
+            node.llm_model = LlmModel{val};
         }
         else if (key == "llm_provider") {
-            node.llm_provider = val;
+            node.llm_provider = LlmProvider{val};
         }
         else if (key == "reasoning_effort") {
-            node.reasoning_effort = val;
+            auto r = parse_reasoning_effort(val);
+            if (!r) {
+                return ParseError{"invalid value for attribute 'reasoning_effort': '" + val + "'", 0, 0};
+            }
+            node.reasoning_effort = r;
         }
         else if (key == "auto_status") {
             node.auto_status = (val == "true");
@@ -633,7 +645,7 @@ static auto apply_attrs_to_edge(Edge& edge,
             edge.label = EdgeLabel{val};
         }
         else if (key == "condition") {
-            edge.condition = val;
+            edge.condition = ConditionExpr{val};
         }
         else if (key == "weight") {
             auto n_opt = parse_int_attr(val);
@@ -667,10 +679,10 @@ static auto apply_attrs_to_graph(Graph& graph,
             graph.goal = GoalText{val};
         }
         else if (key == "label") {
-            graph.label = val;
+            graph.label = GraphLabel{val};
         }
         else if (key == "model_stylesheet") {
-            graph.model_stylesheet = val;
+            graph.model_stylesheet = StylesheetId{val};
         }
         else if (key == "default_max_retries" || key == "default_max_retry") {
             auto n_opt = parse_int_attr(val);
@@ -693,16 +705,16 @@ static auto apply_attrs_to_graph(Graph& graph,
             graph.fallback_retry_target = NodeId{val};
         }
         else if (key == "stack.child_dotfile") {
-            graph.stack_child_dotfile = val;
+            graph.stack_child_dotfile = DotfilePath{val};
         }
         else if (key == "stack.child_workdir") {
-            graph.stack_child_workdir = val;
+            graph.stack_child_workdir = WorkDir{val};
         }
         else if (key == "tool_hooks.pre") {
-            graph.tool_hooks_pre = val;
+            graph.tool_hooks_pre = ShellCommand{val};
         }
         else if (key == "tool_hooks.post") {
-            graph.tool_hooks_post = val;
+            graph.tool_hooks_post = ShellCommand{val};
         }
     }
     return std::nullopt;
@@ -783,16 +795,16 @@ static auto ensure_node_exists(ParseContext& ctx, const std::string& id) -> std:
     }
     Node nd;
     nd.id = NodeId{id};
-    nd.label = id;
+    nd.label = NodeLabel{id};
     if (auto err = apply_attrs_to_node(nd, ctx.node_defaults)) {
         return err;
     }
     if (!ctx.subgraph_class.empty()) {
-        if (nd.css_class.empty()) {
-            nd.css_class = ctx.subgraph_class;
+        if (type_safe::get(nd.css_class).empty()) {
+            nd.css_class = CssClass{ctx.subgraph_class};
         }
         else {
-            nd.css_class += ' ' + ctx.subgraph_class;
+            type_safe::get(nd.css_class) += ' ' + ctx.subgraph_class;
         }
     }
     ctx.graph.nodes.push_back(std::move(nd));
@@ -836,7 +848,7 @@ static auto parse_node_stmt(TokenStream& ts, ParseContext& ctx, const Token& id_
     else {
         Node nd;
         nd.id = NodeId{id_tok.value};
-        nd.label = id_tok.value;
+        nd.label = NodeLabel{id_tok.value};
         // Apply context defaults first
         if (auto err = apply_attrs_to_node(nd, ctx.node_defaults)) {
             return err;
@@ -847,11 +859,11 @@ static auto parse_node_stmt(TokenStream& ts, ParseContext& ctx, const Token& id_
         }
         // Apply subgraph CSS class
         if (!ctx.subgraph_class.empty()) {
-            if (nd.css_class.empty()) {
-                nd.css_class = ctx.subgraph_class;
+            if (type_safe::get(nd.css_class).empty()) {
+                nd.css_class = CssClass{ctx.subgraph_class};
             }
             else {
-                nd.css_class += ' ' + ctx.subgraph_class;
+                type_safe::get(nd.css_class) += ' ' + ctx.subgraph_class;
             }
         }
         ctx.graph.nodes.push_back(std::move(nd));
@@ -1007,11 +1019,11 @@ static auto parse_subgraph_stmt(TokenStream& ts, ParseContext& ctx) -> std::opti
     if (!derived_class.empty()) {
         for (std::size_t i = nodes_before; i < ctx.graph.nodes.size(); ++i) {
             Node& nd = ctx.graph.nodes[i];
-            if (nd.css_class.empty()) {
-                nd.css_class = derived_class;
+            if (type_safe::get(nd.css_class).empty()) {
+                nd.css_class = CssClass{derived_class};
             }
             else {
-                nd.css_class += ' ' + derived_class;
+                type_safe::get(nd.css_class) += ' ' + derived_class;
             }
         }
     }
@@ -1171,7 +1183,7 @@ auto parse_graph(std::string_view source) -> std::expected<Graph, ParseError>
 
     // Optional digraph id
     if (ts.peek().kind == TokenKind::identifier) {
-        ctx.graph.digraph_id = ts.consume().value;
+        ctx.graph.digraph_id = GraphId{ts.consume().value};
     }
 
     // '{'
@@ -1194,8 +1206,8 @@ auto parse_graph(std::string_view source) -> std::expected<Graph, ParseError>
 
     // Apply default labels: label = id string where label is empty
     for (auto& nd : ctx.graph.nodes) {
-        if (nd.label.empty()) {
-            nd.label = type_safe::get(nd.id);
+        if (type_safe::get(nd.label).empty()) {
+            nd.label = NodeLabel{type_safe::get(nd.id)};
         }
     }
 

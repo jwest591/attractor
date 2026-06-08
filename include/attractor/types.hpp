@@ -4,6 +4,7 @@
 #include <chrono>
 #include <nlohmann/json_fwd.hpp>
 #include <string>
+#include <type_safe/boolean.hpp>
 #include <type_safe/constrained_type.hpp>
 #include <type_safe/strong_typedef.hpp>
 
@@ -76,6 +77,90 @@ struct LogsRoot
     using strong_typedef::strong_typedef;
 };
 
+struct NodeLabel
+    : ts::strong_typedef<NodeLabel, std::string>
+    , ts::strong_typedef_op::equality_comparison<NodeLabel>
+    , ts::strong_typedef_op::relational_comparison<NodeLabel> {
+    using strong_typedef::strong_typedef;
+};
+
+struct NodeShape
+    : ts::strong_typedef<NodeShape, std::string>
+    , ts::strong_typedef_op::equality_comparison<NodeShape>
+    , ts::strong_typedef_op::relational_comparison<NodeShape> {
+    using strong_typedef::strong_typedef;
+};
+
+struct CssClass
+    : ts::strong_typedef<CssClass, std::string>
+    , ts::strong_typedef_op::equality_comparison<CssClass>
+    , ts::strong_typedef_op::relational_comparison<CssClass> {
+    using strong_typedef::strong_typedef;
+};
+
+struct LlmModel
+    : ts::strong_typedef<LlmModel, std::string>
+    , ts::strong_typedef_op::equality_comparison<LlmModel>
+    , ts::strong_typedef_op::relational_comparison<LlmModel> {
+    using strong_typedef::strong_typedef;
+};
+
+struct LlmProvider
+    : ts::strong_typedef<LlmProvider, std::string>
+    , ts::strong_typedef_op::equality_comparison<LlmProvider>
+    , ts::strong_typedef_op::relational_comparison<LlmProvider> {
+    using strong_typedef::strong_typedef;
+};
+
+struct GraphId
+    : ts::strong_typedef<GraphId, std::string>
+    , ts::strong_typedef_op::equality_comparison<GraphId>
+    , ts::strong_typedef_op::relational_comparison<GraphId> {
+    using strong_typedef::strong_typedef;
+};
+
+struct GraphLabel
+    : ts::strong_typedef<GraphLabel, std::string>
+    , ts::strong_typedef_op::equality_comparison<GraphLabel>
+    , ts::strong_typedef_op::relational_comparison<GraphLabel> {
+    using strong_typedef::strong_typedef;
+};
+
+struct StylesheetId
+    : ts::strong_typedef<StylesheetId, std::string>
+    , ts::strong_typedef_op::equality_comparison<StylesheetId>
+    , ts::strong_typedef_op::relational_comparison<StylesheetId> {
+    using strong_typedef::strong_typedef;
+};
+
+struct DotfilePath
+    : ts::strong_typedef<DotfilePath, std::string>
+    , ts::strong_typedef_op::equality_comparison<DotfilePath>
+    , ts::strong_typedef_op::relational_comparison<DotfilePath> {
+    using strong_typedef::strong_typedef;
+};
+
+struct WorkDir
+    : ts::strong_typedef<WorkDir, std::string>
+    , ts::strong_typedef_op::equality_comparison<WorkDir>
+    , ts::strong_typedef_op::relational_comparison<WorkDir> {
+    using strong_typedef::strong_typedef;
+};
+
+struct ShellCommand
+    : ts::strong_typedef<ShellCommand, std::string>
+    , ts::strong_typedef_op::equality_comparison<ShellCommand>
+    , ts::strong_typedef_op::relational_comparison<ShellCommand> {
+    using strong_typedef::strong_typedef;
+};
+
+struct ConditionExpr
+    : ts::strong_typedef<ConditionExpr, std::string>
+    , ts::strong_typedef_op::equality_comparison<ConditionExpr>
+    , ts::strong_typedef_op::relational_comparison<ConditionExpr> {
+    using strong_typedef::strong_typedef;
+};
+
 // ── Constrained types (AC2) ───────────────────────────────────────────────────
 // Each constrained type uses its own constraint struct so the four `using`
 // aliases produce distinct instantiations of ts::constrained_type.
@@ -115,6 +200,8 @@ enum class QuestionType { yes_no, multiple_choice, freeform, confirmation };
 
 enum class FidelityMode { full, truncate, compact, summary_low, summary_medium, summary_high };
 
+enum class ReasoningEffort { low, medium, high };
+
 // ── JSON serialization declarations (defined in src/types.cpp) ───────────────
 
 void to_json(nlohmann::json& j, const NodeId& v);
@@ -143,6 +230,45 @@ void from_json(const nlohmann::json& j, GoalText& v);
 
 void to_json(nlohmann::json& j, const LogsRoot& v);
 void from_json(const nlohmann::json& j, LogsRoot& v);
+
+void to_json(nlohmann::json& j, const NodeLabel& v);
+void from_json(const nlohmann::json& j, NodeLabel& v);
+
+void to_json(nlohmann::json& j, const NodeShape& v);
+void from_json(const nlohmann::json& j, NodeShape& v);
+
+void to_json(nlohmann::json& j, const CssClass& v);
+void from_json(const nlohmann::json& j, CssClass& v);
+
+void to_json(nlohmann::json& j, const LlmModel& v);
+void from_json(const nlohmann::json& j, LlmModel& v);
+
+void to_json(nlohmann::json& j, const LlmProvider& v);
+void from_json(const nlohmann::json& j, LlmProvider& v);
+
+void to_json(nlohmann::json& j, const GraphId& v);
+void from_json(const nlohmann::json& j, GraphId& v);
+
+void to_json(nlohmann::json& j, const GraphLabel& v);
+void from_json(const nlohmann::json& j, GraphLabel& v);
+
+void to_json(nlohmann::json& j, const StylesheetId& v);
+void from_json(const nlohmann::json& j, StylesheetId& v);
+
+void to_json(nlohmann::json& j, const DotfilePath& v);
+void from_json(const nlohmann::json& j, DotfilePath& v);
+
+void to_json(nlohmann::json& j, const WorkDir& v);
+void from_json(const nlohmann::json& j, WorkDir& v);
+
+void to_json(nlohmann::json& j, const ShellCommand& v);
+void from_json(const nlohmann::json& j, ShellCommand& v);
+
+void to_json(nlohmann::json& j, const ConditionExpr& v);
+void from_json(const nlohmann::json& j, ConditionExpr& v);
+
+void to_json(nlohmann::json& j, ReasoningEffort v);
+void from_json(const nlohmann::json& j, ReasoningEffort& v);
 
 void to_json(nlohmann::json& j, const MaxRetries& v);
 void from_json(const nlohmann::json& j, MaxRetries& v);

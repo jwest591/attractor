@@ -31,27 +31,32 @@ void to_json(nlohmann::json& j, const Node& n)
 {
     j["id"] = nlohmann::json{};
     to_json(j["id"], n.id);
-    j["label"] = n.label;
-    j["shape"] = n.shape;
+    j["label"] = nlohmann::json{};
+    to_json(j["label"], n.label);
+    j["shape"] = nlohmann::json{};
+    to_json(j["shape"], n.shape);
     j["node_type"] = nlohmann::json{};
     to_json(j["node_type"], n.node_type);
     j["prompt"] = nlohmann::json{};
     to_json(j["prompt"], n.prompt);
     opt_to_json(j, "max_retries", n.max_retries);
-    j["goal_gate"] = n.goal_gate;
+    j["goal_gate"] = bool{n.goal_gate};
     j["retry_target"] = nlohmann::json{};
     to_json(j["retry_target"], n.retry_target);
     j["fallback_retry_target"] = nlohmann::json{};
     to_json(j["fallback_retry_target"], n.fallback_retry_target);
     opt_to_json(j, "fidelity", n.fidelity);
     opt_to_json(j, "thread_id", n.thread_id);
-    j["css_class"] = n.css_class;
+    j["css_class"] = nlohmann::json{};
+    to_json(j["css_class"], n.css_class);
     opt_to_json(j, "timeout", n.timeout);
-    j["llm_model"] = n.llm_model;
-    j["llm_provider"] = n.llm_provider;
-    j["reasoning_effort"] = n.reasoning_effort;
-    j["auto_status"] = n.auto_status;
-    j["allow_partial"] = n.allow_partial;
+    j["llm_model"] = nlohmann::json{};
+    to_json(j["llm_model"], n.llm_model);
+    j["llm_provider"] = nlohmann::json{};
+    to_json(j["llm_provider"], n.llm_provider);
+    opt_to_json(j, "reasoning_effort", n.reasoning_effort);
+    j["auto_status"] = bool{n.auto_status};
+    j["allow_partial"] = bool{n.allow_partial};
     j["human_default_choice"] = nlohmann::json{};
     to_json(j["human_default_choice"], n.human_default_choice);
 }
@@ -59,8 +64,8 @@ void to_json(nlohmann::json& j, const Node& n)
 void from_json(const nlohmann::json& j, Node& n)
 {
     from_json(j.at("id"), n.id);
-    n.label = j.at("label").get<std::string>();
-    n.shape = j.at("shape").get<std::string>();
+    from_json(j.at("label"), n.label);
+    from_json(j.at("shape"), n.shape);
     from_json(j.at("node_type"), n.node_type);
     from_json(j.at("prompt"), n.prompt);
 
@@ -80,7 +85,7 @@ void from_json(const nlohmann::json& j, Node& n)
         n.thread_id = ThreadId{j["thread_id"].get<std::string>()};
     }
 
-    n.css_class = j.at("css_class").get<std::string>();
+    from_json(j.at("css_class"), n.css_class);
 
     // optional<TimeoutDuration> — constrained_type, no default ctor
     if (j.contains("timeout") && !j["timeout"].is_null()) {
@@ -91,9 +96,16 @@ void from_json(const nlohmann::json& j, Node& n)
         n.timeout = TimeoutDuration{ms};
     }
 
-    n.llm_model = j.at("llm_model").get<std::string>();
-    n.llm_provider = j.at("llm_provider").get<std::string>();
-    n.reasoning_effort = j.at("reasoning_effort").get<std::string>();
+    from_json(j.at("llm_model"), n.llm_model);
+    from_json(j.at("llm_provider"), n.llm_provider);
+
+    // optional<ReasoningEffort> — enum, no default ctor issue but absent = nullopt
+    if (j.contains("reasoning_effort") && !j["reasoning_effort"].is_null()) {
+        ReasoningEffort re{};
+        from_json(j["reasoning_effort"], re);
+        n.reasoning_effort = re;
+    }
+
     n.auto_status = j.at("auto_status").get<bool>();
     n.allow_partial = j.at("allow_partial").get<bool>();
     from_json(j.at("human_default_choice"), n.human_default_choice);
@@ -107,12 +119,13 @@ void to_json(nlohmann::json& j, const Edge& e)
     to_json(j["to"], e.to);
     j["label"] = nlohmann::json{};
     to_json(j["label"], e.label);
-    j["condition"] = e.condition;
+    j["condition"] = nlohmann::json{};
+    to_json(j["condition"], e.condition);
     j["weight"] = nlohmann::json{};
     to_json(j["weight"], e.weight);
     opt_to_json(j, "fidelity", e.fidelity);
     opt_to_json(j, "thread_id", e.thread_id);
-    j["loop_restart"] = e.loop_restart;
+    j["loop_restart"] = bool{e.loop_restart};
 }
 
 void from_json(const nlohmann::json& j, Edge& e)
@@ -120,7 +133,7 @@ void from_json(const nlohmann::json& j, Edge& e)
     from_json(j.at("from"), e.from);
     from_json(j.at("to"), e.to);
     from_json(j.at("label"), e.label);
-    e.condition = j.at("condition").get<std::string>();
+    from_json(j.at("condition"), e.condition);
     from_json(j.at("weight"), e.weight);
     opt_fidelity_from_json(j, "fidelity", e.fidelity);
 
@@ -134,11 +147,14 @@ void from_json(const nlohmann::json& j, Edge& e)
 
 void to_json(nlohmann::json& j, const Graph& g)
 {
-    j["digraph_id"] = g.digraph_id;
+    j["digraph_id"] = nlohmann::json{};
+    to_json(j["digraph_id"], g.digraph_id);
     j["goal"] = nlohmann::json{};
     to_json(j["goal"], g.goal);
-    j["label"] = g.label;
-    j["model_stylesheet"] = g.model_stylesheet;
+    j["label"] = nlohmann::json{};
+    to_json(j["label"], g.label);
+    j["model_stylesheet"] = nlohmann::json{};
+    to_json(j["model_stylesheet"], g.model_stylesheet);
     j["default_max_retries"] = nlohmann::json{};
     to_json(j["default_max_retries"], g.default_max_retries);
     opt_to_json(j, "default_fidelity", g.default_fidelity);
@@ -146,10 +162,14 @@ void to_json(nlohmann::json& j, const Graph& g)
     to_json(j["retry_target"], g.retry_target);
     j["fallback_retry_target"] = nlohmann::json{};
     to_json(j["fallback_retry_target"], g.fallback_retry_target);
-    j["stack_child_dotfile"] = g.stack_child_dotfile;
-    j["stack_child_workdir"] = g.stack_child_workdir;
-    j["tool_hooks_pre"] = g.tool_hooks_pre;
-    j["tool_hooks_post"] = g.tool_hooks_post;
+    j["stack_child_dotfile"] = nlohmann::json{};
+    to_json(j["stack_child_dotfile"], g.stack_child_dotfile);
+    j["stack_child_workdir"] = nlohmann::json{};
+    to_json(j["stack_child_workdir"], g.stack_child_workdir);
+    j["tool_hooks_pre"] = nlohmann::json{};
+    to_json(j["tool_hooks_pre"], g.tool_hooks_pre);
+    j["tool_hooks_post"] = nlohmann::json{};
+    to_json(j["tool_hooks_post"], g.tool_hooks_post);
     j["nodes"] = nlohmann::json::array();
     for (const auto& n : g.nodes) {
         nlohmann::json nj;
@@ -166,18 +186,18 @@ void to_json(nlohmann::json& j, const Graph& g)
 
 void from_json(const nlohmann::json& j, Graph& g)
 {
-    g.digraph_id = j.at("digraph_id").get<std::string>();
+    from_json(j.at("digraph_id"), g.digraph_id);
     from_json(j.at("goal"), g.goal);
-    g.label = j.at("label").get<std::string>();
-    g.model_stylesheet = j.at("model_stylesheet").get<std::string>();
+    from_json(j.at("label"), g.label);
+    from_json(j.at("model_stylesheet"), g.model_stylesheet);
     from_json(j.at("default_max_retries"), g.default_max_retries);
     opt_fidelity_from_json(j, "default_fidelity", g.default_fidelity);
     from_json(j.at("retry_target"), g.retry_target);
     from_json(j.at("fallback_retry_target"), g.fallback_retry_target);
-    g.stack_child_dotfile = j.at("stack_child_dotfile").get<std::string>();
-    g.stack_child_workdir = j.at("stack_child_workdir").get<std::string>();
-    g.tool_hooks_pre = j.at("tool_hooks_pre").get<std::string>();
-    g.tool_hooks_post = j.at("tool_hooks_post").get<std::string>();
+    from_json(j.at("stack_child_dotfile"), g.stack_child_dotfile);
+    from_json(j.at("stack_child_workdir"), g.stack_child_workdir);
+    from_json(j.at("tool_hooks_pre"), g.tool_hooks_pre);
+    from_json(j.at("tool_hooks_post"), g.tool_hooks_post);
     for (const auto& nj : j.at("nodes")) {
         Node n;
         from_json(nj, n);

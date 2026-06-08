@@ -8,7 +8,7 @@ using namespace attractor;
 SNITCH_TEST_CASE("[graph_model] Node default values")
 {
     Node n;
-    SNITCH_CHECK(n.shape == "box");
+    SNITCH_CHECK(type_safe::get(n.shape) == "box");
     SNITCH_CHECK(!n.goal_gate);
     SNITCH_CHECK(!n.auto_status);
     SNITCH_CHECK(!n.allow_partial);
@@ -39,8 +39,8 @@ SNITCH_TEST_CASE("[graph_model] Node JSON round-trip")
     using namespace std::chrono;
     Node n;
     n.id = NodeId{"node_a"};
-    n.label = "Node A";
-    n.shape = "box";
+    n.label = NodeLabel{"Node A"};
+    n.shape = NodeShape{"box"};
     n.goal_gate = true;
     n.timeout = TimeoutDuration{milliseconds{5000}};
 
@@ -80,18 +80,18 @@ SNITCH_TEST_CASE("[graph_model] Edge JSON round-trip")
 SNITCH_TEST_CASE("[graph_model] Graph JSON round-trip")
 {
     Graph g;
-    g.digraph_id = "mypipe";
+    g.digraph_id = GraphId{"mypipe"};
     g.goal = GoalText{"Test goal"};
-    g.label = "My Pipeline";
+    g.label = GraphLabel{"My Pipeline"};
 
     Node start;
     start.id = NodeId{"start"};
-    start.label = "Start";
+    start.label = NodeLabel{"Start"};
     g.nodes.push_back(start);
 
     Node end;
     end.id = NodeId{"end"};
-    end.label = "End";
+    end.label = NodeLabel{"End"};
     g.nodes.push_back(end);
 
     Edge e;
@@ -104,7 +104,7 @@ SNITCH_TEST_CASE("[graph_model] Graph JSON round-trip")
 
     Graph restored;
     from_json(j, restored);
-    SNITCH_CHECK(restored.digraph_id == "mypipe");
+    SNITCH_CHECK(type_safe::get(restored.digraph_id) == "mypipe");
     SNITCH_CHECK(type_safe::get(restored.goal) == "Test goal");
     SNITCH_CHECK(restored.nodes.size() == 2u);
     SNITCH_CHECK(restored.edges.size() == 1u);

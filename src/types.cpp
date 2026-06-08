@@ -106,6 +106,32 @@ void from_json(const nlohmann::json& j, LogsRoot& v)
     v = LogsRoot{j.get<std::string>()};
 }
 
+#define ATTRACTOR_STRING_TYPEDEF_JSON(Type)                                                                            \
+    void to_json(nlohmann::json& j, const Type& v) { j = type_safe::get(v); }                                         \
+    void from_json(const nlohmann::json& j, Type& v)                                                                   \
+    {                                                                                                                   \
+        if (!j.is_string())                                                                                            \
+            throw nlohmann::json::type_error::create(302,                                                              \
+                                                     #Type " requires a string, got: " + std::string{j.type_name()},  \
+                                                     &j);                                                              \
+        v = Type{j.get<std::string>()};                                                                                \
+    }
+
+ATTRACTOR_STRING_TYPEDEF_JSON(NodeLabel)
+ATTRACTOR_STRING_TYPEDEF_JSON(NodeShape)
+ATTRACTOR_STRING_TYPEDEF_JSON(CssClass)
+ATTRACTOR_STRING_TYPEDEF_JSON(LlmModel)
+ATTRACTOR_STRING_TYPEDEF_JSON(LlmProvider)
+ATTRACTOR_STRING_TYPEDEF_JSON(GraphId)
+ATTRACTOR_STRING_TYPEDEF_JSON(GraphLabel)
+ATTRACTOR_STRING_TYPEDEF_JSON(StylesheetId)
+ATTRACTOR_STRING_TYPEDEF_JSON(DotfilePath)
+ATTRACTOR_STRING_TYPEDEF_JSON(WorkDir)
+ATTRACTOR_STRING_TYPEDEF_JSON(ShellCommand)
+ATTRACTOR_STRING_TYPEDEF_JSON(ConditionExpr)
+
+#undef ATTRACTOR_STRING_TYPEDEF_JSON
+
 // ── Int constrained types ─────────────────────────────────────────────────────
 
 void to_json(nlohmann::json& j, const MaxRetries& v) { j = v.get_value(); }
@@ -278,6 +304,35 @@ void from_json(const nlohmann::json& j, FidelityMode& v)
         }
     }
     throw nlohmann::json::other_error::create(501, "unknown FidelityMode: " + s, &j);
+}
+
+static const std::pair<ReasoningEffort, std::string_view> k_reasoning_effort_map[] = {
+    {ReasoningEffort::low,    "low"   },
+    {ReasoningEffort::medium, "medium"},
+    {ReasoningEffort::high,   "high"  },
+};
+
+void to_json(nlohmann::json& j, ReasoningEffort v)
+{
+    for (const auto& [enumerator, name] : k_reasoning_effort_map) {
+        if (enumerator == v) {
+            j = name;
+            return;
+        }
+    }
+    j = nullptr;
+}
+
+void from_json(const nlohmann::json& j, ReasoningEffort& v)
+{
+    auto s = j.get<std::string>();
+    for (const auto& [enumerator, name] : k_reasoning_effort_map) {
+        if (name == s) {
+            v = enumerator;
+            return;
+        }
+    }
+    throw nlohmann::json::other_error::create(501, "unknown ReasoningEffort: " + s, &j);
 }
 
 }  // namespace attractor
