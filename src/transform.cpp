@@ -2,7 +2,7 @@
 
 #include <attractor/graph.hpp>
 #include <attractor/types.hpp>
-#include <cctype>
+#include <algorithm>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -10,17 +10,24 @@
 namespace attractor {
 namespace detail {
 
-static auto replace_all(std::string s, std::string_view from, std::string_view to) -> std::string
+static auto replace_all(std::string_view s, std::string_view from, std::string_view to) -> std::string
 {
     if (from.empty()) {
-        return s;
+        return std::string{s};
     }
-    size_t pos = 0;
-    while ((pos = s.find(from, pos)) != std::string::npos) {
-        s.replace(pos, from.size(), to);
-        pos += to.size();
+    std::string result;
+    result.reserve(s.size());
+    const auto* it = s.cbegin();
+    while (true) {
+        auto found = std::ranges::search(it, s.cend(), from.cbegin(), from.cend());
+        result.append(it, found.begin());
+        if (found.empty()) {
+            break;
+        }
+        result.append(to);
+        it = found.end();
     }
-    return s;
+    return result;
 }
 
 struct StyleRule {
@@ -34,34 +41,49 @@ struct StyleRule {
     std::string reasoning_effort;
 };
 
+static constexpr std::string_view k_whitespace = " \t\n\r";
+static constexpr std::string_view k_selector_chars =
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-.*#";
+
+static auto skip_ws(std::string_view& sv) -> void
+{
+    auto pos = sv.find_first_not_of(k_whitespace);
+    sv.remove_prefix(pos == std::string_view::npos ? sv.size() : pos);
+}
+
+static auto consume_while(std::string_view& sv, std::string_view chars) -> std::string_view
+{
+    auto end = sv.find_first_not_of(chars);
+    auto token = sv.substr(0, end == std::string_view::npos ? sv.size() : end);
+    sv.remove_prefix(token.size());
+    return token;
+}
+
+static auto consume_until(std::string_view& sv, std::string_view stops) -> std::string_view
+{
+    auto end = sv.find_first_of(stops);
+    auto token = sv.substr(0, end == std::string_view::npos ? sv.size() : end);
+    sv.remove_prefix(token.size());
+    return token;
+}
+
+static auto rtrim(std::string_view sv) -> std::string_view
+{
+    auto end = sv.find_last_not_of(k_whitespace);
+    return end == std::string_view::npos ? sv.substr(0, 0) : sv.substr(0, end + 1);
+}
+
 static auto parse_stylesheet(std::string_view ss) -> std::vector<StyleRule>
 {
     std::vector<StyleRule> rules;
-    const char* p = ss.data();
-    const char* end = p + ss.size();
 
-    auto skip_ws = [&] {
-        while (p < end && std::isspace(static_cast<unsigned char>(*p))) {
-            ++p;
-        }
-    };
-
-    auto read_selector = [&] -> std::string {
-        const char* s = p;
-        while (p < end && (std::isalnum(static_cast<unsigned char>(*p)) || *p == '_' || *p == '-' || *p == '.' ||
-                           *p == '#' || *p == '*')) {
-            ++p;
-        }
-        return {s, static_cast<size_t>(p - s)};
-    };
-
-    while (p < end) {
-        skip_ws();
-        if (p >= end) {
+    while (true) {
+        skip_ws(ss);
+        if (ss.empty()) {
             break;
         }
 
-        auto sel = read_selector();
+        auto sel = consume_while(ss, k_selector_chars);
         if (sel.empty()) {
             break;
         }
@@ -70,14 +92,13 @@ static auto parse_stylesheet(std::string_view ss) -> std::vector<StyleRule>
         if (sel == "*") {
             rule.type = StyleRule::SelectorType::universal;
             rule.specificity = 0;
-            rule.selector_value.clear();
         }
-        else if (!sel.empty() && sel[0] == '#') {
+        else if (sel.starts_with('#')) {
             rule.type = StyleRule::SelectorType::id;
             rule.specificity = 3;
             rule.selector_value = sel.substr(1);
         }
-        else if (!sel.empty() && sel[0] == '.') {
+        else if (sel.starts_with('.')) {
             rule.type = StyleRule::SelectorType::css_class;
             rule.specificity = 2;
             rule.selector_value = sel.substr(1);
@@ -88,49 +109,34 @@ static auto parse_stylesheet(std::string_view ss) -> std::vector<StyleRule>
             rule.selector_value = sel;
         }
 
-        skip_ws();
-        if (p >= end || *p != '{') {
+        skip_ws(ss);
+        if (ss.empty() || ss.front() != '{') {
             break;
         }
-        ++p;
+        ss.remove_prefix(1);
 
-        while (true) {
-            skip_ws();
-            if (p >= end) {
-                break;
-            }
-            if (*p == '}') {
-                ++p;
+        while (!ss.empty() && ss.front() != '}') {
+            skip_ws(ss);
+            if (ss.empty() || ss.front() == '}') {
                 break;
             }
 
-            const char* ks = p;
-            while (p < end && *p != ':' && *p != '}' && !std::isspace(static_cast<unsigned char>(*p))) {
-                ++p;
-            }
-            std::string key{ks, static_cast<size_t>(p - ks)};
+            auto key = consume_until(ss, ": \t\n\r}");
             if (key.empty()) {
                 break;
             }
 
-            skip_ws();
-            if (p >= end || *p != ':') {
+            skip_ws(ss);
+            if (ss.empty() || ss.front() != ':') {
                 break;
             }
-            ++p;
-            skip_ws();
+            ss.remove_prefix(1);
+            skip_ws(ss);
 
-            const char* vs = p;
-            while (p < end && *p != ';' && *p != '}') {
-                ++p;
-            }
-            std::string val{vs, static_cast<size_t>(p - vs)};
-            while (!val.empty() && std::isspace(static_cast<unsigned char>(val.back()))) {
-                val.pop_back();
-            }
+            auto val = std::string{rtrim(consume_until(ss, ";}\n"))};
 
-            if (p < end && *p == ';') {
-                ++p;
+            if (!ss.empty() && ss.front() == ';') {
+                ss.remove_prefix(1);
             }
 
             if (key == "llm_model") {
@@ -144,6 +150,9 @@ static auto parse_stylesheet(std::string_view ss) -> std::vector<StyleRule>
             }
         }
 
+        if (!ss.empty() && ss.front() == '}') {
+            ss.remove_prefix(1);
+        }
         rules.push_back(std::move(rule));
     }
 
@@ -160,27 +169,18 @@ static auto node_matches_rule(const Node& node, const StyleRule& rule) -> bool
     case StyleRule::SelectorType::id:
         return type_safe::get(node.id) == rule.selector_value;
     case StyleRule::SelectorType::css_class: {
-        const auto& cls = type_safe::get(node.css_class);
-        if (cls.empty()) {
-            return false;
-        }
-        size_t start = 0;
-        while (start <= cls.size()) {
-            auto comma = cls.find(',', start);
-            auto token = cls.substr(start, comma == std::string::npos ? std::string::npos : comma - start);
-            while (!token.empty() && std::isspace(static_cast<unsigned char>(token.front()))) {
-                token.erase(0, 1);
-            }
-            while (!token.empty() && std::isspace(static_cast<unsigned char>(token.back()))) {
-                token.pop_back();
-            }
-            if (token == rule.selector_value) {
+        std::string_view remaining{type_safe::get(node.css_class)};
+        while (!remaining.empty()) {
+            auto comma = remaining.find(',');
+            auto token = remaining.substr(0, comma == std::string_view::npos ? remaining.size() : comma);
+            skip_ws(token);
+            if (rtrim(token) == rule.selector_value) {
                 return true;
             }
-            if (comma == std::string::npos) {
+            if (comma == std::string_view::npos) {
                 break;
             }
-            start = comma + 1;
+            remaining.remove_prefix(comma + 1);
         }
         return false;
     }
