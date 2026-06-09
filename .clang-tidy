@@ -11,7 +11,8 @@ Checks: >
   performance-*,
   readability-*,
   -readability-magic-numbers,
-  -readability-named-parameter
+  -readability-named-parameter,
+  -readability-identifier-length
 WarningsAsErrors: ''
 HeaderFilterRegex: 'include/attractor/.*'
 CheckOptions: []
