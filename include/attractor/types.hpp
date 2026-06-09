@@ -2,6 +2,7 @@
 #define ATTRACTOR_TYPES_HPP
 
 #include <chrono>
+#include <functional>
 #include <nlohmann/json_fwd.hpp>
 #include <string>
 #include <type_safe/boolean.hpp>
@@ -182,6 +183,20 @@ struct SuggestedFix
     using strong_typedef::strong_typedef;
 };
 
+struct HandlerNote
+    : ts::strong_typedef<HandlerNote, std::string>
+    , ts::strong_typedef_op::equality_comparison<HandlerNote>
+    , ts::strong_typedef_op::relational_comparison<HandlerNote> {
+    using strong_typedef::strong_typedef;
+};
+
+struct LlmResponse
+    : ts::strong_typedef<LlmResponse, std::string>
+    , ts::strong_typedef_op::equality_comparison<LlmResponse>
+    , ts::strong_typedef_op::relational_comparison<LlmResponse> {
+    using strong_typedef::strong_typedef;
+};
+
 // ── Constrained types (AC2) ───────────────────────────────────────────────────
 // Each constrained type uses its own constraint struct so the four `using`
 // aliases produce distinct instantiations of ts::constrained_type.
@@ -297,6 +312,12 @@ void from_json(const nlohmann::json& j, DiagnosticMessage& v);
 void to_json(nlohmann::json& j, const SuggestedFix& v);
 void from_json(const nlohmann::json& j, SuggestedFix& v);
 
+void to_json(nlohmann::json& j, const HandlerNote& v);
+void from_json(const nlohmann::json& j, HandlerNote& v);
+
+void to_json(nlohmann::json& j, const LlmResponse& v);
+void from_json(const nlohmann::json& j, LlmResponse& v);
+
 void to_json(nlohmann::json& j, ReasoningEffort v);
 void from_json(const nlohmann::json& j, ReasoningEffort& v);
 
@@ -325,5 +346,17 @@ void to_json(nlohmann::json& j, FidelityMode v);
 void from_json(const nlohmann::json& j, FidelityMode& v);
 
 }  // namespace attractor
+
+namespace std {
+
+template<>
+struct hash<attractor::HandlerTypeName> {
+    size_t operator()(const attractor::HandlerTypeName& v) const noexcept
+    {
+        return hash<std::string>{}(type_safe::get(v));
+    }
+};
+
+}  // namespace std
 
 #endif  // ATTRACTOR_TYPES_HPP

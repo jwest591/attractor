@@ -15,6 +15,7 @@ add_library(attractor STATIC
     dot_parser.cpp
     validator.cpp
     transform.cpp
+    handler_registry.cpp
 )
 
 add_library(attractor::attractor ALIAS attractor)

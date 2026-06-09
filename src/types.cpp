@@ -107,13 +107,12 @@ void from_json(const nlohmann::json& j, LogsRoot& v)
 }
 
 #define ATTRACTOR_STRING_TYPEDEF_JSON(Type)                                                                            \
-    void to_json(nlohmann::json& j, const Type& v) { j = type_safe::get(v); }                                         \
+    void to_json(nlohmann::json& j, const Type& v) { j = type_safe::get(v); }                                          \
     void from_json(const nlohmann::json& j, Type& v)                                                                   \
-    {                                                                                                                   \
+    {                                                                                                                  \
         if (!j.is_string())                                                                                            \
-            throw nlohmann::json::type_error::create(302,                                                              \
-                                                     #Type " requires a string, got: " + std::string{j.type_name()},  \
-                                                     &j);                                                              \
+            throw nlohmann::json::type_error::create(                                                                  \
+                302, #Type " requires a string, got: " + std::string{j.type_name()}, &j);                              \
         v = Type{j.get<std::string>()};                                                                                \
     }
 
@@ -132,6 +131,8 @@ ATTRACTOR_STRING_TYPEDEF_JSON(ConditionExpr)
 ATTRACTOR_STRING_TYPEDEF_JSON(RuleId)
 ATTRACTOR_STRING_TYPEDEF_JSON(DiagnosticMessage)
 ATTRACTOR_STRING_TYPEDEF_JSON(SuggestedFix)
+ATTRACTOR_STRING_TYPEDEF_JSON(HandlerNote)
+ATTRACTOR_STRING_TYPEDEF_JSON(LlmResponse)
 
 #undef ATTRACTOR_STRING_TYPEDEF_JSON
 
