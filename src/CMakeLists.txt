@@ -13,6 +13,7 @@ add_library(attractor STATIC
     types.cpp
     graph.cpp
     dot_parser.cpp
+    validator.cpp
 )
 
 add_library(attractor::attractor ALIAS attractor)

@@ -161,6 +161,27 @@ struct ConditionExpr
     using strong_typedef::strong_typedef;
 };
 
+struct RuleId
+    : ts::strong_typedef<RuleId, std::string>
+    , ts::strong_typedef_op::equality_comparison<RuleId>
+    , ts::strong_typedef_op::relational_comparison<RuleId> {
+    using strong_typedef::strong_typedef;
+};
+
+struct DiagnosticMessage
+    : ts::strong_typedef<DiagnosticMessage, std::string>
+    , ts::strong_typedef_op::equality_comparison<DiagnosticMessage>
+    , ts::strong_typedef_op::relational_comparison<DiagnosticMessage> {
+    using strong_typedef::strong_typedef;
+};
+
+struct SuggestedFix
+    : ts::strong_typedef<SuggestedFix, std::string>
+    , ts::strong_typedef_op::equality_comparison<SuggestedFix>
+    , ts::strong_typedef_op::relational_comparison<SuggestedFix> {
+    using strong_typedef::strong_typedef;
+};
+
 // ── Constrained types (AC2) ───────────────────────────────────────────────────
 // Each constrained type uses its own constraint struct so the four `using`
 // aliases produce distinct instantiations of ts::constrained_type.
@@ -266,6 +287,15 @@ void from_json(const nlohmann::json& j, ShellCommand& v);
 
 void to_json(nlohmann::json& j, const ConditionExpr& v);
 void from_json(const nlohmann::json& j, ConditionExpr& v);
+
+void to_json(nlohmann::json& j, const RuleId& v);
+void from_json(const nlohmann::json& j, RuleId& v);
+
+void to_json(nlohmann::json& j, const DiagnosticMessage& v);
+void from_json(const nlohmann::json& j, DiagnosticMessage& v);
+
+void to_json(nlohmann::json& j, const SuggestedFix& v);
+void from_json(const nlohmann::json& j, SuggestedFix& v);
 
 void to_json(nlohmann::json& j, ReasoningEffort v);
 void from_json(const nlohmann::json& j, ReasoningEffort& v);
