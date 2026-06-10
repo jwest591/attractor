@@ -9,6 +9,7 @@
 #include <attractor/types.hpp>
 #include <filesystem>
 #include <string>
+#include <unistd.h>
 
 namespace attractor::test {
 
@@ -28,7 +29,8 @@ class TempLogsDir {
     TempLogsDir()
     {
         static std::atomic<int> k_counter{0};
-        m_path = std::filesystem::temp_directory_path() / ("att_engine_test_" + std::to_string(++k_counter));
+        m_path = std::filesystem::temp_directory_path() /
+                 ("att_engine_test_" + std::to_string(getpid()) + "_" + std::to_string(++k_counter));
         std::filesystem::create_directories(m_path);
     }
 

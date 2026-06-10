@@ -16,6 +16,7 @@ add_library(attractor STATIC
     validator.cpp
     transform.cpp
     handler_registry.cpp
+    engine.cpp
     handlers/start_handler.cpp
     handlers/exit_handler.cpp
     handlers/conditional_handler.cpp

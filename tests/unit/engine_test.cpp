@@ -11,7 +11,6 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
-#include <type_safe/strong_typedef.hpp>
 
 using namespace attractor;
 using namespace attractor::test;
@@ -77,7 +76,7 @@ SNITCH_TEST_CASE("[engine] 3-node pipeline dispatches intermediate handler exact
     TempLogsDir logs;
     Engine engine{std::move(reg)};
 
-    engine.run(graph, RunConfig{.logs_root = logs.logs_root()});
+    (void)engine.run(graph, RunConfig{.logs_root = logs.logs_root()});
 
     SNITCH_CHECK(raw->call_count == 1);
 }
@@ -138,7 +137,7 @@ SNITCH_TEST_CASE("[engine] goal gate unsatisfied with no retry_target returns Ou
     auto outcome = engine.run(graph, RunConfig{.logs_root = logs.logs_root()});
 
     SNITCH_CHECK(outcome.status == StageStatus::fail);
-    SNITCH_CHECK(!type_safe::get(outcome.failure_reason).empty());
+    SNITCH_CHECK(!outcome.failure_reason.empty());
 }
 
 // -- AC3: exception boundary --------------------------------------------------
@@ -163,7 +162,7 @@ SNITCH_TEST_CASE("[engine] handler throws -> Outcome{fail} without propagation -
     auto outcome = engine.run(graph, RunConfig{.logs_root = logs.logs_root()});
 
     SNITCH_CHECK(outcome.status == StageStatus::fail);
-    SNITCH_CHECK(!type_safe::get(outcome.failure_reason).empty());
+    SNITCH_CHECK(!outcome.failure_reason.empty());
 }
 
 // -- AC4: loop_restart ---------------------------------------------------------
@@ -266,7 +265,7 @@ SNITCH_TEST_CASE("[engine] no start node returns Outcome{fail}")
     auto outcome = engine.run(graph, RunConfig{.logs_root = logs.logs_root()});
 
     SNITCH_CHECK(outcome.status == StageStatus::fail);
-    SNITCH_CHECK(!type_safe::get(outcome.failure_reason).empty());
+    SNITCH_CHECK(!outcome.failure_reason.empty());
 }
 
 SNITCH_TEST_CASE("[engine] weight-based edge selection: higher weight wins")
@@ -298,7 +297,7 @@ SNITCH_TEST_CASE("[engine] weight-based edge selection: higher weight wins")
     TempLogsDir logs;
     Engine engine{std::move(reg)};
 
-    engine.run(graph, RunConfig{.logs_root = logs.logs_root()});
+    (void)engine.run(graph, RunConfig{.logs_root = logs.logs_root()});
 
     SNITCH_CHECK(raw_high->call_count == 1);
     SNITCH_CHECK(raw_low->call_count == 0);
@@ -333,7 +332,7 @@ SNITCH_TEST_CASE("[engine] lexical tiebreak: alpha before beta when weights equa
     TempLogsDir logs;
     Engine engine{std::move(reg)};
 
-    engine.run(graph, RunConfig{.logs_root = logs.logs_root()});
+    (void)engine.run(graph, RunConfig{.logs_root = logs.logs_root()});
 
     SNITCH_CHECK(raw_alpha->call_count == 1);
     SNITCH_CHECK(raw_beta->call_count == 0);
