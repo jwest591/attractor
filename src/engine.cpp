@@ -10,10 +10,13 @@
 #include <attractor/handlers/exit_handler.hpp>
 #include <attractor/handlers/start_handler.hpp>
 #include <attractor/types.hpp>
+#include <cctype>
 #include <map>
 #include <memory>
+#include <nlohmann/json.hpp>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <type_safe/strong_typedef.hpp>
 #include <vector>
 
@@ -64,20 +67,157 @@ Outcome safe_execute(const Handler& handler, const Node& node, Context& ctx, con
     }
 }
 
-// Edge selection Steps 4+5 for unconditional edges (condition is empty).
-// Steps 1-3 (condition evaluation, preferred_label, suggested_next_ids) deferred to Story 2.4.
-const Edge* select_edge(const Node& node, const Graph& graph)
+std::string stage_status_to_string(StageStatus status)
 {
-    std::vector<const Edge*> candidates;
-    for (const auto& edge : graph.edges) {
-        if (edge.from == node.id && edge.condition.empty()) {
-            candidates.push_back(&edge);
+    switch (status) {
+    case StageStatus::success:
+        return "success";
+    case StageStatus::partial_success:
+        return "partial_success";
+    case StageStatus::fail:
+        return "fail";
+    case StageStatus::retry:
+        return "retry";
+    case StageStatus::skipped:
+        return "skipped";
+    }
+    return "";
+}
+
+std::string trim(const std::string& s)
+{
+    const auto start = s.find_first_not_of(" \t\n\r");
+    if (start == std::string::npos) {
+        return "";
+    }
+    const auto end = s.find_last_not_of(" \t\n\r");
+    return s.substr(start, end - start + 1);
+}
+
+std::string normalize_label(const std::string& s)
+{
+    std::string t = trim(s);
+
+    if (t.size() >= 4 && t[0] == '[') {
+        if (t[2] == ']' && t[3] == ' ') {
+            t = t.substr(4);
         }
     }
-    if (candidates.empty()) {
-        return nullptr;
+    else if (t.size() >= 3 && std::isalnum(static_cast<unsigned char>(t[0])) && t[1] == ')' && t[2] == ' ') {
+        t = t.substr(3);
+    }
+    else if (t.size() >= 4 && std::isalnum(static_cast<unsigned char>(t[0])) && t[1] == ' ' && t[2] == '-' &&
+             t[3] == ' ') {
+        t = t.substr(4);
     }
 
+    std::transform(t.begin(), t.end(), t.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return t;
+}
+
+std::string lookup_context(const nlohmann::json& snapshot, std::string_view path)
+{
+    const nlohmann::json* current = &snapshot;
+
+    while (!path.empty()) {
+        const auto dot = path.find('.');
+        const std::string key(dot == std::string_view::npos ? path : path.substr(0, dot));
+
+        if (!current->is_object() || !current->contains(key)) {
+            return "";
+        }
+        current = &(*current)[key];
+
+        if (dot == std::string_view::npos) {
+            break;
+        }
+        path = path.substr(dot + 1);
+    }
+
+    if (current->is_string()) {
+        return current->get<std::string>();
+    }
+    if (current->is_null()) {
+        return "";
+    }
+    return current->dump();
+}
+
+bool eval_clause(const std::string& clause_str, const Outcome& outcome, const nlohmann::json& context_snapshot)
+{
+    const std::string clause = trim(clause_str);
+
+    const auto neq_pos = clause.find("!=");
+    const auto eq_pos = clause.find('=');
+
+    std::string key_str;
+    std::string op;
+    std::string val;
+
+    if (neq_pos != std::string::npos && (eq_pos == std::string::npos || neq_pos < eq_pos)) {
+        key_str = trim(clause.substr(0, neq_pos));
+        op = "!=";
+        val = trim(clause.substr(neq_pos + 2));
+    }
+    else if (eq_pos != std::string::npos) {
+        key_str = trim(clause.substr(0, eq_pos));
+        op = "=";
+        val = trim(clause.substr(eq_pos + 1));
+    }
+    else {
+        return false;
+    }
+
+    std::string actual;
+    if (key_str == "outcome") {
+        actual = stage_status_to_string(outcome.status);
+    }
+    else if (key_str == "preferred_label") {
+        actual = type_safe::get(outcome.preferred_label);
+    }
+    else if (key_str.starts_with("context.")) {
+        actual = lookup_context(context_snapshot, std::string_view(key_str).substr(8));
+    }
+    else {
+        return false;
+    }
+
+    if (op == "=") {
+        return actual == val;
+    }
+    if (op == "!=") {
+        return actual != val;
+    }
+    return false;
+}
+
+bool eval_condition(const ConditionExpr& condition, const Outcome& outcome, const nlohmann::json& context_snapshot)
+{
+    if (condition.empty()) {
+        return true;
+    }
+
+    const std::string expr = type_safe::get(condition);
+
+    std::string::size_type pos = 0;
+    while (true) {
+        const auto amp = expr.find("&&", pos);
+        const std::string clause = (amp == std::string::npos) ? expr.substr(pos) : expr.substr(pos, amp - pos);
+
+        if (!eval_clause(clause, outcome, context_snapshot)) {
+            return false;
+        }
+
+        if (amp == std::string::npos) {
+            break;
+        }
+        pos = amp + 2;
+    }
+    return true;
+}
+
+const Edge* best_by_weight_then_lexical(std::vector<const Edge*>& candidates)
+{
     std::sort(candidates.begin(), candidates.end(), [](const Edge* a, const Edge* b) {
         const int wa = a->weight.get_value();
         const int wb = b->weight.get_value();
@@ -86,8 +226,62 @@ const Edge* select_edge(const Node& node, const Graph& graph)
         }
         return a->to < b->to;
     });
-
     return candidates[0];
+}
+
+// 5-step deterministic edge selection.
+// Step 1: condition match; Steps 2-5: unconditional edges only.
+// Returns nullptr if no edge is selectable.
+const Edge* select_edge(const Node& node, const Outcome& outcome, const nlohmann::json& context_snapshot,
+                        const Graph& graph)
+{
+    std::vector<const Edge*> conditional_candidates;
+    std::vector<const Edge*> unconditional_candidates;
+
+    for (const auto& edge : graph.edges) {
+        if (edge.from != node.id) {
+            continue;
+        }
+        if (edge.condition.empty()) {
+            unconditional_candidates.push_back(&edge);
+        }
+        else if (eval_condition(edge.condition, outcome, context_snapshot)) {
+            conditional_candidates.push_back(&edge);
+        }
+    }
+
+    // Step 1: any condition matched?
+    if (!conditional_candidates.empty()) {
+        return best_by_weight_then_lexical(conditional_candidates);
+    }
+
+    if (unconditional_candidates.empty()) {
+        return nullptr;
+    }
+
+    // Step 2: preferred_label match (first match among unconditional edges)
+    if (!outcome.preferred_label.empty()) {
+        const std::string norm_pref = normalize_label(type_safe::get(outcome.preferred_label));
+        for (const Edge* e : unconditional_candidates) {
+            if (!e->label.empty() && normalize_label(type_safe::get(e->label)) == norm_pref) {
+                return e;
+            }
+        }
+    }
+
+    // Step 3: suggested_next_ids match (first id in list order, first matching edge)
+    if (!outcome.suggested_next_ids.empty()) {
+        for (const NodeId& nid : outcome.suggested_next_ids) {
+            for (const Edge* e : unconditional_candidates) {
+                if (e->to == nid) {
+                    return e;
+                }
+            }
+        }
+    }
+
+    // Steps 4+5: weight descending, lexical tiebreak on target node ID
+    return best_by_weight_then_lexical(unconditional_candidates);
 }
 
 }  // namespace
@@ -117,6 +311,7 @@ auto Engine::run_from(const Graph& graph, const NodeId& start_id, const RunConfi
 {
     std::map<NodeId, Outcome> node_outcomes;
     NodeId current_id = start_id;
+    nlohmann::json context_snapshot = nlohmann::json::object();
 
     while (true) {
         const Node* node = find_node(graph, current_id);
@@ -165,7 +360,11 @@ auto Engine::run_from(const Graph& graph, const NodeId& start_id, const RunConfi
 
         node_outcomes[node->id] = outcome;
 
-        const Edge* next_edge = select_edge(*node, graph);
+        for (const auto& [key, value] : outcome.context_updates.items()) {
+            context_snapshot[key] = value;
+        }
+
+        const Edge* next_edge = select_edge(*node, outcome, context_snapshot, graph);
 
         if (next_edge == nullptr) {
             if (outcome.status == StageStatus::fail || outcome.status == StageStatus::retry) {
@@ -178,7 +377,9 @@ auto Engine::run_from(const Graph& graph, const NodeId& start_id, const RunConfi
             return run_from(graph, next_edge->to, config);
         }
 
-        if (outcome.status == StageStatus::fail || outcome.status == StageStatus::retry) {
+        // Fail/retry outcomes do not follow unconditional edges.
+        if ((outcome.status == StageStatus::fail || outcome.status == StageStatus::retry) &&
+            next_edge->condition.empty()) {
             return outcome;
         }
 
