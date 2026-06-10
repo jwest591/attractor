@@ -449,9 +449,15 @@ static auto parse_duration(std::string_view s) -> std::optional<TimeoutDuration>
 
 static auto parse_reasoning_effort(std::string_view s) -> std::optional<ReasoningEffort>
 {
-    if (s == "low") return ReasoningEffort::low;
-    if (s == "medium") return ReasoningEffort::medium;
-    if (s == "high") return ReasoningEffort::high;
+    if (s == "low") {
+        return ReasoningEffort::low;
+    }
+    if (s == "medium") {
+        return ReasoningEffort::medium;
+    }
+    if (s == "high") {
+        return ReasoningEffort::high;
+    }
     return std::nullopt;
 }
 
@@ -554,8 +560,8 @@ struct TokenStream {
 
 // ── Attribute application ─────────────────────────────────────────────────────
 
-static auto apply_attrs_to_node(Node& node,
-                                const std::unordered_map<std::string, std::string>& attrs) -> std::optional<ParseError>
+static auto apply_attrs_to_node(Node& node, const std::unordered_map<std::string, std::string>& attrs)
+    -> std::optional<ParseError>
 {
     for (const auto& [key, val] : attrs) {
         if (key == "label") {
@@ -597,7 +603,7 @@ static auto apply_attrs_to_node(Node& node,
             node.thread_id = ThreadId{val};
         }
         else if (key == "class") {
-            if (type_safe::get(node.css_class).empty()) {
+            if (node.css_class.empty()) {
                 node.css_class = CssClass{val};
             }
             else {
@@ -637,8 +643,8 @@ static auto apply_attrs_to_node(Node& node,
     return std::nullopt;
 }
 
-static auto apply_attrs_to_edge(Edge& edge,
-                                const std::unordered_map<std::string, std::string>& attrs) -> std::optional<ParseError>
+static auto apply_attrs_to_edge(Edge& edge, const std::unordered_map<std::string, std::string>& attrs)
+    -> std::optional<ParseError>
 {
     for (const auto& [key, val] : attrs) {
         if (key == "label") {
@@ -671,8 +677,8 @@ static auto apply_attrs_to_edge(Edge& edge,
     return std::nullopt;
 }
 
-static auto apply_attrs_to_graph(Graph& graph,
-                                 const std::unordered_map<std::string, std::string>& attrs) -> std::optional<ParseError>
+static auto apply_attrs_to_graph(Graph& graph, const std::unordered_map<std::string, std::string>& attrs)
+    -> std::optional<ParseError>
 {
     for (const auto& [key, val] : attrs) {
         if (key == "goal") {
@@ -800,7 +806,7 @@ static auto ensure_node_exists(ParseContext& ctx, const std::string& id) -> std:
         return err;
     }
     if (!ctx.subgraph_class.empty()) {
-        if (type_safe::get(nd.css_class).empty()) {
+        if (nd.css_class.empty()) {
             nd.css_class = CssClass{ctx.subgraph_class};
         }
         else {
@@ -859,7 +865,7 @@ static auto parse_node_stmt(TokenStream& ts, ParseContext& ctx, const Token& id_
         }
         // Apply subgraph CSS class
         if (!ctx.subgraph_class.empty()) {
-            if (type_safe::get(nd.css_class).empty()) {
+            if (nd.css_class.empty()) {
                 nd.css_class = CssClass{ctx.subgraph_class};
             }
             else {
@@ -1019,7 +1025,7 @@ static auto parse_subgraph_stmt(TokenStream& ts, ParseContext& ctx) -> std::opti
     if (!derived_class.empty()) {
         for (std::size_t i = nodes_before; i < ctx.graph.nodes.size(); ++i) {
             Node& nd = ctx.graph.nodes[i];
-            if (type_safe::get(nd.css_class).empty()) {
+            if (nd.css_class.empty()) {
                 nd.css_class = CssClass{derived_class};
             }
             else {
@@ -1038,8 +1044,8 @@ static auto parse_subgraph_stmt(TokenStream& ts, ParseContext& ctx) -> std::opti
     return std::nullopt;
 }
 
-static auto parse_statement_list(TokenStream& ts, ParseContext& ctx, bool is_subgraph,
-                                 std::string* subgraph_label_out) -> std::optional<ParseError>
+static auto parse_statement_list(TokenStream& ts, ParseContext& ctx, bool is_subgraph, std::string* subgraph_label_out)
+    -> std::optional<ParseError>
 {
     while (!ts.at_eof()) {
         const Token& t = ts.peek();
@@ -1206,7 +1212,7 @@ auto parse_graph(std::string_view source) -> std::expected<Graph, ParseError>
 
     // Apply default labels: label = id string where label is empty
     for (auto& nd : ctx.graph.nodes) {
-        if (type_safe::get(nd.label).empty()) {
+        if (nd.label.empty()) {
             nd.label = NodeLabel{type_safe::get(nd.id)};
         }
     }

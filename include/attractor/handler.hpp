@@ -34,7 +34,7 @@ struct Outcome {
 class CodergenBackend {
   public:
     virtual ~CodergenBackend() = default;
-    [[nodiscard]] virtual auto run(const Node& node, std::string_view prompt,
+    [[nodiscard]] virtual auto run(const Node& node, const PromptText& prompt,
                                    Context& ctx) const -> std::expected<LlmResponse, Outcome> = 0;
 };
 

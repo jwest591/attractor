@@ -1,8 +1,8 @@
 #include <attractor/transform.hpp>
 
+#include <algorithm>
 #include <attractor/graph.hpp>
 #include <attractor/types.hpp>
-#include <algorithm>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -73,10 +73,11 @@ static auto rtrim(std::string_view sv) -> std::string_view
     return end == std::string_view::npos ? sv.substr(0, 0) : sv.substr(0, end + 1);
 }
 
-static auto parse_stylesheet(std::string_view ss) -> std::vector<StyleRule>
+static auto parse_stylesheet(const StylesheetId& ssid) -> std::vector<StyleRule>
 {
     std::vector<StyleRule> rules;
 
+    std::string_view ss = type_safe::get(ssid);
     while (true) {
         skip_ws(ss);
         if (ss.empty()) {
@@ -203,12 +204,11 @@ auto VariableExpansionTransform::apply(const Graph& graph) const -> Graph
 
 auto StylesheetTransform::apply(const Graph& graph) const -> Graph
 {
-    const auto& ss = type_safe::get(graph.model_stylesheet);
-    if (ss.empty()) {
+    if (graph.model_stylesheet.empty()) {
         return graph;
     }
 
-    auto rules = detail::parse_stylesheet(ss);
+    auto rules = detail::parse_stylesheet(graph.model_stylesheet);
     Graph out = graph;
 
     for (auto& node : out.nodes) {
@@ -235,10 +235,10 @@ auto StylesheetTransform::apply(const Graph& graph) const -> Graph
             }
         }
 
-        if (!best_model.empty() && type_safe::get(node.llm_model).empty()) {
+        if (!best_model.empty() && node.llm_model.empty()) {
             node.llm_model = LlmModel{best_model};
         }
-        if (!best_provider.empty() && type_safe::get(node.llm_provider).empty()) {
+        if (!best_provider.empty() && node.llm_provider.empty()) {
             node.llm_provider = LlmProvider{best_provider};
         }
         if (!best_effort.empty() && !node.reasoning_effort.has_value()) {

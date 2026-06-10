@@ -16,6 +16,11 @@ add_library(attractor STATIC
     validator.cpp
     transform.cpp
     handler_registry.cpp
+    handlers/start_handler.cpp
+    handlers/exit_handler.cpp
+    handlers/conditional_handler.cpp
+    handlers/codergen_handler.cpp
+    backends/noop_backend.cpp
 )
 
 add_library(attractor::attractor ALIAS attractor)

@@ -20,6 +20,8 @@ struct NodeId
     , ts::strong_typedef_op::equality_comparison<NodeId>
     , ts::strong_typedef_op::relational_comparison<NodeId> {
     using strong_typedef::strong_typedef;
+
+    bool empty() const noexcept { return static_cast<std::string>(*this).empty(); }
 };
 
 struct EdgeLabel
@@ -27,6 +29,8 @@ struct EdgeLabel
     , ts::strong_typedef_op::equality_comparison<EdgeLabel>
     , ts::strong_typedef_op::relational_comparison<EdgeLabel> {
     using strong_typedef::strong_typedef;
+
+    bool empty() const noexcept { return static_cast<std::string>(*this).empty(); }
 };
 
 struct ArtifactId
@@ -34,6 +38,8 @@ struct ArtifactId
     , ts::strong_typedef_op::equality_comparison<ArtifactId>
     , ts::strong_typedef_op::relational_comparison<ArtifactId> {
     using strong_typedef::strong_typedef;
+
+    bool empty() const noexcept { return static_cast<std::string>(*this).empty(); }
 };
 
 struct HandlerTypeName
@@ -41,6 +47,8 @@ struct HandlerTypeName
     , ts::strong_typedef_op::equality_comparison<HandlerTypeName>
     , ts::strong_typedef_op::relational_comparison<HandlerTypeName> {
     using strong_typedef::strong_typedef;
+
+    bool empty() const noexcept { return static_cast<std::string>(*this).empty(); }
 };
 
 struct ContextKey
@@ -48,6 +56,8 @@ struct ContextKey
     , ts::strong_typedef_op::equality_comparison<ContextKey>
     , ts::strong_typedef_op::relational_comparison<ContextKey> {
     using strong_typedef::strong_typedef;
+
+    bool empty() const noexcept { return static_cast<std::string>(*this).empty(); }
 };
 
 struct ThreadId
@@ -55,6 +65,8 @@ struct ThreadId
     , ts::strong_typedef_op::equality_comparison<ThreadId>
     , ts::strong_typedef_op::relational_comparison<ThreadId> {
     using strong_typedef::strong_typedef;
+
+    bool empty() const noexcept { return static_cast<std::string>(*this).empty(); }
 };
 
 struct PromptText
@@ -62,6 +74,8 @@ struct PromptText
     , ts::strong_typedef_op::equality_comparison<PromptText>
     , ts::strong_typedef_op::relational_comparison<PromptText> {
     using strong_typedef::strong_typedef;
+
+    bool empty() const noexcept { return static_cast<std::string>(*this).empty(); }
 };
 
 struct GoalText
@@ -69,6 +83,8 @@ struct GoalText
     , ts::strong_typedef_op::equality_comparison<GoalText>
     , ts::strong_typedef_op::relational_comparison<GoalText> {
     using strong_typedef::strong_typedef;
+
+    bool empty() const noexcept { return static_cast<std::string>(*this).empty(); }
 };
 
 struct LogsRoot
@@ -76,6 +92,8 @@ struct LogsRoot
     , ts::strong_typedef_op::equality_comparison<LogsRoot>
     , ts::strong_typedef_op::relational_comparison<LogsRoot> {
     using strong_typedef::strong_typedef;
+
+    bool empty() const noexcept { return static_cast<std::string>(*this).empty(); }
 };
 
 struct NodeLabel
@@ -83,6 +101,8 @@ struct NodeLabel
     , ts::strong_typedef_op::equality_comparison<NodeLabel>
     , ts::strong_typedef_op::relational_comparison<NodeLabel> {
     using strong_typedef::strong_typedef;
+
+    bool empty() const noexcept { return static_cast<std::string>(*this).empty(); }
 };
 
 struct NodeShape
@@ -90,6 +110,8 @@ struct NodeShape
     , ts::strong_typedef_op::equality_comparison<NodeShape>
     , ts::strong_typedef_op::relational_comparison<NodeShape> {
     using strong_typedef::strong_typedef;
+
+    bool empty() const noexcept { return static_cast<std::string>(*this).empty(); }
 };
 
 struct CssClass
@@ -97,6 +119,8 @@ struct CssClass
     , ts::strong_typedef_op::equality_comparison<CssClass>
     , ts::strong_typedef_op::relational_comparison<CssClass> {
     using strong_typedef::strong_typedef;
+
+    bool empty() const noexcept { return static_cast<std::string>(*this).empty(); }
 };
 
 struct LlmModel
@@ -104,6 +128,8 @@ struct LlmModel
     , ts::strong_typedef_op::equality_comparison<LlmModel>
     , ts::strong_typedef_op::relational_comparison<LlmModel> {
     using strong_typedef::strong_typedef;
+
+    bool empty() const noexcept { return static_cast<std::string>(*this).empty(); }
 };
 
 struct LlmProvider
@@ -111,6 +137,8 @@ struct LlmProvider
     , ts::strong_typedef_op::equality_comparison<LlmProvider>
     , ts::strong_typedef_op::relational_comparison<LlmProvider> {
     using strong_typedef::strong_typedef;
+
+    bool empty() const noexcept { return static_cast<std::string>(*this).empty(); }
 };
 
 struct GraphId
@@ -118,6 +146,8 @@ struct GraphId
     , ts::strong_typedef_op::equality_comparison<GraphId>
     , ts::strong_typedef_op::relational_comparison<GraphId> {
     using strong_typedef::strong_typedef;
+
+    bool empty() const noexcept { return static_cast<std::string>(*this).empty(); }
 };
 
 struct GraphLabel
@@ -125,6 +155,8 @@ struct GraphLabel
     , ts::strong_typedef_op::equality_comparison<GraphLabel>
     , ts::strong_typedef_op::relational_comparison<GraphLabel> {
     using strong_typedef::strong_typedef;
+
+    bool empty() const noexcept { return static_cast<std::string>(*this).empty(); }
 };
 
 struct StylesheetId
@@ -132,6 +164,8 @@ struct StylesheetId
     , ts::strong_typedef_op::equality_comparison<StylesheetId>
     , ts::strong_typedef_op::relational_comparison<StylesheetId> {
     using strong_typedef::strong_typedef;
+
+    bool empty() const noexcept { return static_cast<std::string>(*this).empty(); }
 };
 
 struct DotfilePath
@@ -139,6 +173,8 @@ struct DotfilePath
     , ts::strong_typedef_op::equality_comparison<DotfilePath>
     , ts::strong_typedef_op::relational_comparison<DotfilePath> {
     using strong_typedef::strong_typedef;
+
+    bool empty() const noexcept { return static_cast<std::string>(*this).empty(); }
 };
 
 struct WorkDir
@@ -146,6 +182,8 @@ struct WorkDir
     , ts::strong_typedef_op::equality_comparison<WorkDir>
     , ts::strong_typedef_op::relational_comparison<WorkDir> {
     using strong_typedef::strong_typedef;
+
+    bool empty() const noexcept { return static_cast<std::string>(*this).empty(); }
 };
 
 struct ShellCommand
@@ -153,6 +191,8 @@ struct ShellCommand
     , ts::strong_typedef_op::equality_comparison<ShellCommand>
     , ts::strong_typedef_op::relational_comparison<ShellCommand> {
     using strong_typedef::strong_typedef;
+
+    bool empty() const noexcept { return static_cast<std::string>(*this).empty(); }
 };
 
 struct ConditionExpr
@@ -160,6 +200,8 @@ struct ConditionExpr
     , ts::strong_typedef_op::equality_comparison<ConditionExpr>
     , ts::strong_typedef_op::relational_comparison<ConditionExpr> {
     using strong_typedef::strong_typedef;
+
+    bool empty() const noexcept { return static_cast<std::string>(*this).empty(); }
 };
 
 struct RuleId
@@ -167,6 +209,8 @@ struct RuleId
     , ts::strong_typedef_op::equality_comparison<RuleId>
     , ts::strong_typedef_op::relational_comparison<RuleId> {
     using strong_typedef::strong_typedef;
+
+    bool empty() const noexcept { return static_cast<std::string>(*this).empty(); }
 };
 
 struct DiagnosticMessage
@@ -174,6 +218,8 @@ struct DiagnosticMessage
     , ts::strong_typedef_op::equality_comparison<DiagnosticMessage>
     , ts::strong_typedef_op::relational_comparison<DiagnosticMessage> {
     using strong_typedef::strong_typedef;
+
+    bool empty() const noexcept { return static_cast<std::string>(*this).empty(); }
 };
 
 struct SuggestedFix
@@ -181,6 +227,8 @@ struct SuggestedFix
     , ts::strong_typedef_op::equality_comparison<SuggestedFix>
     , ts::strong_typedef_op::relational_comparison<SuggestedFix> {
     using strong_typedef::strong_typedef;
+
+    bool empty() const noexcept { return static_cast<std::string>(*this).empty(); }
 };
 
 struct HandlerNote
@@ -188,6 +236,8 @@ struct HandlerNote
     , ts::strong_typedef_op::equality_comparison<HandlerNote>
     , ts::strong_typedef_op::relational_comparison<HandlerNote> {
     using strong_typedef::strong_typedef;
+
+    bool empty() const noexcept { return static_cast<std::string>(*this).empty(); }
 };
 
 struct LlmResponse
@@ -195,6 +245,8 @@ struct LlmResponse
     , ts::strong_typedef_op::equality_comparison<LlmResponse>
     , ts::strong_typedef_op::relational_comparison<LlmResponse> {
     using strong_typedef::strong_typedef;
+
+    bool empty() const noexcept { return static_cast<std::string>(*this).empty(); }
 };
 
 // ── Constrained types (AC2) ───────────────────────────────────────────────────
@@ -350,12 +402,7 @@ void from_json(const nlohmann::json& j, FidelityMode& v);
 namespace std {
 
 template<>
-struct hash<attractor::HandlerTypeName> {
-    size_t operator()(const attractor::HandlerTypeName& v) const noexcept
-    {
-        return hash<std::string>{}(type_safe::get(v));
-    }
-};
+struct hash<attractor::HandlerTypeName> : type_safe::hashable<attractor::HandlerTypeName> {};
 
 }  // namespace std
 
