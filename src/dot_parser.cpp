@@ -639,6 +639,19 @@ static auto apply_attrs_to_node(Node& node, const std::unordered_map<std::string
         else if (key == "human.default_choice") {
             node.human_default_choice = NodeId{val};
         }
+        else if (key == "tool_command") {
+            node.tool_command = ShellCommand{val};
+        }
+        else if (key == "manager.stop_condition") {
+            node.manager_stop_condition = ConditionExpr{val};
+        }
+        else if (key == "manager.max_cycles") {
+            auto n_opt = parse_int_attr(val);
+            if (!n_opt || *n_opt <= 0) {
+                return ParseError{"invalid value for attribute 'manager.max_cycles': '" + val + "'", 0, 0};
+            }
+            node.manager_max_cycles = *n_opt;
+        }
     }
     return std::nullopt;
 }

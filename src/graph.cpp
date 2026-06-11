@@ -59,6 +59,11 @@ void to_json(nlohmann::json& j, const Node& n)
     j["allow_partial"] = bool{n.allow_partial};
     j["human_default_choice"] = nlohmann::json{};
     to_json(j["human_default_choice"], n.human_default_choice);
+    j["tool_command"] = nlohmann::json{};
+    to_json(j["tool_command"], n.tool_command);
+    j["manager_stop_condition"] = nlohmann::json{};
+    to_json(j["manager_stop_condition"], n.manager_stop_condition);
+    j["manager_max_cycles"] = n.manager_max_cycles;
 }
 
 void from_json(const nlohmann::json& j, Node& n)
@@ -109,6 +114,18 @@ void from_json(const nlohmann::json& j, Node& n)
     n.auto_status = j.at("auto_status").get<bool>();
     n.allow_partial = j.at("allow_partial").get<bool>();
     from_json(j.at("human_default_choice"), n.human_default_choice);
+    if (j.contains("tool_command")) {
+        from_json(j.at("tool_command"), n.tool_command);
+    }
+    if (j.contains("manager_stop_condition")) {
+        from_json(j.at("manager_stop_condition"), n.manager_stop_condition);
+    }
+    if (j.contains("manager_max_cycles")) {
+        const int v = j.at("manager_max_cycles").get<int>();
+        if (v > 0) {
+            n.manager_max_cycles = v;
+        }
+    }
 }
 
 void to_json(nlohmann::json& j, const Edge& e)

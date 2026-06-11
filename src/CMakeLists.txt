@@ -25,6 +25,8 @@ add_library(attractor STATIC
     handlers/exit_handler.cpp
     handlers/conditional_handler.cpp
     handlers/codergen_handler.cpp
+    handlers/tool_handler.cpp
+    handlers/manager_loop_handler.cpp
     backends/noop_backend.cpp
 )
 

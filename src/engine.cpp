@@ -1,6 +1,7 @@
 #include <attractor/engine.hpp>
 
 #include <algorithm>
+#include <attractor/condition_eval.hpp>
 #include <attractor/backends/noop_backend.hpp>
 #include <attractor/checkpoint.hpp>
 #include <attractor/events.hpp>
@@ -194,31 +195,6 @@ bool eval_clause(const std::string& clause_str, const Outcome& outcome, const nl
     return false;
 }
 
-bool eval_condition(const ConditionExpr& condition, const Outcome& outcome, const nlohmann::json& context_snapshot)
-{
-    if (condition.empty()) {
-        return true;
-    }
-
-    const std::string expr = type_safe::get(condition);
-
-    std::string::size_type pos = 0;
-    while (true) {
-        const auto amp = expr.find("&&", pos);
-        const std::string clause = (amp == std::string::npos) ? expr.substr(pos) : expr.substr(pos, amp - pos);
-
-        if (!eval_clause(clause, outcome, context_snapshot)) {
-            return false;
-        }
-
-        if (amp == std::string::npos) {
-            break;
-        }
-        pos = amp + 2;
-    }
-    return true;
-}
-
 const Edge* best_by_weight_then_lexical(std::vector<const Edge*>& candidates)
 {
     std::sort(candidates.begin(), candidates.end(), [](const Edge* a, const Edge* b) {
@@ -337,6 +313,31 @@ const Edge* select_edge(const Node& node, const Outcome& outcome, const nlohmann
 }
 
 }  // namespace
+
+bool eval_condition(const ConditionExpr& condition, const Outcome& outcome, const nlohmann::json& context_snapshot)
+{
+    if (condition.empty()) {
+        return true;
+    }
+
+    const std::string expr = type_safe::get(condition);
+
+    std::string::size_type pos = 0;
+    while (true) {
+        const auto amp = expr.find("&&", pos);
+        const std::string clause = (amp == std::string::npos) ? expr.substr(pos) : expr.substr(pos, amp - pos);
+
+        if (!eval_clause(clause, outcome, context_snapshot)) {
+            return false;
+        }
+
+        if (amp == std::string::npos) {
+            break;
+        }
+        pos = amp + 2;
+    }
+    return true;
+}
 
 Engine::Engine()
 {

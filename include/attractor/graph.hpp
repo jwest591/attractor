@@ -30,6 +30,9 @@ struct Node {
     ts::boolean auto_status{false};
     ts::boolean allow_partial{false};
     NodeId human_default_choice;
+    ShellCommand tool_command;
+    ConditionExpr manager_stop_condition;
+    int manager_max_cycles{1000};
 };
 
 struct Edge {
