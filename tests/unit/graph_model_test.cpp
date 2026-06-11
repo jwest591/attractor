@@ -51,6 +51,7 @@ SNITCH_TEST_CASE("[graph_model] Node JSON round-trip")
     from_json(j, restored);
     SNITCH_CHECK(restored.id == n.id);
     SNITCH_CHECK(restored.label == n.label);
+    SNITCH_CHECK(restored.shape == NodeShape::box);
     SNITCH_CHECK(restored.goal_gate == n.goal_gate);
     SNITCH_REQUIRE(restored.timeout.has_value());
     SNITCH_CHECK(restored.timeout->get_value() == milliseconds{5000});

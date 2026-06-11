@@ -356,3 +356,39 @@ SNITCH_TEST_CASE("[dot_parser] unknown shape emits ParseError")
     SNITCH_REQUIRE(!result.has_value());
     SNITCH_CHECK(result.error().message.find("unknownshape") != std::string::npos);
 }
+
+SNITCH_TEST_CASE("[dot_parser] all 9 canonical shapes parse to correct enum values")
+{
+    auto result = parse_graph(R"(
+        digraph g {
+            S  [shape=Mdiamond]
+            X  [shape=Msquare]
+            B  [shape=box]
+            H  [shape=hexagon]
+            D  [shape=diamond]
+            C  [shape=component]
+            T  [shape=tripleoctagon]
+            P  [shape=parallelogram]
+            M  [shape=house]
+        }
+    )");
+    SNITCH_REQUIRE(result.has_value());
+    SNITCH_REQUIRE(result->nodes.size() == 9);
+
+    auto find = [&](std::string_view id) -> const Node* {
+        for (const auto& n : result->nodes) {
+            if (type_safe::get(n.id) == id) return &n;
+        }
+        return nullptr;
+    };
+
+    auto* s = find("S"); SNITCH_REQUIRE(s); SNITCH_CHECK(s->shape == NodeShape::mdiamond);
+    auto* x = find("X"); SNITCH_REQUIRE(x); SNITCH_CHECK(x->shape == NodeShape::msquare);
+    auto* b = find("B"); SNITCH_REQUIRE(b); SNITCH_CHECK(b->shape == NodeShape::box);
+    auto* h = find("H"); SNITCH_REQUIRE(h); SNITCH_CHECK(h->shape == NodeShape::hexagon);
+    auto* d = find("D"); SNITCH_REQUIRE(d); SNITCH_CHECK(d->shape == NodeShape::diamond);
+    auto* c = find("C"); SNITCH_REQUIRE(c); SNITCH_CHECK(c->shape == NodeShape::component);
+    auto* t = find("T"); SNITCH_REQUIRE(t); SNITCH_CHECK(t->shape == NodeShape::triple_octagon);
+    auto* p = find("P"); SNITCH_REQUIRE(p); SNITCH_CHECK(p->shape == NodeShape::parallelogram);
+    auto* m = find("M"); SNITCH_REQUIRE(m); SNITCH_CHECK(m->shape == NodeShape::house);
+}

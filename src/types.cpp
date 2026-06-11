@@ -296,7 +296,7 @@ auto node_shape_to_string(NodeShape s) noexcept -> std::string_view
             return name;
         }
     }
-    return {};
+    std::unreachable();
 }
 
 auto node_shape_from_string(std::string_view s) noexcept -> std::optional<NodeShape>
