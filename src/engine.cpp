@@ -355,6 +355,11 @@ Engine::Engine(HandlerRegistry registry, EventObserver on_event)
     : m_registry{std::move(registry)}, m_on_event{std::move(on_event)}
 {}
 
+Engine::Engine(EventObserver on_event) : Engine()
+{
+    m_on_event = std::move(on_event);
+}
+
 auto Engine::run(const Graph& graph, const RunConfig& config) const -> Outcome
 {
     const Node* start = find_start_node(graph);

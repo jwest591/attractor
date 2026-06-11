@@ -3,6 +3,7 @@
 #include <attractor/checkpoint.hpp>
 #include <attractor/context.hpp>
 #include <attractor/engine.hpp>
+#include <attractor/events.hpp>
 #include <attractor/graph.hpp>
 #include <attractor/handler.hpp>
 #include <attractor/handler_registry.hpp>
@@ -12,6 +13,9 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <type_safe/strong_typedef.hpp>
+#include <variant>
+#include <vector>
 
 using namespace attractor;
 using namespace attractor::test;
@@ -367,4 +371,42 @@ SNITCH_TEST_CASE("[engine] resume from checkpoint skips completed nodes -- 2.6-E
 
     SNITCH_CHECK(outcome.status == StageStatus::success);
     SNITCH_CHECK(raw_a->call_count == 0);
+}
+
+// -- Story 2.9: Engine(EventObserver) constructor ------------------------------
+
+SNITCH_TEST_CASE("[engine] Engine(EventObserver) calls observer for non-terminal nodes -- 2.9-U-001")
+{
+    // Red phase: fails to compile until Engine::Engine(EventObserver) is declared in engine.hpp.
+    // Observer receives StageStarted + StageCompleted for each non-terminal node.
+    // Terminal node (Msquare) emits no events.
+    auto graph = parse_ok(R"(
+        digraph { start [shape=Mdiamond] node_a [shape=box] done [shape=Msquare]
+                  start -> node_a -> done }
+    )");
+    TempLogsDir logs;
+
+    std::vector<std::string> observed;
+    Engine engine{[&observed](const Event& ev) {
+        std::visit(
+            [&observed](auto&& e) {
+                using T = std::decay_t<decltype(e)>;
+                if constexpr (std::is_same_v<T, StageStarted>) {
+                    observed.push_back("started:" + type_safe::get(e.id));
+                }
+                else if constexpr (std::is_same_v<T, StageCompleted>) {
+                    observed.push_back("completed:" + type_safe::get(e.id));
+                }
+            },
+            ev);
+    }};
+
+    const auto outcome = engine.run(graph, RunConfig{.logs_root = logs.logs_root()});
+
+    SNITCH_CHECK(outcome.status == StageStatus::success);
+    SNITCH_REQUIRE(observed.size() == 4);
+    SNITCH_CHECK(observed[0] == "started:start");
+    SNITCH_CHECK(observed[1] == "completed:start");
+    SNITCH_CHECK(observed[2] == "started:node_a");
+    SNITCH_CHECK(observed[3] == "completed:node_a");
 }

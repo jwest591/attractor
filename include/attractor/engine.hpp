@@ -39,6 +39,9 @@ class Engine {
 
     explicit Engine(HandlerRegistry registry);
     Engine(HandlerRegistry registry, EventObserver on_event);
+    // Uses default handlers (start, exit, codergen/NoOp, conditional) + provided event observer.
+    // Equivalent to Engine() + setting the observer; avoids duplicating default handler setup in callers.
+    explicit Engine(EventObserver on_event);
 
     // Runs the pipeline. Catches all handler exceptions at the boundary.
     // Returns Outcome{success} if the pipeline terminates normally at the exit node
