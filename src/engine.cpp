@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <attractor/backends/noop_backend.hpp>
 #include <attractor/checkpoint.hpp>
+#include <attractor/events.hpp>
 #include <attractor/context.hpp>
 #include <attractor/graph.hpp>
 #include <attractor/handler_registry.hpp>
@@ -349,6 +350,10 @@ Engine::Engine()
 
 Engine::Engine(HandlerRegistry registry) : m_registry{std::move(registry)} {}
 
+Engine::Engine(HandlerRegistry registry, EventObserver on_event)
+    : m_registry{std::move(registry)}, m_on_event{std::move(on_event)}
+{}
+
 auto Engine::run(const Graph& graph, const RunConfig& config) const -> Outcome
 {
     const Node* start = find_start_node(graph);
@@ -433,6 +438,13 @@ auto Engine::run_from(const Graph& graph, const NodeId& start_id, const RunConfi
             return Outcome{};
         }
 
+        // 0-based index = count of already-completed nodes before this one.
+        const int node_index = static_cast<int>(completed_nodes.size());
+
+        if (m_on_event) {
+            m_on_event(Event{StageStarted{node->id, node_index}});
+        }
+
         const Handler& handler = m_registry.resolve(*node);
         const int max_retries = effective_max_retries(*node, graph);
         int remaining = max_retries;
@@ -464,6 +476,11 @@ auto Engine::run_from(const Graph& graph, const NodeId& start_id, const RunConfi
                     DiagnosticMessage{"Retry exhausted: " + type_safe::get(node->id)});
             }
             node_outcomes[node->id] = outcome;
+        }
+
+        // Emit StageCompleted after final outcome is determined.
+        if (m_on_event) {
+            m_on_event(Event{StageCompleted{node->id, node_index}});
         }
 
         // Merge context_updates into persistent context; set engine-controlled keys.

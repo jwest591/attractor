@@ -1,6 +1,7 @@
 #ifndef ATTRACTOR_ENGINE_HPP
 #define ATTRACTOR_ENGINE_HPP
 
+#include <attractor/events.hpp>
 #include <attractor/graph.hpp>
 #include <attractor/handler_registry.hpp>
 #include <attractor/types.hpp>
@@ -37,6 +38,7 @@ class Engine {
     Engine();
 
     explicit Engine(HandlerRegistry registry);
+    Engine(HandlerRegistry registry, EventObserver on_event);
 
     // Runs the pipeline. Catches all handler exceptions at the boundary.
     // Returns Outcome{success} if the pipeline terminates normally at the exit node
@@ -45,6 +47,7 @@ class Engine {
 
   private:
     HandlerRegistry m_registry;
+    EventObserver m_on_event;
 
     [[nodiscard]] auto run_from(const Graph& graph, const NodeId& start_id, const RunConfig& config) const -> Outcome;
 };
