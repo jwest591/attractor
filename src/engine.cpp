@@ -31,9 +31,8 @@ namespace {
 const Node* find_start_node(const Graph& graph)
 {
     for (const auto& node : graph.nodes) {
-        const auto& s = type_safe::get(node.shape);
         const auto& id = type_safe::get(node.id);
-        if (s == "Mdiamond" || id == "start" || id == "Start") {
+        if (node.shape == NodeShape::mdiamond || id == "start" || id == "Start") {
             return &node;
         }
     }
@@ -42,9 +41,8 @@ const Node* find_start_node(const Graph& graph)
 
 bool is_terminal(const Node& node) noexcept
 {
-    const auto& s = type_safe::get(node.shape);
     const auto& id = type_safe::get(node.id);
-    return s == "Msquare" || id == "exit" || id == "end";
+    return node.shape == NodeShape::msquare || id == "exit" || id == "end";
 }
 
 const Node* find_node(const Graph& graph, const NodeId& id)

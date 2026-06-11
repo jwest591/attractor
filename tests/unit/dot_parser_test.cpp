@@ -265,16 +265,16 @@ SNITCH_TEST_CASE("[dot_parser] node and edge defaults scoped correctly")
     };
     auto* a = find("A");
     SNITCH_REQUIRE(a != nullptr);
-    SNITCH_CHECK(type_safe::get(a->shape) == "diamond");
+    SNITCH_CHECK(a->shape == NodeShape::diamond);
 
     auto* c = find("C");
     SNITCH_REQUIRE(c != nullptr);
-    SNITCH_CHECK(type_safe::get(c->shape) == "box");
+    SNITCH_CHECK(c->shape == NodeShape::box);
 
     // D is after subgraph — defaults should revert to diamond
     auto* d = find("D");
     SNITCH_REQUIRE(d != nullptr);
-    SNITCH_CHECK(type_safe::get(d->shape) == "diamond");
+    SNITCH_CHECK(d->shape == NodeShape::diamond);
 }
 
 SNITCH_TEST_CASE("[dot_parser] multi-line attribute block")
@@ -341,7 +341,18 @@ SNITCH_TEST_CASE("[dot_parser] quoted and unquoted attribute values")
     SNITCH_REQUIRE(result.has_value());
     SNITCH_REQUIRE(!result->nodes.empty());
     const auto& n = result->nodes[0];
-    SNITCH_CHECK(type_safe::get(n.shape) == "box");
+    SNITCH_CHECK(n.shape == NodeShape::box);
     SNITCH_CHECK(n.goal_gate == true);
     SNITCH_CHECK(type_safe::get(n.label) == "quoted label");
+}
+
+SNITCH_TEST_CASE("[dot_parser] unknown shape emits ParseError")
+{
+    auto result = parse_graph(R"(
+        digraph g {
+            A [shape=unknownshape]
+        }
+    )");
+    SNITCH_REQUIRE(!result.has_value());
+    SNITCH_CHECK(result.error().message.find("unknownshape") != std::string::npos);
 }

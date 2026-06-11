@@ -196,7 +196,7 @@ SNITCH_TEST_CASE("[transform] stylesheet shape rule overrides universal on match
     StylesheetTransform xform;
     auto out = xform.apply(*result);
     for (const auto& n : out.nodes) {
-        if (type_safe::get(n.shape) == "box") {
+        if (n.shape == NodeShape::box) {
             SNITCH_CHECK(type_safe::get(n.llm_model) == "box-model");
         }
         else {

@@ -16,7 +16,7 @@ Node make_tool_node(std::string id, std::string cmd)
 {
     Node n;
     n.id = NodeId{std::move(id)};
-    n.shape = NodeShape{"parallelogram"};
+    n.shape = NodeShape::parallelogram;
     n.tool_command = ShellCommand{std::move(cmd)};
     return n;
 }

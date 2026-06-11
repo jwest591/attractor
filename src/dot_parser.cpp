@@ -568,7 +568,11 @@ static auto apply_attrs_to_node(Node& node, const std::unordered_map<std::string
             node.label = NodeLabel{val};
         }
         else if (key == "shape") {
-            node.shape = NodeShape{val};
+            auto s = node_shape_from_string(val);
+            if (!s) {
+                return ParseError{"unknown shape: '" + val + "'", 0, 0};
+            }
+            node.shape = *s;
         }
         else if (key == "type") {
             node.node_type = HandlerTypeName{val};

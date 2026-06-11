@@ -13,7 +13,7 @@ namespace attractor {
 struct Node {
     NodeId id;
     NodeLabel label;
-    NodeShape shape{"box"};
+    NodeShape shape{NodeShape::box};
     HandlerTypeName node_type;
     PromptText prompt;
     std::optional<MaxRetries> max_retries;

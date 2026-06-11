@@ -5,7 +5,6 @@
 #include <attractor/handler.hpp>
 #include <attractor/types.hpp>
 #include <memory>
-#include <optional>
 #include <unordered_map>
 
 namespace attractor {
@@ -20,7 +19,7 @@ class HandlerRegistry {
     // any node that does not match a registered type or shape.
     [[nodiscard]] auto resolve(const Node& node) const -> const Handler&;
 
-    [[nodiscard]] static auto shape_to_handler_type(const NodeShape& shape) -> std::optional<HandlerTypeName>;
+    [[nodiscard]] static auto shape_to_handler_type(NodeShape shape) -> HandlerTypeName;
 
   private:
     std::unordered_map<HandlerTypeName, std::unique_ptr<Handler>> m_handlers;

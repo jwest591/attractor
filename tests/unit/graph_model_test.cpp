@@ -8,7 +8,7 @@ using namespace attractor;
 SNITCH_TEST_CASE("[graph_model] Node default values")
 {
     Node n;
-    SNITCH_CHECK(type_safe::get(n.shape) == "box");
+    SNITCH_CHECK(n.shape == NodeShape::box);
     SNITCH_CHECK(!n.goal_gate);
     SNITCH_CHECK(!n.auto_status);
     SNITCH_CHECK(!n.allow_partial);
@@ -40,7 +40,7 @@ SNITCH_TEST_CASE("[graph_model] Node JSON round-trip")
     Node n;
     n.id = NodeId{"node_a"};
     n.label = NodeLabel{"Node A"};
-    n.shape = NodeShape{"box"};
+    n.shape = NodeShape::box;
     n.goal_gate = true;
     n.timeout = TimeoutDuration{milliseconds{5000}};
 

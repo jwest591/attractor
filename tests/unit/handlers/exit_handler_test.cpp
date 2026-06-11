@@ -14,7 +14,7 @@ Node make_exit_node()
 {
     Node n;
     n.id = NodeId{"exit"};
-    n.shape = NodeShape{"Msquare"};
+    n.shape = NodeShape::msquare;
     return n;
 }
 

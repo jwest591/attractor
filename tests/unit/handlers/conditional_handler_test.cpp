@@ -14,7 +14,7 @@ Node make_conditional_node(std::string id)
 {
     Node n;
     n.id = NodeId{std::move(id)};
-    n.shape = NodeShape{"diamond"};
+    n.shape = NodeShape::diamond;
     return n;
 }
 

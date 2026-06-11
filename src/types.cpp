@@ -117,7 +117,6 @@ void from_json(const nlohmann::json& j, LogsRoot& v)
     }
 
 ATTRACTOR_STRING_TYPEDEF_JSON(NodeLabel)
-ATTRACTOR_STRING_TYPEDEF_JSON(NodeShape)
 ATTRACTOR_STRING_TYPEDEF_JSON(CssClass)
 ATTRACTOR_STRING_TYPEDEF_JSON(LlmModel)
 ATTRACTOR_STRING_TYPEDEF_JSON(LlmProvider)
@@ -276,6 +275,53 @@ void from_json(const nlohmann::json& j, QuestionType& v)
         }
     }
     throw nlohmann::json::other_error::create(501, "unknown QuestionType: " + s, &j);
+}
+
+static const std::pair<NodeShape, std::string_view> k_node_shape_map[] = {
+    {NodeShape::mdiamond,      "Mdiamond"     },
+    {NodeShape::msquare,       "Msquare"      },
+    {NodeShape::box,           "box"          },
+    {NodeShape::hexagon,       "hexagon"      },
+    {NodeShape::diamond,       "diamond"      },
+    {NodeShape::component,     "component"    },
+    {NodeShape::triple_octagon,"tripleoctagon"},
+    {NodeShape::parallelogram, "parallelogram"},
+    {NodeShape::house,         "house"        },
+};
+
+auto node_shape_to_string(NodeShape s) noexcept -> std::string_view
+{
+    for (const auto& [enumerator, name] : k_node_shape_map) {
+        if (enumerator == s) {
+            return name;
+        }
+    }
+    return {};
+}
+
+auto node_shape_from_string(std::string_view s) noexcept -> std::optional<NodeShape>
+{
+    for (const auto& [enumerator, name] : k_node_shape_map) {
+        if (name == s) {
+            return enumerator;
+        }
+    }
+    return std::nullopt;
+}
+
+void to_json(nlohmann::json& j, NodeShape v)
+{
+    j = node_shape_to_string(v);
+}
+
+void from_json(const nlohmann::json& j, NodeShape& v)
+{
+    auto s = j.get<std::string>();
+    if (auto parsed = node_shape_from_string(s)) {
+        v = *parsed;
+        return;
+    }
+    throw nlohmann::json::other_error::create(501, "unknown NodeShape: " + s, &j);
 }
 
 static const std::pair<FidelityMode, std::string_view> k_fidelity_mode_map[] = {

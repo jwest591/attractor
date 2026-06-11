@@ -14,7 +14,7 @@ Node make_start_node()
 {
     Node n;
     n.id = NodeId{"start"};
-    n.shape = NodeShape{"Mdiamond"};
+    n.shape = NodeShape::mdiamond;
     return n;
 }
 

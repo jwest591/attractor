@@ -1,10 +1,7 @@
 #include <attractor/handler_registry.hpp>
 
 #include <cassert>
-#include <optional>
-#include <string>
-#include <type_safe/strong_typedef.hpp>
-#include <unordered_map>
+#include <utility>
 
 namespace attractor {
 
@@ -15,24 +12,20 @@ void HandlerRegistry::register_handler(const HandlerTypeName& type, std::unique_
 
 void HandlerRegistry::set_default_handler(std::unique_ptr<Handler> handler) { m_default_handler = std::move(handler); }
 
-auto HandlerRegistry::shape_to_handler_type(const NodeShape& shape) -> std::optional<HandlerTypeName>
+auto HandlerRegistry::shape_to_handler_type(NodeShape shape) -> HandlerTypeName
 {
-    static const std::unordered_map<std::string, std::string> k_shape_map{
-        {"Mdiamond",      "start"             },
-        {"Msquare",       "exit"              },
-        {"box",           "codergen"          },
-        {"hexagon",       "wait.human"        },
-        {"diamond",       "conditional"       },
-        {"component",     "parallel"          },
-        {"tripleoctagon", "parallel.fan_in"   },
-        {"parallelogram", "tool"              },
-        {"house",         "stack.manager_loop"},
-    };
-    auto it = k_shape_map.find(type_safe::get(shape));
-    if (it == k_shape_map.end()) {
-        return std::nullopt;
+    switch (shape) {
+    case NodeShape::mdiamond:      return HandlerTypeName{"start"};
+    case NodeShape::msquare:       return HandlerTypeName{"exit"};
+    case NodeShape::box:           return HandlerTypeName{"codergen"};
+    case NodeShape::hexagon:       return HandlerTypeName{"wait.human"};
+    case NodeShape::diamond:       return HandlerTypeName{"conditional"};
+    case NodeShape::component:     return HandlerTypeName{"parallel"};
+    case NodeShape::triple_octagon:return HandlerTypeName{"parallel.fan_in"};
+    case NodeShape::parallelogram: return HandlerTypeName{"tool"};
+    case NodeShape::house:         return HandlerTypeName{"stack.manager_loop"};
     }
-    return HandlerTypeName{it->second};
+    std::unreachable();
 }
 
 auto HandlerRegistry::resolve(const Node& node) const -> const Handler&
@@ -45,8 +38,9 @@ auto HandlerRegistry::resolve(const Node& node) const -> const Handler&
     }
 
     // Step 2: shape-based resolution
-    if (auto mapped = shape_to_handler_type(node.shape)) {
-        if (auto it = m_handlers.find(*mapped); it != m_handlers.end()) {
+    {
+        const auto mapped = shape_to_handler_type(node.shape);
+        if (auto it = m_handlers.find(mapped); it != m_handlers.end()) {
             return *it->second;
         }
     }

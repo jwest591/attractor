@@ -42,7 +42,7 @@ Node make_codergen_node(std::string id, std::string prompt_text = "")
 {
     Node n;
     n.id = NodeId{std::move(id)};
-    n.shape = NodeShape{"box"};
+    n.shape = NodeShape::box;
     n.prompt = PromptText{std::move(prompt_text)};
     return n;
 }
@@ -205,7 +205,7 @@ SNITCH_TEST_CASE("[codergen_handler] empty prompt falls back to node label")
     Graph g;
     Node n;
     n.id = NodeId{"labeled_node"};
-    n.shape = NodeShape{"box"};
+    n.shape = NodeShape::box;
     n.label = NodeLabel{"My fallback label"};
     // n.prompt is empty (default PromptText{})
     LogsRoot lr{tmp.path.string()};

@@ -15,7 +15,7 @@ Node make_manager_node(std::string id, int max_cycles, std::string stop_conditio
 {
     Node n;
     n.id = NodeId{std::move(id)};
-    n.shape = NodeShape{"house"};
+    n.shape = NodeShape::house;
     n.manager_max_cycles = max_cycles;
     n.manager_stop_condition = ConditionExpr{std::move(stop_condition)};
     return n;

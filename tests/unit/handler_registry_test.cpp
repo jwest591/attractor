@@ -25,11 +25,11 @@ struct StubHandler final : public Handler {
     }
 };
 
-Node make_node(std::string id, std::string shape = "box", std::string handler_type = "")
+Node make_node(std::string id, NodeShape shape = NodeShape::box, std::string handler_type = "")
 {
     Node n;
     n.id = NodeId{std::move(id)};
-    n.shape = NodeShape{std::move(shape)};
+    n.shape = shape;
     n.node_type = HandlerTypeName{std::move(handler_type)};
     return n;
 }
@@ -135,7 +135,7 @@ SNITCH_TEST_CASE("[handler_registry] register_handler and resolve by explicit ty
     reg.set_default_handler(std::move(default_h));
     reg.register_handler(HandlerTypeName{"my_handler"}, std::move(h1));
 
-    Node n = make_node("x", "box", "my_handler");
+    Node n = make_node("x", NodeShape::box, "my_handler");
     SNITCH_CHECK(&reg.resolve(n) == h1_ptr);
     SNITCH_CHECK(&reg.resolve(n) != default_h_ptr);
 }
@@ -153,7 +153,7 @@ SNITCH_TEST_CASE("[handler_registry] second registration replaces first - 2.1-U-
     reg.register_handler(HandlerTypeName{"my_type"}, std::move(h1));
     reg.register_handler(HandlerTypeName{"my_type"}, std::move(h2));
 
-    Node n = make_node("x", "box", "my_type");
+    Node n = make_node("x", NodeShape::box, "my_type");
     SNITCH_CHECK(&reg.resolve(n) == h2_ptr);
     SNITCH_CHECK(&reg.resolve(n) != h1_ptr);
 }
@@ -168,7 +168,7 @@ SNITCH_TEST_CASE("[handler_registry] unregistered explicit type falls back to sh
     reg.register_handler(HandlerTypeName{"codergen"}, std::move(codergen));
 
     // "unknown_type" not registered - falls back to shape "box" -> "codergen"
-    Node n = make_node("x", "box", "unknown_type");
+    Node n = make_node("x", NodeShape::box, "unknown_type");
     SNITCH_CHECK(&reg.resolve(n) == codergen_ptr);
 }
 
@@ -179,20 +179,20 @@ SNITCH_TEST_CASE("[handler_registry] all 9 shapes resolve to correct registered 
     reg.set_default_handler(std::move(default_h));
 
     struct ShapeCase {
-        const char* shape;
+        NodeShape shape;
         const char* type;
     };
 
-    constexpr ShapeCase k_cases[] = {
-        {"Mdiamond",      "start"             },
-        {"Msquare",       "exit"              },
-        {"box",           "codergen"          },
-        {"hexagon",       "wait.human"        },
-        {"diamond",       "conditional"       },
-        {"component",     "parallel"          },
-        {"tripleoctagon", "parallel.fan_in"   },
-        {"parallelogram", "tool"              },
-        {"house",         "stack.manager_loop"},
+    const ShapeCase k_cases[] = {
+        {NodeShape::mdiamond,       "start"             },
+        {NodeShape::msquare,        "exit"              },
+        {NodeShape::box,            "codergen"          },
+        {NodeShape::hexagon,        "wait.human"        },
+        {NodeShape::diamond,        "conditional"       },
+        {NodeShape::component,      "parallel"          },
+        {NodeShape::triple_octagon, "parallel.fan_in"   },
+        {NodeShape::parallelogram,  "tool"              },
+        {NodeShape::house,          "stack.manager_loop"},
     };
 
     StubHandler* k_expected[std::size(k_cases)] = {};
@@ -208,14 +208,15 @@ SNITCH_TEST_CASE("[handler_registry] all 9 shapes resolve to correct registered 
     }
 }
 
-SNITCH_TEST_CASE("[handler_registry] unknown type and unknown shape returns default handler")
+SNITCH_TEST_CASE("[handler_registry] unregistered type and unregistered shape handler returns default")
 {
     HandlerRegistry reg;
     auto default_h = std::make_unique<StubHandler>();
     auto* default_h_ptr = default_h.get();
     reg.set_default_handler(std::move(default_h));
 
-    Node n = make_node("x", "unknown_shape", "unknown_type");
+    // "unknown_type" not registered; "box" maps to "codergen" which is also not registered -> default
+    Node n = make_node("x", NodeShape::box, "unknown_type");
     SNITCH_CHECK(&reg.resolve(n) == default_h_ptr);
 }
 
@@ -228,6 +229,6 @@ SNITCH_TEST_CASE("[handler_registry] node with no explicit type uses shape resol
     reg.set_default_handler(std::move(default_h));
     reg.register_handler(HandlerTypeName{"start"}, std::move(start_h));
 
-    Node n = make_node("begin", "Mdiamond", "");  // no explicit type
+    Node n = make_node("begin", NodeShape::mdiamond, "");  // no explicit type
     SNITCH_CHECK(&reg.resolve(n) == start_h_ptr);
 }

@@ -26,13 +26,13 @@ const std::vector<Diagnostic>& ValidationError::diagnostics() const noexcept { r
 static auto is_start_node(const Node& n) -> bool
 {
     const auto& id = type_safe::get(n.id);
-    return type_safe::get(n.shape) == "Mdiamond" || id == "start" || id == "Start";
+    return n.shape == NodeShape::mdiamond || id == "start" || id == "Start";
 }
 
 static auto is_terminal_node(const Node& n) -> bool
 {
     const auto& id = type_safe::get(n.id);
-    return type_safe::get(n.shape) == "Msquare" || id == "exit" || id == "end";
+    return n.shape == NodeShape::msquare || id == "exit" || id == "end";
 }
 
 static auto reachable_ids(const Graph& g, const NodeId& start_id) -> std::unordered_set<std::string>
@@ -472,7 +472,7 @@ auto validate(const Graph& graph, const ValidationConfig& config,
         }
         const auto& lbl = type_safe::get(n.label);
         const bool label_is_auto = lbl.empty() || lbl == type_safe::get(n.id);
-        if (type_safe::get(n.shape) == "box" && type_safe::get(n.prompt).empty() && label_is_auto) {
+        if (n.shape == NodeShape::box && type_safe::get(n.prompt).empty() && label_is_auto) {
             diags.push_back({.rule_id = RuleId{"prompt_on_llm_nodes"},
                              .severity = Severity::warning,
                              .node_id = n.id,

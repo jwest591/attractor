@@ -63,13 +63,13 @@ SNITCH_TEST_CASE("[validator] edge_target_exists ERROR — edge to nonexistent n
     {
         Node n;
         n.id = NodeId{"start"};
-        n.shape = NodeShape{"Mdiamond"};
+        n.shape = NodeShape::mdiamond;
         g.nodes.push_back(n);
     }
     {
         Node n;
         n.id = NodeId{"done"};
-        n.shape = NodeShape{"Msquare"};
+        n.shape = NodeShape::msquare;
         g.nodes.push_back(n);
     }
     {

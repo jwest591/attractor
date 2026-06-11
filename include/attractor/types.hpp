@@ -4,7 +4,9 @@
 #include <chrono>
 #include <functional>
 #include <nlohmann/json_fwd.hpp>
+#include <optional>
 #include <string>
+#include <string_view>
 #include <type_safe/boolean.hpp>
 #include <type_safe/constrained_type.hpp>
 #include <type_safe/strong_typedef.hpp>
@@ -105,13 +107,16 @@ struct NodeLabel
     bool empty() const noexcept { return static_cast<std::string>(*this).empty(); }
 };
 
-struct NodeShape
-    : ts::strong_typedef<NodeShape, std::string>
-    , ts::strong_typedef_op::equality_comparison<NodeShape>
-    , ts::strong_typedef_op::relational_comparison<NodeShape> {
-    using strong_typedef::strong_typedef;
-
-    bool empty() const noexcept { return static_cast<std::string>(*this).empty(); }
+enum class NodeShape {
+    mdiamond,
+    msquare,
+    box,
+    hexagon,
+    diamond,
+    component,
+    triple_octagon,
+    parallelogram,
+    house,
 };
 
 struct CssClass
@@ -322,7 +327,10 @@ void from_json(const nlohmann::json& j, LogsRoot& v);
 void to_json(nlohmann::json& j, const NodeLabel& v);
 void from_json(const nlohmann::json& j, NodeLabel& v);
 
-void to_json(nlohmann::json& j, const NodeShape& v);
+[[nodiscard]] auto node_shape_to_string(NodeShape s) noexcept -> std::string_view;
+[[nodiscard]] auto node_shape_from_string(std::string_view s) noexcept -> std::optional<NodeShape>;
+
+void to_json(nlohmann::json& j, NodeShape v);
 void from_json(const nlohmann::json& j, NodeShape& v);
 
 void to_json(nlohmann::json& j, const CssClass& v);

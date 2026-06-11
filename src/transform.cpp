@@ -166,7 +166,7 @@ static auto node_matches_rule(const Node& node, const StyleRule& rule) -> bool
     case StyleRule::SelectorType::universal:
         return true;
     case StyleRule::SelectorType::shape:
-        return type_safe::get(node.shape) == rule.selector_value;
+        return node_shape_to_string(node.shape) == rule.selector_value;
     case StyleRule::SelectorType::id:
         return type_safe::get(node.id) == rule.selector_value;
     case StyleRule::SelectorType::css_class: {
