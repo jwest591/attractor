@@ -1,5 +1,6 @@
 #include "attractor_test_support.hpp"
 
+#include <attractor/checkpoint.hpp>
 #include <attractor/context.hpp>
 #include <attractor/engine.hpp>
 #include <attractor/graph.hpp>
@@ -336,4 +337,34 @@ SNITCH_TEST_CASE("[engine] lexical tiebreak: alpha before beta when weights equa
 
     SNITCH_CHECK(raw_alpha->call_count == 1);
     SNITCH_CHECK(raw_beta->call_count == 0);
+}
+
+SNITCH_TEST_CASE("[engine] resume from checkpoint skips completed nodes -- 2.6-E-001")
+{
+    auto recording_a = std::make_unique<RecordingHandler>();
+    const RecordingHandler* raw_a = recording_a.get();
+
+    HandlerRegistry reg;
+    reg.register_handler(HandlerTypeName{"start"}, std::make_unique<StartHandler>());
+    reg.register_handler(HandlerTypeName{"exit"}, std::make_unique<ExitHandler>());
+    reg.register_handler(HandlerTypeName{"codergen"}, std::move(recording_a));
+    reg.set_default_handler(std::make_unique<StartHandler>());
+
+    auto graph = parse_ok(R"(
+        digraph { start [shape=Mdiamond] node_a [shape=box] done [shape=Msquare]
+                  start -> node_a -> done }
+    )");
+    TempLogsDir logs;
+    Engine engine{std::move(reg)};
+
+    CheckpointData cp;
+    cp.current_node = NodeId{"done"};
+    cp.completed_nodes = {NodeId{"start"}, NodeId{"node_a"}};
+    cp.context = nlohmann::json{{"outcome", "success"}};
+    SNITCH_REQUIRE(save_checkpoint(logs.logs_root(), cp).has_value());
+
+    auto outcome = engine.run(graph, RunConfig{.logs_root = logs.logs_root(), .resume = true});
+
+    SNITCH_CHECK(outcome.status == StageStatus::success);
+    SNITCH_CHECK(raw_a->call_count == 0);
 }

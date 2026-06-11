@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <attractor/backends/noop_backend.hpp>
+#include <attractor/checkpoint.hpp>
 #include <attractor/context.hpp>
 #include <attractor/graph.hpp>
 #include <attractor/handler_registry.hpp>
@@ -17,6 +18,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <type_safe/strong_typedef.hpp>
 #include <vector>
 
@@ -229,6 +231,55 @@ const Edge* best_by_weight_then_lexical(std::vector<const Edge*>& candidates)
     return candidates[0];
 }
 
+// Returns base delay for attempt n (0-based), before jitter.
+std::chrono::duration<double> compute_backoff_delay(BackoffPreset preset, int attempt)
+{
+    using namespace std::chrono_literals;
+    switch (preset) {
+    case BackoffPreset::none:
+        return 0s;
+    case BackoffPreset::fixed_1s:
+        return 1.0s;
+    case BackoffPreset::exponential_100ms: {
+        const double d = 0.1 * (1 << std::min(attempt, 7));
+        return std::chrono::duration<double>(std::min(d, 10.0));
+    }
+    case BackoffPreset::exponential_1s: {
+        const double d = 1.0 * (1 << std::min(attempt, 6));
+        return std::chrono::duration<double>(std::min(d, 60.0));
+    }
+    case BackoffPreset::exponential_jitter_1s: {
+        const double base = 1.0 * (1 << std::min(attempt, 5));
+        const double capped = std::min(base, 60.0);
+        const double jitter = (attempt % 2 == 0) ? 0.75 : 1.25;
+        return std::chrono::duration<double>(capped * jitter);
+    }
+    }
+    return std::chrono::duration<double>(0);
+}
+
+void do_sleep(const RetryPolicy& policy, int attempt)
+{
+    const auto delay = compute_backoff_delay(policy.preset, attempt);
+    if (delay.count() <= 0.0) {
+        return;
+    }
+    if (policy.sleep_fn) {
+        policy.sleep_fn(delay);
+    }
+    else {
+        std::this_thread::sleep_for(delay);
+    }
+}
+
+int effective_max_retries(const Node& node, const Graph& graph)
+{
+    if (node.max_retries.has_value()) {
+        return node.max_retries->get_value();
+    }
+    return graph.default_max_retries.get_value();
+}
+
 // 5-step deterministic edge selection.
 // Step 1: condition match; Steps 2-5: unconditional edges only.
 // Returns nullptr if no edge is selectable.
@@ -311,7 +362,24 @@ auto Engine::run_from(const Graph& graph, const NodeId& start_id, const RunConfi
 {
     std::map<NodeId, Outcome> node_outcomes;
     NodeId current_id = start_id;
-    nlohmann::json context_snapshot = nlohmann::json::object();
+    Context ctx;
+    std::vector<NodeId> completed_nodes;
+
+    // Resume: restore context and starting point from checkpoint.
+    if (config.resume) {
+        if (config.logs_root.empty()) {
+            return Outcome::fail(DiagnosticMessage{"resume requires a non-empty logs_root"});
+        }
+        auto cp = load_checkpoint(config.logs_root);
+        if (!cp) {
+            return Outcome::fail(DiagnosticMessage{"resume failed: " + cp.error()});
+        }
+        ctx.merge_updates(cp->context);
+        completed_nodes = cp->completed_nodes;
+        if (!cp->current_node.empty()) {
+            current_id = cp->current_node;
+        }
+    }
 
     while (true) {
         const Node* node = find_node(graph, current_id);
@@ -320,6 +388,7 @@ auto Engine::run_from(const Graph& graph, const NodeId& start_id, const RunConfi
         }
 
         if (is_terminal(*node)) {
+            NodeId gate_to_erase;
             bool retry_requested = false;
             for (const auto& [node_id, outcome] : node_outcomes) {
                 const Node* gn = find_node(graph, node_id);
@@ -341,6 +410,7 @@ auto Engine::run_from(const Graph& graph, const NodeId& start_id, const RunConfi
 
                         if (rt != nullptr) {
                             current_id = *rt;
+                            gate_to_erase = node_id;
                             retry_requested = true;
                             break;
                         }
@@ -349,21 +419,62 @@ auto Engine::run_from(const Graph& graph, const NodeId& start_id, const RunConfi
                 }
             }
             if (retry_requested) {
+                node_outcomes.erase(gate_to_erase);
                 continue;
+            }
+            for (const auto& [nid, nout] : node_outcomes) {
+                if (nout.status == StageStatus::partial_success) {
+                    const Node* n = find_node(graph, nid);
+                    if (n != nullptr && static_cast<bool>(n->allow_partial)) {
+                        return nout;
+                    }
+                }
             }
             return Outcome{};
         }
 
-        Context ctx;
         const Handler& handler = m_registry.resolve(*node);
-        const Outcome outcome = safe_execute(handler, *node, ctx, graph, config.logs_root);
+        const int max_retries = effective_max_retries(*node, graph);
+        int remaining = max_retries;
+        int attempt = 0;
+        Outcome outcome;
 
-        node_outcomes[node->id] = outcome;
+        do {
+            outcome = safe_execute(handler, *node, ctx, graph, config.logs_root);
+            node_outcomes[node->id] = outcome;
+            if (outcome.status != StageStatus::retry) {
+                break;
+            }
+            if (remaining == 0) {
+                break;
+            }
+            --remaining;
+            do_sleep(config.retry_policy, attempt);
+            ++attempt;
+        } while (true);
 
-        for (const auto& [key, value] : outcome.context_updates.items()) {
-            context_snapshot[key] = value;
+        if (outcome.status == StageStatus::retry) {
+            if (static_cast<bool>(node->allow_partial)) {
+                outcome = Outcome{.status = StageStatus::partial_success,
+                                  .failure_reason = DiagnosticMessage{"Retry exhausted (partial): " +
+                                                                       type_safe::get(node->id)}};
+            }
+            else {
+                outcome = Outcome::fail(
+                    DiagnosticMessage{"Retry exhausted: " + type_safe::get(node->id)});
+            }
+            node_outcomes[node->id] = outcome;
         }
 
+        // Merge context_updates into persistent context; set engine-controlled keys.
+        ctx.merge_updates(outcome.context_updates);
+        (void)ctx.set(ContextKey{"outcome"}, stage_status_to_string(outcome.status));
+        if (!outcome.preferred_label.empty()) {
+            (void)ctx.set(ContextKey{"preferred_label"}, type_safe::get(outcome.preferred_label));
+        }
+
+        // Use context snapshot for edge condition evaluation.
+        const auto context_snapshot = ctx.snapshot();
         const Edge* next_edge = select_edge(*node, outcome, context_snapshot, graph);
 
         if (next_edge == nullptr) {
@@ -374,16 +485,29 @@ auto Engine::run_from(const Graph& graph, const NodeId& start_id, const RunConfi
         }
 
         if (static_cast<bool>(next_edge->loop_restart)) {
-            return run_from(graph, next_edge->to, config);
+            RunConfig fresh_config = config;
+            fresh_config.resume = false;
+            return run_from(graph, next_edge->to, fresh_config);
         }
 
-        // Fail/retry outcomes do not follow unconditional edges.
+        // Fail/retry outcomes do not follow unconditional edges, except when goal_gate is
+        // set -- the terminal node must evaluate the gate before deciding to retry or fail.
         if ((outcome.status == StageStatus::fail || outcome.status == StageStatus::retry) &&
-            next_edge->condition.empty()) {
+            next_edge->condition.empty() && !static_cast<bool>(node->goal_gate)) {
             return outcome;
         }
 
+        completed_nodes.push_back(node->id);
         current_id = next_edge->to;
+
+        // Checkpoint saved AFTER advancing current_id; current_node = NEXT node to execute.
+        if (!config.logs_root.empty()) {
+            CheckpointData cp;
+            cp.current_node = current_id;
+            cp.completed_nodes = completed_nodes;
+            cp.context = context_snapshot;
+            (void)save_checkpoint(config.logs_root, cp);
+        }
     }
 }
 
