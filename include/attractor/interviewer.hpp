@@ -3,6 +3,8 @@
 
 #include <attractor/types.hpp>
 
+#include <functional>
+#include <iosfwd>
 #include <optional>
 #include <queue>
 #include <string>
@@ -85,6 +87,35 @@ public:
 private:
     Interviewer* m_inner;
     std::vector<Recording> m_recordings;
+};
+
+// -- ConsoleInterviewer
+
+class ConsoleInterviewer final : public Interviewer {
+public:
+    ConsoleInterviewer();
+    ConsoleInterviewer(std::istream& in, std::ostream& out);
+
+    [[nodiscard]] auto ask(const Question& question) -> Answer override;
+    void inform(const std::string& message, const std::string& stage) override;
+
+private:
+    std::istream* m_in;
+    std::ostream* m_out;
+};
+
+// -- CallbackInterviewer
+
+class CallbackInterviewer final : public Interviewer {
+public:
+    using Callback = std::function<Answer(const Question&)>;
+
+    explicit CallbackInterviewer(Callback callback);
+
+    [[nodiscard]] auto ask(const Question& question) -> Answer override;
+
+private:
+    Callback m_callback;
 };
 
 }  // namespace attractor

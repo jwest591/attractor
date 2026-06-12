@@ -31,6 +31,8 @@ add_library(attractor STATIC
     interviewers/auto_approve_interviewer.cpp
     interviewers/queue_interviewer.cpp
     interviewers/recording_interviewer.cpp
+    interviewers/console_interviewer.cpp
+    interviewers/callback_interviewer.cpp
     backends/noop_backend.cpp
 )
 

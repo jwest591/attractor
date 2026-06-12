@@ -1862,8 +1862,8 @@ This section defines how to validate that an implementation of this spec is comp
 - [ ] Interviewer interface works: `ask(question) -> Answer`
 - [ ] Question supports types: YES_NO, MULTIPLE_CHOICE, FREEFORM, CONFIRMATION
 - [ ] AutoApproveInterviewer always selects the first option (for automation/testing)
-- [ ] ConsoleInterviewer prompts in terminal and reads user input
-- [ ] CallbackInterviewer delegates to a provided function
+- [x] ConsoleInterviewer prompts in terminal and reads user input
+- [x] CallbackInterviewer delegates to a provided function
 - [ ] QueueInterviewer reads from a pre-filled answer queue (for testing)
 
 ### 11.9 Condition Expressions
