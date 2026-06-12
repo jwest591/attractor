@@ -291,6 +291,8 @@ enum class Severity { error, warning, info };
 
 enum class QuestionType { yes_no, multiple_choice, freeform, confirmation };
 
+enum class AnswerKind { yes, no, text, skipped, timeout };
+
 enum class FidelityMode { full, truncate, compact, summary_low, summary_medium, summary_high };
 
 enum class ReasoningEffort { low, medium, high };
@@ -401,6 +403,9 @@ void from_json(const nlohmann::json& j, Severity& v);
 
 void to_json(nlohmann::json& j, QuestionType v);
 void from_json(const nlohmann::json& j, QuestionType& v);
+
+void to_json(nlohmann::json& j, AnswerKind v);
+void from_json(const nlohmann::json& j, AnswerKind& v);
 
 void to_json(nlohmann::json& j, FidelityMode v);
 void from_json(const nlohmann::json& j, FidelityMode& v);

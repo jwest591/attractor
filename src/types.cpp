@@ -324,6 +324,37 @@ void from_json(const nlohmann::json& j, NodeShape& v)
     throw nlohmann::json::other_error::create(501, "unknown NodeShape: " + s, &j);
 }
 
+static const std::pair<AnswerKind, std::string_view> k_answer_kind_map[] = {
+    {AnswerKind::yes,     "yes"    },
+    {AnswerKind::no,      "no"     },
+    {AnswerKind::text,    "text"   },
+    {AnswerKind::skipped, "skipped"},
+    {AnswerKind::timeout, "timeout"},
+};
+
+void to_json(nlohmann::json& j, AnswerKind v)
+{
+    for (const auto& [enumerator, name] : k_answer_kind_map) {
+        if (enumerator == v) {
+            j = name;
+            return;
+        }
+    }
+    j = nullptr;
+}
+
+void from_json(const nlohmann::json& j, AnswerKind& v)
+{
+    auto s = j.get<std::string>();
+    for (const auto& [enumerator, name] : k_answer_kind_map) {
+        if (name == s) {
+            v = enumerator;
+            return;
+        }
+    }
+    throw nlohmann::json::other_error::create(501, "unknown AnswerKind: " + s, &j);
+}
+
 static const std::pair<FidelityMode, std::string_view> k_fidelity_mode_map[] = {
     {FidelityMode::full,           "full"          },
     {FidelityMode::truncate,       "truncate"      },
