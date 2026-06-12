@@ -656,6 +656,21 @@ static auto apply_attrs_to_node(Node& node, const std::unordered_map<std::string
             }
             node.manager_max_cycles = *n_opt;
         }
+        else if (key == "join_policy") {
+            if (val == "wait_all")
+                node.join_policy = JoinPolicy::wait_all;
+            else if (val == "first_success")
+                node.join_policy = JoinPolicy::first_success;
+            else
+                return ParseError{"unknown join_policy: " + val};
+        }
+        else if (key == "max_parallel") {
+            auto n_opt = parse_int_attr(val);
+            if (!n_opt || *n_opt <= 0) {
+                return ParseError{"invalid value for attribute 'max_parallel': '" + val + "'", 0, 0};
+            }
+            node.max_parallel = MaxParallel{*n_opt};
+        }
     }
     return std::nullopt;
 }

@@ -64,6 +64,8 @@ void to_json(nlohmann::json& j, const Node& n)
     j["manager_stop_condition"] = nlohmann::json{};
     to_json(j["manager_stop_condition"], n.manager_stop_condition);
     j["manager_max_cycles"] = n.manager_max_cycles;
+    j["join_policy"] = n.join_policy;
+    j["max_parallel"] = n.max_parallel;
 }
 
 void from_json(const nlohmann::json& j, Node& n)
@@ -125,6 +127,12 @@ void from_json(const nlohmann::json& j, Node& n)
         if (v > 0) {
             n.manager_max_cycles = v;
         }
+    }
+    if (j.contains("join_policy")) {
+        from_json(j.at("join_policy"), n.join_policy);
+    }
+    if (j.contains("max_parallel")) {
+        from_json(j.at("max_parallel"), n.max_parallel);
     }
 }
 

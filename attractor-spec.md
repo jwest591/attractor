@@ -1843,7 +1843,7 @@ This section defines how to validate that an implementation of this spec is comp
 - [ ] **Codergen handler:** Expands `$goal` in prompt, calls `CodergenBackend.run()`, writes prompt.md and response.md to stage dir
 - [x] **Wait.human handler:** Presents outgoing edge labels as choices to the interviewer, returns selected label as preferred_label
 - [ ] **Conditional handler:** Passes through; engine evaluates edge conditions against outcome/context
-- [ ] **Parallel handler:** Fans out to multiple target nodes concurrently (or sequentially as fallback)
+- [x] **Parallel handler:** Fans out to multiple target nodes concurrently (or sequentially as fallback)
 - [ ] **Fan-in handler:** Waits for all parallel branches to complete before proceeding
 - [ ] **Tool handler:** Executes configured tool/command and returns result
 - [ ] Custom handlers can be registered by type string

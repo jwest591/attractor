@@ -416,4 +416,44 @@ void from_json(const nlohmann::json& j, ReasoningEffort& v)
     throw nlohmann::json::other_error::create(501, "unknown ReasoningEffort: " + s, &j);
 }
 
+static const std::pair<JoinPolicy, std::string_view> k_join_policy_map[] = {
+    {JoinPolicy::wait_all,      "wait_all"     },
+    {JoinPolicy::first_success, "first_success"},
+};
+
+void to_json(nlohmann::json& j, JoinPolicy v)
+{
+    for (const auto& [enumerator, name] : k_join_policy_map) {
+        if (enumerator == v) {
+            j = name;
+            return;
+        }
+    }
+    j = nullptr;
+}
+
+void from_json(const nlohmann::json& j, JoinPolicy& v)
+{
+    auto s = j.get<std::string>();
+    for (const auto& [enumerator, name] : k_join_policy_map) {
+        if (name == s) {
+            v = enumerator;
+            return;
+        }
+    }
+    throw nlohmann::json::other_error::create(501, "unknown JoinPolicy: " + s, &j);
+}
+
+void to_json(nlohmann::json& j, const MaxParallel& v) { j = v.get_value(); }
+
+void from_json(const nlohmann::json& j, MaxParallel& v)
+{
+    auto val = j.get<int>();
+    if (!max_parallel_constraint{}(val)) {
+        throw nlohmann::json::other_error::create(
+            501, "MaxParallel value must be >= 1, got: " + std::to_string(val), &j);
+    }
+    v = MaxParallel{val};
+}
+
 }  // namespace attractor

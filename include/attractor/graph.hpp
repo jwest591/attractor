@@ -33,6 +33,8 @@ struct Node {
     ShellCommand tool_command;
     ConditionExpr manager_stop_condition;
     int manager_max_cycles{1000};
+    JoinPolicy join_policy{JoinPolicy::wait_all};
+    MaxParallel max_parallel{4};
 };
 
 struct Edge {

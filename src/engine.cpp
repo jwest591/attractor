@@ -12,6 +12,7 @@
 #include <attractor/handlers/conditional_handler.hpp>
 #include <attractor/handlers/exit_handler.hpp>
 #include <attractor/handlers/start_handler.hpp>
+#include <attractor/handlers/parallel_handler.hpp>
 #include <attractor/handlers/wait_for_human_handler.hpp>
 #include <attractor/interviewer.hpp>
 #include <attractor/types.hpp>
@@ -349,6 +350,11 @@ Engine::Engine()
     static AutoApproveInterviewer k_default_interviewer;
     m_registry.register_handler(HandlerTypeName{"wait.human"},
         std::make_unique<WaitForHumanHandler>(k_default_interviewer));
+    m_registry.register_handler(HandlerTypeName{"parallel"},
+        std::make_unique<ParallelHandler>(
+            [this](const Graph& g, const NodeId& id, const RunConfig& cfg) -> Outcome {
+                return run_from(g, id, cfg);
+            }));
     m_registry.set_default_handler(std::make_unique<StartHandler>());
 }
 

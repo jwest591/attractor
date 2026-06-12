@@ -34,7 +34,7 @@ struct RunConfig {
 class Engine {
   public:
     // Default constructor: registers StartHandler, ExitHandler, ConditionalHandler,
-    // CodergenHandler(NoOpBackend), and WaitForHumanHandler for the 5 built-in simulation types.
+    // CodergenHandler(NoOpBackend), WaitForHumanHandler, and ParallelHandler for the built-in types.
     Engine();
 
     explicit Engine(HandlerRegistry registry);
@@ -42,6 +42,11 @@ class Engine {
     // Uses default handlers (start, exit, codergen/NoOp, conditional) + provided event observer.
     // Equivalent to Engine() + setting the observer; avoids duplicating default handler setup in callers.
     explicit Engine(EventObserver on_event);
+
+    Engine(const Engine&) = delete;
+    Engine& operator=(const Engine&) = delete;
+    Engine(Engine&&) = delete;
+    Engine& operator=(Engine&&) = delete;
 
     // Runs the pipeline. Catches all handler exceptions at the boundary.
     // Returns Outcome{success} if the pipeline terminates normally at the exit node

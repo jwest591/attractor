@@ -283,6 +283,12 @@ struct positive_duration_constraint {
 using TimeoutDuration =
     ts::constrained_type<std::chrono::milliseconds, positive_duration_constraint, ts::assertion_verifier>;
 
+struct max_parallel_constraint {
+    constexpr bool operator()(int v) const noexcept { return v >= 1; }
+};
+
+using MaxParallel = ts::constrained_type<int, max_parallel_constraint, ts::assertion_verifier>;
+
 // ── Enum classes ──────────────────────────────────────────────────────────────
 
 enum class StageStatus { success, partial_success, fail, retry, skipped };
@@ -296,6 +302,8 @@ enum class AnswerKind { yes, no, text, skipped, timeout };
 enum class FidelityMode { full, truncate, compact, summary_low, summary_medium, summary_high };
 
 enum class ReasoningEffort { low, medium, high };
+
+enum class JoinPolicy { wait_all, first_success };
 
 // ── JSON serialization declarations (defined in src/types.cpp) ───────────────
 
@@ -409,6 +417,12 @@ void from_json(const nlohmann::json& j, AnswerKind& v);
 
 void to_json(nlohmann::json& j, FidelityMode v);
 void from_json(const nlohmann::json& j, FidelityMode& v);
+
+void to_json(nlohmann::json& j, JoinPolicy v);
+void from_json(const nlohmann::json& j, JoinPolicy& v);
+
+void to_json(nlohmann::json& j, const MaxParallel& v);
+void from_json(const nlohmann::json& j, MaxParallel& v);
 
 }  // namespace attractor
 
