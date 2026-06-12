@@ -27,6 +27,7 @@ add_library(attractor STATIC
     handlers/codergen_handler.cpp
     handlers/tool_handler.cpp
     handlers/manager_loop_handler.cpp
+    handlers/wait_for_human_handler.cpp
     interviewers/auto_approve_interviewer.cpp
     interviewers/queue_interviewer.cpp
     interviewers/recording_interviewer.cpp

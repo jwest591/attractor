@@ -12,6 +12,8 @@
 #include <attractor/handlers/conditional_handler.hpp>
 #include <attractor/handlers/exit_handler.hpp>
 #include <attractor/handlers/start_handler.hpp>
+#include <attractor/handlers/wait_for_human_handler.hpp>
+#include <attractor/interviewer.hpp>
 #include <attractor/types.hpp>
 #include <cctype>
 #include <map>
@@ -344,6 +346,9 @@ Engine::Engine()
     m_registry.register_handler(HandlerTypeName{"exit"}, std::make_unique<ExitHandler>());
     m_registry.register_handler(HandlerTypeName{"codergen"}, std::make_unique<CodergenHandler>(noop));
     m_registry.register_handler(HandlerTypeName{"conditional"}, std::make_unique<ConditionalHandler>());
+    static AutoApproveInterviewer k_default_interviewer;
+    m_registry.register_handler(HandlerTypeName{"wait.human"},
+        std::make_unique<WaitForHumanHandler>(k_default_interviewer));
     m_registry.set_default_handler(std::make_unique<StartHandler>());
 }
 

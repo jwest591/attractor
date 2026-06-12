@@ -1841,7 +1841,7 @@ This section defines how to validate that an implementation of this spec is comp
 - [ ] **Start handler:** Returns SUCCESS immediately (no-op)
 - [ ] **Exit handler:** Returns SUCCESS immediately (no-op, engine checks goal gates)
 - [ ] **Codergen handler:** Expands `$goal` in prompt, calls `CodergenBackend.run()`, writes prompt.md and response.md to stage dir
-- [ ] **Wait.human handler:** Presents outgoing edge labels as choices to the interviewer, returns selected label as preferred_label
+- [x] **Wait.human handler:** Presents outgoing edge labels as choices to the interviewer, returns selected label as preferred_label
 - [ ] **Conditional handler:** Passes through; engine evaluates edge conditions against outcome/context
 - [ ] **Parallel handler:** Fans out to multiple target nodes concurrently (or sequentially as fallback)
 - [ ] **Fan-in handler:** Waits for all parallel branches to complete before proceeding
@@ -1910,7 +1910,7 @@ Run this validation matrix -- each cell must pass:
 | Execute with retry on failure (max_retries=2)    | [ ] |
 | Goal gate blocks exit when unsatisfied            | [ ] |
 | Goal gate allows exit when all satisfied          | [ ] |
-| Wait.human presents choices and routes on selection | [ ] |
+| Wait.human presents choices and routes on selection | [x] |
 | Edge selection: condition match wins over weight  | [ ] |
 | Edge selection: weight breaks ties for unconditional edges | [ ] |
 | Edge selection: lexical tiebreak as final fallback | [ ] |
