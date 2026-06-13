@@ -1,5 +1,4 @@
 find_package(nlohmann_json CONFIG REQUIRED)
-find_package(type_safe CONFIG REQUIRED)
 find_package(stdexec CONFIG REQUIRED)
 
 # vcpkg's type_safe port creates 'type_safe'; local source-install creates 'type_safe::type_safe'

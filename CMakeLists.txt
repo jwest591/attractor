@@ -13,6 +13,15 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
+include(FetchContent)
+
+FetchContent_Declare(
+    type_safe
+    GIT_REPOSITORY https://github.com/jwest591/type_safe.git
+    GIT_TAG        main
+    GIT_SHALLOW    TRUE
+)
+FetchContent_MakeAvailable(type_safe)
 
 add_subdirectory(src)
 add_subdirectory(cli)
