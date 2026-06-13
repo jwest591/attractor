@@ -1917,6 +1917,7 @@ Run this validation matrix -- each cell must pass:
 | Context updates from one node are visible to the next | [ ] |
 | Checkpoint save and resume produces same result   | [ ] |
 | Stylesheet applies model override to nodes by shape | [x] |
+| Fidelity mode resolves compact by default        | [x] |
 | Prompt variable expansion ($goal) works           | [ ] |
 | Parallel fan-out and fan-in complete correctly    | [x] |
 | Custom handler registration and execution works   | [ ] |
@@ -1978,6 +1979,14 @@ ASSERT "plan" IN checkpoint.completed_nodes
 ASSERT "implement" IN checkpoint.completed_nodes
 ASSERT "review" IN checkpoint.completed_nodes
 ```
+
+### 11.14 Context Fidelity
+
+- [x] `FidelityMode` enum exposes 6 modes: `full`, `truncate`, `compact`, `summary:low`, `summary:medium`, `summary:high`
+- [x] `fidelity` attribute is parsed on nodes, edges, and `default_fidelity` on graphs
+- [x] `resolve_fidelity(node, edge, graph)` follows precedence: edge -> node -> graph default -> `compact`
+- [x] `resolve_thread_key(node, edge, graph)` follows precedence: node.thread_id -> edge.thread_id -> node.id fallback
+- [x] Validator emits `fidelity_valid` WARNING for out-of-range `FidelityMode` values
 
 ---
 

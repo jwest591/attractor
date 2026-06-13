@@ -223,6 +223,19 @@ static auto parse_stylesheet_syntax(std::string_view stylesheet) -> bool
     return true;
 }
 
+static auto is_known_fidelity_mode(FidelityMode m) noexcept -> bool
+{
+    switch (m) {
+    case FidelityMode::full:           return true;
+    case FidelityMode::truncate:       return true;
+    case FidelityMode::compact:        return true;
+    case FidelityMode::summary_low:    return true;
+    case FidelityMode::summary_medium: return true;
+    case FidelityMode::summary_high:   return true;
+    }
+    return false;
+}
+
 auto validate(const Graph& graph, const ValidationConfig& config,
               std::vector<const LintRule*> extra_rules) -> std::vector<Diagnostic>
 {
@@ -414,8 +427,30 @@ auto validate(const Graph& graph, const ValidationConfig& config,
         }
     }
 
-    // fidelity_valid: enum values are always valid after normal parse;
-    // out-of-range cast check deferred to Story 4.4
+    for (const auto& n : graph.nodes) {
+        if (n.fidelity.has_value() && !is_known_fidelity_mode(*n.fidelity)) {
+            diags.push_back({.rule_id = RuleId{"fidelity_valid"},
+                             .severity = Severity::warning,
+                             .node_id = n.id,
+                             .message = DiagnosticMessage{"fidelity attribute has unrecognised value"},
+                             .suggested_fix = SuggestedFix{"Use one of: full, truncate, compact, summary:low, summary:medium, summary:high"}});
+        }
+    }
+    for (const auto& e : graph.edges) {
+        if (e.fidelity.has_value() && !is_known_fidelity_mode(*e.fidelity)) {
+            diags.push_back({.rule_id = RuleId{"fidelity_valid"},
+                             .severity = Severity::warning,
+                             .node_id = e.from,
+                             .message = DiagnosticMessage{"edge fidelity attribute has unrecognised value"},
+                             .suggested_fix = SuggestedFix{"Use one of: full, truncate, compact, summary:low, summary:medium, summary:high"}});
+        }
+    }
+    if (graph.default_fidelity.has_value() && !is_known_fidelity_mode(*graph.default_fidelity)) {
+        diags.push_back({.rule_id = RuleId{"fidelity_valid"},
+                         .severity = Severity::warning,
+                         .message = DiagnosticMessage{"graph default_fidelity attribute has unrecognised value"},
+                         .suggested_fix = SuggestedFix{"Use one of: full, truncate, compact, summary:low, summary:medium, summary:high"}});
+    }
 
     auto check_retry_target = [&](const NodeId& target, const NodeId& subject, const char* attr) {
         if (!type_safe::get(target).empty() && !node_ids.count(type_safe::get(target))) {

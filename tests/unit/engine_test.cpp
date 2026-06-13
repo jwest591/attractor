@@ -410,3 +410,77 @@ SNITCH_TEST_CASE("[engine] Engine(EventObserver) calls observer for non-terminal
     SNITCH_CHECK(observed[2] == "started:node_a");
     SNITCH_CHECK(observed[3] == "completed:node_a");
 }
+
+// -- resolve_fidelity / resolve_thread_key (Story 4.4) --
+
+SNITCH_TEST_CASE("[engine] resolve_fidelity defaults to compact when nothing set -- 4.4-U-001")
+{
+    Graph g;
+    Node n;
+    n.id = NodeId{"work"};
+    SNITCH_CHECK(resolve_fidelity(n, nullptr, g) == FidelityMode::compact);
+}
+
+SNITCH_TEST_CASE("[engine] resolve_fidelity: edge fidelity beats node fidelity -- 4.4-U-002")
+{
+    Graph g;
+    Node n;
+    n.id       = NodeId{"work"};
+    n.fidelity = FidelityMode::truncate;
+    Edge e;
+    e.from     = NodeId{"prev"};
+    e.to       = NodeId{"work"};
+    e.fidelity = FidelityMode::full;
+    SNITCH_CHECK(resolve_fidelity(n, &e, g) == FidelityMode::full);
+}
+
+SNITCH_TEST_CASE("[engine] resolve_fidelity: graph default_fidelity used when node has none -- 4.4-U-003")
+{
+    Graph g;
+    g.default_fidelity = FidelityMode::summary_high;
+    Node n;
+    n.id = NodeId{"work"};
+    SNITCH_CHECK(resolve_fidelity(n, nullptr, g) == FidelityMode::summary_high);
+}
+
+SNITCH_TEST_CASE("[engine] resolve_thread_key: shared thread_id maps to same session key -- 4.4-U-004")
+{
+    Graph g;
+    Node n1;
+    n1.id        = NodeId{"plan"};
+    n1.thread_id = ThreadId{"loop-a"};
+    Node n2;
+    n2.id        = NodeId{"implement"};
+    n2.thread_id = ThreadId{"loop-a"};
+    const auto key1 = resolve_thread_key(n1, nullptr, g);
+    const auto key2 = resolve_thread_key(n2, nullptr, g);
+    SNITCH_CHECK(type_safe::get(key1) == "loop-a");
+    SNITCH_CHECK(type_safe::get(key2) == "loop-a");
+    SNITCH_CHECK(type_safe::get(key1) == type_safe::get(key2));
+}
+
+SNITCH_TEST_CASE("[engine] resolve_fidelity: edge present but no fidelity falls through to node -- 4.4-U-006")
+{
+    Graph g;
+    Node n;
+    n.id       = NodeId{"work"};
+    n.fidelity = FidelityMode::truncate;
+    Edge e;
+    e.from = NodeId{"prev"};
+    e.to   = NodeId{"work"};
+    // edge has no fidelity -> falls through to node fidelity
+    SNITCH_CHECK(resolve_fidelity(n, &e, g) == FidelityMode::truncate);
+}
+
+SNITCH_TEST_CASE("[engine] resolve_thread_key: edge thread_id used when node has none -- 4.4-U-007")
+{
+    Graph g;
+    Node n;
+    n.id        = NodeId{"work"};
+    Edge e;
+    e.from      = NodeId{"prev"};
+    e.to        = NodeId{"work"};
+    e.thread_id = ThreadId{"edge-thread"};
+    const auto key = resolve_thread_key(n, &e, g);
+    SNITCH_CHECK(type_safe::get(key) == "edge-thread");
+}

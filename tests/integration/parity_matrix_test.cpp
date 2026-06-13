@@ -1,6 +1,7 @@
 #include "attractor_test_support.hpp"
 
 #include <attractor/context.hpp>
+#include <attractor/engine.hpp>
 #include <attractor/graph.hpp>
 #include <attractor/handler.hpp>
 #include <attractor/handlers/fan_in_handler.hpp>
@@ -165,4 +166,28 @@ SNITCH_TEST_CASE("[parity] Stylesheet applies model override to nodes by shape -
             SNITCH_CHECK(type_safe::get(n.llm_model) == "base-model");
         }
     }
+}
+
+SNITCH_TEST_CASE("[parity] Fidelity mode resolves compact by default -- INT-PARITY")
+{
+    // DoD 11.12-016: resolve_fidelity returns compact when no fidelity attributes are set.
+    auto result = parse_graph(R"(
+        digraph g {
+            start [shape=Mdiamond]
+            work  [shape=box, prompt="Do work"]
+            done  [shape=Msquare]
+            start -> work -> done
+        }
+    )");
+    SNITCH_REQUIRE(result.has_value());
+    const auto& g = *result;
+    const Node* work_node = nullptr;
+    for (const auto& n : g.nodes) {
+        if (type_safe::get(n.id) == "work") {
+            work_node = &n;
+            break;
+        }
+    }
+    SNITCH_REQUIRE(work_node != nullptr);
+    SNITCH_CHECK(resolve_fidelity(*work_node, nullptr, g) == FidelityMode::compact);
 }

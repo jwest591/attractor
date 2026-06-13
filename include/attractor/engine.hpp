@@ -61,6 +61,12 @@ class Engine {
     [[nodiscard]] auto run_from(const Graph& graph, const NodeId& start_id, const RunConfig& config) const -> Outcome;
 };
 
+[[nodiscard]] auto resolve_fidelity(const Node& node, const Edge* incoming_edge,
+                                     const Graph& graph) -> FidelityMode;
+
+[[nodiscard]] auto resolve_thread_key(const Node& node, const Edge* incoming_edge,
+                                       const Graph& graph) -> ThreadId;
+
 }  // namespace attractor
 
 #endif  // ATTRACTOR_ENGINE_HPP

@@ -239,6 +239,15 @@ SNITCH_TEST_CASE("[validator] fidelity_valid WARNING — no spurious diagnostic 
     SNITCH_CHECK(count_by_rule(diags, "fidelity_valid") == 0);
 }
 
+// T / AC5
+SNITCH_TEST_CASE("[validator] fidelity_valid WARNING fires for out-of-range FidelityMode -- 4.4-U-005")
+{
+    Graph g = make_valid_linear();
+    g.nodes[1].fidelity = static_cast<FidelityMode>(99);
+    auto diags = validate(g);
+    SNITCH_CHECK(count_by_rule(diags, "fidelity_valid") >= 1);
+}
+
 // T17 / AC5
 SNITCH_TEST_CASE("[validator] goal_gate_has_retry WARNING — goal_gate without retry_target")
 {

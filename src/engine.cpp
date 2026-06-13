@@ -341,6 +341,33 @@ bool eval_condition(const ConditionExpr& condition, const Outcome& outcome, cons
     return true;
 }
 
+auto resolve_fidelity(const Node& node, const Edge* incoming_edge, const Graph& graph) -> FidelityMode
+{
+    if (incoming_edge && incoming_edge->fidelity.has_value()) {
+        return *incoming_edge->fidelity;
+    }
+    if (node.fidelity.has_value()) {
+        return *node.fidelity;
+    }
+    if (graph.default_fidelity.has_value()) {
+        return *graph.default_fidelity;
+    }
+    return FidelityMode::compact;
+}
+
+auto resolve_thread_key(const Node& node, const Edge* incoming_edge,
+                         const Graph& graph) -> ThreadId
+{
+    (void)graph;
+    if (node.thread_id.has_value()) {
+        return *node.thread_id;
+    }
+    if (incoming_edge && incoming_edge->thread_id.has_value()) {
+        return *incoming_edge->thread_id;
+    }
+    return ThreadId{type_safe::get(node.id)};
+}
+
 Engine::Engine()
 {
     auto noop = std::make_shared<NoOpBackend>();
