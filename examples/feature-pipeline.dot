@@ -142,24 +142,25 @@ digraph FeaturePipeline {
         shape        = parallelogram,
         label        = "Run Test Suite",
         type         = "tool",
-        tool_command = "make test",
+        tool_command = "./test_tool.sh",
         timeout      = "300s"
     ]
 
-    // Codergen node interprets the test run output and writes a named
-    // context key so the downstream diamond can route on a stable value
-    // rather than on the transient "outcome" key (which the ConditionalHandler
-    // overwrites with SUCCESS when it executes).
+    // Codergen node interprets the test run output and writes a named context
+    // key that downstream edges can route on.  A real LLM backend will honour
+    // the prompt and set context_updates["quality_verdict"] = "pass"/"fail".
+    // With the NoOpBackend the key is never written; the unconditional fallback
+    // edge (weight=0) below routes to code_review so the noop simulation still
+    // completes.  A separate diamond (quality_gate) is intentionally omitted:
+    // the ConditionalHandler always returns outcome=success, which overwrites
+    // the transient outcome key before any of its own edges are evaluated,
+    // making context.* routing from a downstream diamond unreachable.
     evaluate_results [
         label    = "Evaluate Test Results",
         prompt   = "Summarise test output. Set context_update quality_verdict to 'pass' or 'fail'.",
         class    = "fast",
         fidelity = "summary:medium"
     ]
-
-    // Conditional routing node (diamond): a pass-through whose outgoing edge
-    // conditions check context values written by the preceding codergen node.
-    quality_gate [shape=diamond, label="Quality gate?"]
 
     // Code review — .careful class → claude-opus via stylesheet;
     // fidelity="summary:high" gives the reviewer rich context (~3000 tokens).
@@ -193,7 +194,7 @@ digraph FeaturePipeline {
         shape        = parallelogram,
         label        = "Deploy to Staging",
         type         = "tool",
-        tool_command = "make deploy-staging",
+        tool_command = "deploy_tool.sh",
         timeout      = "600s"
     ]
 
@@ -225,12 +226,13 @@ digraph FeaturePipeline {
     write_tests -> run_tests -> evaluate_results [condition="outcome=success"]
     write_tests -> implement [condition="outcome=fail", label="Fix test compilation"]
 
-    evaluate_results -> quality_gate
-
-    // Diamond routing on context.quality_verdict written by evaluate_results.
-    // weight= ensures a deterministic winner if the LLM returns an unexpected value.
-    quality_gate -> code_review [label="Pass", condition="context.quality_verdict=pass", weight=2]
-    quality_gate -> implement   [label="Fail", condition="context.quality_verdict=fail", weight=1]
+    // Route directly from evaluate_results on the context key it writes.
+    // weight= ensures a deterministic winner if the LLM writes an unexpected value.
+    // The unconditional fallback (weight=0) fires when quality_verdict is absent
+    // (noop backend), routing the simulation through the happy path.
+    evaluate_results -> code_review [label="Pass", condition="context.quality_verdict=pass", weight=2]
+    evaluate_results -> implement   [label="Fail", condition="context.quality_verdict=fail", weight=1]
+    evaluate_results -> code_review [weight=0]
 
     code_review -> approval  [condition="outcome=success"]
     code_review -> implement [condition="outcome=fail", label="Fix review comments"]
