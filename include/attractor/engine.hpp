@@ -8,6 +8,7 @@
 
 #include <chrono>
 #include <functional>
+#include <memory>
 
 namespace attractor {
 
@@ -43,6 +44,10 @@ class Engine {
     // Uses default handlers (start, exit, codergen/NoOp, conditional) + provided event observer.
     // Equivalent to Engine() + setting the observer; avoids duplicating default handler setup in callers.
     explicit Engine(EventObserver on_event);
+
+    // Uses all default handlers with the provided backend instead of NoOpBackend.
+    explicit Engine(std::shared_ptr<CodergenBackend> backend);
+    Engine(std::shared_ptr<CodergenBackend> backend, EventObserver on_event);
 
     Engine(const Engine&) = delete;
     Engine& operator=(const Engine&) = delete;

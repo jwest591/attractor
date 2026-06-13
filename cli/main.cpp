@@ -3,6 +3,9 @@
 #include <attractor/events.hpp>
 #include <attractor/types.hpp>
 #include <attractor/validator.hpp>
+#include <attractor/backends/noop_backend.hpp>
+#include "backends/claude_headless_backend.hpp"
+#include "backends/claude_tmux_backend.hpp"
 
 #include <CLI/CLI.hpp>
 
@@ -42,7 +45,17 @@ void render_event(const Event& event)
         event);
 }
 
-bool write_manifest(const std::string& logs_root_str, const Graph& graph)
+std::string generate_run_id()
+{
+    const auto now = std::chrono::system_clock::now();
+    const auto tt  = std::chrono::system_clock::to_time_t(now);
+    char buf[32]{};
+    // NOLINTNEXTLINE(concurrency-mt-unsafe)
+    std::strftime(buf, sizeof(buf), "%Y%m%dT%H%M%SZ", std::gmtime(&tt));
+    return buf;
+}
+
+bool write_manifest(const std::string& logs_root_str, const std::string& run_id, const Graph& graph)
 {
     namespace fs = std::filesystem;
     const fs::path dir{logs_root_str};
@@ -56,6 +69,7 @@ bool write_manifest(const std::string& logs_root_str, const Graph& graph)
         return false;
     }
     nlohmann::json j;
+    j["run_id"]     = run_id;
     j["graph_id"]   = type_safe::get(graph.digraph_id);
     j["node_count"] = static_cast<int>(graph.nodes.size());
     j["edge_count"] = static_cast<int>(graph.edges.size());
@@ -82,10 +96,20 @@ int main(int argc, char* argv[])
     run->add_option("file", dot_file, "Path to the .dot pipeline file")->required();
 
     std::string backend{"noop"};
-    run->add_option("--backend", backend, "Backend for codergen nodes (noop)");
+    run->add_option("--backend", backend,
+            "Backend for codergen nodes (noop, claude-headless, claude-tmux)")
+        ->check(CLI::IsMember({"noop", "claude-headless", "claude-tmux"}));
+
+    bool resume_run{false};
+    run->add_flag("--resume", resume_run, "Resume from checkpoint.json in logs-root");
 
     std::string logs_root_str{"./logs"};
-    run->add_option("--logs-root", logs_root_str, "Directory for run artifacts");
+    run->add_option("--logs-root", logs_root_str, "Base directory for run artifacts");
+
+    std::string run_id_str;
+    run->add_option("--run-id", run_id_str,
+        "Identifier for this run; used as a subdirectory of --logs-root "
+        "(default: generated from current timestamp; required when --resume)");
 
     CLI11_PARSE(app, argc, argv);
 
@@ -93,6 +117,18 @@ int main(int argc, char* argv[])
         std::cerr << "error: --logs-root must not be empty\n";
         return 1;
     }
+
+    if (run_id_str.empty()) {
+        if (resume_run) {
+            std::cerr << "error: --run-id is required when using --resume\n";
+            return 1;
+        }
+        run_id_str = generate_run_id();
+    }
+
+    logs_root_str = (std::filesystem::path{logs_root_str} / run_id_str).string();
+    std::cout << "run-id: " << run_id_str << "\n"
+              << "logs:   " << logs_root_str << "\n";
 
     // Read .dot file
     std::ifstream file_stream(dot_file);
@@ -138,13 +174,24 @@ int main(int argc, char* argv[])
     }
 
     // Write manifest before run
-    if (!write_manifest(logs_root_str, graph)) {
+    if (!write_manifest(logs_root_str, run_id_str, graph)) {
         std::cerr << "warning: failed to write manifest.json to " << logs_root_str << "\n";
     }
 
-    // Run with event rendering to stdout
-    Engine engine{[](const Event& ev) { render_event(ev); }};
-    const RunConfig config{.logs_root = LogsRoot{logs_root_str}};
+    // Build backend
+    std::shared_ptr<CodergenBackend> backend_ptr;
+    if (backend == "claude-headless") {
+        backend_ptr = std::make_shared<ClaudeCodeHeadlessBackend>();
+    }
+    else if (backend == "claude-tmux") {
+        backend_ptr = std::make_shared<ClaudeCodeTmuxBackend>();
+    }
+    else {
+        backend_ptr = std::make_shared<NoOpBackend>();
+    }
+
+    Engine engine{std::move(backend_ptr), [](const Event& ev) { render_event(ev); }};
+    const RunConfig config{.logs_root = LogsRoot{logs_root_str}, .resume = resume_run};
     const auto outcome = engine.run(graph, config);
 
     if (outcome.status != StageStatus::success) {

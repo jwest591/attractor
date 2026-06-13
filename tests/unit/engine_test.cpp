@@ -484,3 +484,37 @@ SNITCH_TEST_CASE("[engine] resolve_thread_key: edge thread_id used when node has
     const auto key = resolve_thread_key(n, &e, g);
     SNITCH_CHECK(type_safe::get(key) == "edge-thread");
 }
+
+// -- Engine(backend, observer) wiring (Story 5.1) --
+
+SNITCH_TEST_CASE("[engine] Engine(backend, observer) uses injected backend not NoOpBackend -- 5.1-U-001")
+{
+    struct SpyBackend final : public CodergenBackend {
+        mutable bool called{false};
+        [[nodiscard]] auto run(const Node& /*node*/, const PromptText& /*prompt*/,
+                               Context& /*ctx*/) const -> std::expected<LlmResponse, Outcome> override
+        {
+            called = true;
+            return LlmResponse{"spy-response"};
+        }
+    };
+
+    auto spy = std::make_shared<SpyBackend>();
+    TempLogsDir logs;
+
+    auto result = parse_graph(R"(
+        digraph g {
+            start [shape=Mdiamond]
+            work  [shape=box, prompt="Do work"]
+            done  [shape=Msquare]
+            start -> work -> done
+        }
+    )");
+    SNITCH_REQUIRE(result.has_value());
+
+    Engine engine{spy, nullptr};
+    const auto outcome = engine.run(*result, RunConfig{.logs_root = logs.logs_root()});
+
+    SNITCH_CHECK(outcome.status == StageStatus::success);
+    SNITCH_CHECK(spy->called);
+}

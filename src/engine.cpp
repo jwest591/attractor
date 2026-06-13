@@ -399,6 +399,31 @@ Engine::Engine(EventObserver on_event) : Engine()
     m_on_event = std::move(on_event);
 }
 
+Engine::Engine(std::shared_ptr<CodergenBackend> backend)
+{
+    m_registry.register_handler(HandlerTypeName{"start"}, std::make_unique<StartHandler>());
+    m_registry.register_handler(HandlerTypeName{"exit"}, std::make_unique<ExitHandler>());
+    m_registry.register_handler(HandlerTypeName{"codergen"}, std::make_unique<CodergenHandler>(backend));
+    m_registry.register_handler(HandlerTypeName{"conditional"}, std::make_unique<ConditionalHandler>());
+    static AutoApproveInterviewer k_default_interviewer;
+    m_registry.register_handler(HandlerTypeName{"wait.human"},
+        std::make_unique<WaitForHumanHandler>(k_default_interviewer));
+    m_registry.register_handler(HandlerTypeName{"parallel"},
+        std::make_unique<ParallelHandler>(
+            [this](const Graph& g, const NodeId& id, const RunConfig& cfg) -> Outcome {
+                return run_from(g, id, cfg);
+            }));
+    m_registry.register_handler(HandlerTypeName{"parallel.fan_in"},
+        std::make_unique<FanInHandler>(std::move(backend)));
+    m_registry.set_default_handler(std::make_unique<StartHandler>());
+}
+
+Engine::Engine(std::shared_ptr<CodergenBackend> backend, EventObserver on_event)
+    : Engine(std::move(backend))
+{
+    m_on_event = std::move(on_event);
+}
+
 auto Engine::run(const Graph& graph, const RunConfig& config) const -> Outcome
 {
     const Node* start = find_start_node(graph);
