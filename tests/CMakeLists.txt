@@ -63,6 +63,26 @@ target_include_directories(attractor_integration_tests
         ${CMAKE_CURRENT_SOURCE_DIR}/support
 )
 
+# ── CLI backend tests ─────────────────────────────────────────────────────────
+add_executable(attractor_cli_tests
+    support/main_stub.cpp
+    unit/backends/claude_headless_backend_test.cpp
+    ../cli/backends/claude_headless_backend.cpp
+)
+
+target_link_libraries(attractor_cli_tests
+    PRIVATE
+        attractor::attractor
+        snitch::snitch
+)
+
+target_include_directories(attractor_cli_tests
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/support
+        ${CMAKE_SOURCE_DIR}/cli
+        ${CMAKE_SOURCE_DIR}/cli/backends
+)
+
 # ── CTest registration ─────────────────────────────────────────────────────────
 include(CTest)
 
@@ -74,6 +94,11 @@ add_test(
 add_test(
     NAME integration_tests
     COMMAND attractor_integration_tests
+)
+
+add_test(
+    NAME cli_tests
+    COMMAND attractor_cli_tests
 )
 
 # Tag-based filtering examples (document in README):
