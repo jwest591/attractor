@@ -16,6 +16,42 @@ cmake --preset debug
 cmake --build build/debug
 ```
 
+## Run examples
+
+After a debug build, run any `.dot` file from the `examples/` directory:
+
+```sh
+./build/debug/cli/attractor run examples/feature-pipeline.dot
+```
+
+The CLI parses and validates the graph, then executes it with the `noop` backend
+(codergen nodes return a simulated response instead of calling an LLM).  Events
+are printed to stdout as each stage starts and completes; run artefacts are
+written to `./logs/` by default.
+
+```
+[stage 1] started: start
+[stage 1] completed: start
+[stage 2] started: plan
+[stage 2] completed: plan
+...
+```
+
+Useful flags:
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--logs-root <dir>` | `./logs` | Directory for artefacts (`manifest.json`, per-node `prompt.md` / `response.md` / `status.json`, `checkpoint.json`) |
+| `--backend <name>` | `noop` | Codergen backend (`noop` = simulated responses) |
+
+Inspect what was produced after a run:
+
+```sh
+ls logs/
+cat logs/manifest.json
+cat logs/plan/status.json
+```
+
 ## Run tests
 
 ```sh

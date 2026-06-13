@@ -10,6 +10,18 @@ Although bringing your own agentic loop and unified LLM SDK is not required to b
 - [Coding Agent Loop Specification](./coding-agent-loop-spec.md)
 - [Unified LLM Client Specification](./unified-llm-spec.md)
 
+## Examples
+
+The `examples/` directory contains annotated `.dot` files that demonstrate the
+DSL and pipeline features:
+
+| File | What it shows |
+|------|---------------|
+| `feature-pipeline.dot` | Full showcase — graph attributes, subgraph scoped defaults, all core handler types (codergen, tool, conditional, wait.human), goal gates, retries, fidelity modes, model stylesheet, accelerator-key human gates |
+
+See [BUILD.md](./BUILD.md#run-examples) for instructions on running examples
+with the CLI.
+
 ## Building Attractor
 
 Supply the following prompt to a modern coding agent (Claude Code, Codex, OpenCode, Amp, Cursor, etc):
