@@ -292,3 +292,53 @@ SNITCH_TEST_CASE("[transform] stylesheet equal-specificity: later rule overwrite
         SNITCH_CHECK(type_safe::get(n.llm_model) == "second");
     }
 }
+
+SNITCH_TEST_CASE("[transform] stylesheet class selector wins over universal -- 4.3-U-001")
+{
+    auto result = parse_graph(R"(
+        digraph g {
+            graph [model_stylesheet="* { reasoning_effort: medium; } .fast { reasoning_effort: low; }"]
+            start [shape=Mdiamond]
+            work  [shape=box, class="fast", prompt="Do work"]
+            done  [shape=Msquare]
+            start -> work -> done
+        }
+    )");
+    SNITCH_REQUIRE(result.has_value());
+    StylesheetTransform xform;
+    auto out = xform.apply(*result);
+    auto it = std::find_if(out.nodes.begin(), out.nodes.end(),
+        [](const Node& n) { return type_safe::get(n.id) == "work"; });
+    SNITCH_REQUIRE(it != out.nodes.end());
+    SNITCH_REQUIRE(it->reasoning_effort.has_value());
+    SNITCH_CHECK(*it->reasoning_effort == ReasoningEffort::low);
+    for (const auto& n : out.nodes) {
+        if (type_safe::get(n.id) == "work") { continue; }
+        SNITCH_CHECK(n.reasoning_effort.has_value());
+        SNITCH_CHECK(*n.reasoning_effort == ReasoningEffort::medium);
+    }
+}
+
+SNITCH_TEST_CASE("[transform] stylesheet ID selector wins over class shape and universal -- 4.3-U-002")
+{
+    auto result = parse_graph(R"(
+        digraph g {
+            graph [model_stylesheet="* { llm_model: universal; } box { llm_model: shape; } .fast { llm_model: class; } #review { llm_model: id-model; }"]
+            start  [shape=Mdiamond]
+            review [shape=box, class="fast"]
+            done   [shape=Msquare]
+            start -> review -> done
+        }
+    )");
+    SNITCH_REQUIRE(result.has_value());
+    StylesheetTransform xform;
+    auto out = xform.apply(*result);
+    auto rev = std::find_if(out.nodes.begin(), out.nodes.end(),
+        [](const Node& n) { return type_safe::get(n.id) == "review"; });
+    SNITCH_REQUIRE(rev != out.nodes.end());
+    SNITCH_CHECK(type_safe::get(rev->llm_model) == "id-model");
+    for (const auto& n : out.nodes) {
+        if (type_safe::get(n.id) == "review") { continue; }
+        SNITCH_CHECK(type_safe::get(n.llm_model) == "universal");
+    }
+}

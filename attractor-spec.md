@@ -1878,19 +1878,19 @@ This section defines how to validate that an implementation of this spec is comp
 
 ### 11.10 Model Stylesheet
 
-- [ ] Stylesheet is parsed from the graph's `model_stylesheet` attribute
-- [ ] Selectors by shape name work (e.g., `box { llm_model: "claude-opus-4-6" }`)
-- [ ] Selectors by class name work (e.g., `.fast { llm_model: "gemini-3-flash-preview" }`)
-- [ ] Selectors by node ID work (e.g., `#review { reasoning_effort: "high" }`)
-- [ ] Specificity order: universal < shape < class < ID
-- [ ] Stylesheet properties are overridden by explicit node attributes
+- [x] Stylesheet is parsed from the graph's `model_stylesheet` attribute
+- [x] Selectors by shape name work (e.g., `box { llm_model: "claude-opus-4-6" }`)
+- [x] Selectors by class name work (e.g., `.fast { llm_model: "gemini-3-flash-preview" }`)
+- [x] Selectors by node ID work (e.g., `#review { reasoning_effort: "high" }`)
+- [x] Specificity order: universal < shape < class < ID
+- [x] Stylesheet properties are overridden by explicit node attributes
 
 ### 11.11 Transforms and Extensibility
 
-- [ ] AST transforms can modify the Graph between parsing and validation
-- [ ] Transform interface: `transform(graph) -> graph`
-- [ ] Built-in variable expansion transform replaces `$goal` in prompts
-- [ ] Custom transforms can be registered and run in order
+- [x] AST transforms can modify the Graph between parsing and validation
+- [x] Transform interface: `transform(graph) -> graph`
+- [x] Built-in variable expansion transform replaces `$goal` in prompts
+- [x] Custom transforms can be registered and run in order
 - [ ] HTTP server mode (if implemented): POST /run starts pipeline, GET /status checks state, POST /answer submits human input
 
 ### 11.12 Cross-Feature Parity Matrix
@@ -1916,7 +1916,7 @@ Run this validation matrix -- each cell must pass:
 | Edge selection: lexical tiebreak as final fallback | [ ] |
 | Context updates from one node are visible to the next | [ ] |
 | Checkpoint save and resume produces same result   | [ ] |
-| Stylesheet applies model override to nodes by shape | [ ] |
+| Stylesheet applies model override to nodes by shape | [x] |
 | Prompt variable expansion ($goal) works           | [ ] |
 | Parallel fan-out and fan-in complete correctly    | [x] |
 | Custom handler registration and execution works   | [ ] |

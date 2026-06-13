@@ -7,6 +7,7 @@
 #include <attractor/handlers/parallel_handler.hpp>
 #include <attractor/handlers/wait_for_human_handler.hpp>
 #include <attractor/interviewer.hpp>
+#include <attractor/transform.hpp>
 #include <attractor/types.hpp>
 
 #include <nlohmann/json.hpp>
@@ -140,4 +141,28 @@ SNITCH_TEST_CASE("[parity] Parallel fan-in consolidates results by outcome rank 
     SNITCH_REQUIRE(out.context_updates.contains("parallel.fan_in.best_id"));
     SNITCH_CHECK(out.context_updates["parallel.fan_in.best_id"] == "b1");
     SNITCH_REQUIRE(out.context_updates.contains("parallel.fan_in.best_outcome"));
+}
+
+SNITCH_TEST_CASE("[parity] Stylesheet applies model override to nodes by shape -- INT-PARITY")
+{
+    // DoD 11.12-015: apply_transforms applies shape-selector stylesheet to parsed graph.
+    auto result = parse_graph(R"(
+        digraph g {
+            graph [model_stylesheet="* { llm_model: base-model; } box { llm_model: box-model; }"]
+            start [shape=Mdiamond]
+            work  [shape=box, prompt="Do work"]
+            done  [shape=Msquare]
+            start -> work -> done
+        }
+    )");
+    SNITCH_REQUIRE(result.has_value());
+    const auto out = apply_transforms(*result);
+    for (const auto& n : out.nodes) {
+        if (n.shape == NodeShape::box) {
+            SNITCH_CHECK(type_safe::get(n.llm_model) == "box-model");
+        }
+        else {
+            SNITCH_CHECK(type_safe::get(n.llm_model) == "base-model");
+        }
+    }
 }
