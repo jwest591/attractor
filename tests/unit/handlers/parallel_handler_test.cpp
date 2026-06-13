@@ -224,3 +224,25 @@ SNITCH_TEST_CASE("[parallel_handler] callable through Handler interface -- 4.1-U
 
     SNITCH_CHECK(out.status == StageStatus::success);
 }
+
+SNITCH_TEST_CASE("[parallel_handler] results entries contain id and score fields -- 4.2-U-P01")
+{
+    ParallelHandler::RunFn fn = [](const Graph&, const NodeId&, const RunConfig&) -> Outcome {
+        return Outcome{.status = StageStatus::success};
+    };
+    ParallelHandler h{fn};
+    Context ctx;
+    const Graph g = make_parallel_graph();
+    const Node& par = find_par_node(g);
+
+    const Outcome out = h.execute(par, ctx, g, LogsRoot{"/tmp"});
+
+    SNITCH_REQUIRE(out.context_updates.contains("parallel.results"));
+    const auto& results = out.context_updates["parallel.results"];
+    SNITCH_REQUIRE(results.size() == 2);
+    for (const auto& entry : results) {
+        SNITCH_CHECK(entry.contains("id"));
+        SNITCH_CHECK(entry.contains("score"));
+        SNITCH_CHECK(entry["score"].is_number());
+    }
+}

@@ -12,6 +12,7 @@
 #include <attractor/handlers/conditional_handler.hpp>
 #include <attractor/handlers/exit_handler.hpp>
 #include <attractor/handlers/start_handler.hpp>
+#include <attractor/handlers/fan_in_handler.hpp>
 #include <attractor/handlers/parallel_handler.hpp>
 #include <attractor/handlers/wait_for_human_handler.hpp>
 #include <attractor/interviewer.hpp>
@@ -355,6 +356,8 @@ Engine::Engine()
             [this](const Graph& g, const NodeId& id, const RunConfig& cfg) -> Outcome {
                 return run_from(g, id, cfg);
             }));
+    m_registry.register_handler(HandlerTypeName{"parallel.fan_in"},
+        std::make_unique<FanInHandler>(noop));
     m_registry.set_default_handler(std::make_unique<StartHandler>());
 }
 

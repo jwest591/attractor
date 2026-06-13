@@ -3,9 +3,13 @@
 #include <attractor/context.hpp>
 #include <attractor/graph.hpp>
 #include <attractor/handler.hpp>
+#include <attractor/handlers/fan_in_handler.hpp>
+#include <attractor/handlers/parallel_handler.hpp>
 #include <attractor/handlers/wait_for_human_handler.hpp>
 #include <attractor/interviewer.hpp>
 #include <attractor/types.hpp>
+
+#include <nlohmann/json.hpp>
 
 using namespace attractor;
 using namespace attractor::test;
@@ -64,4 +68,76 @@ SNITCH_TEST_CASE("[parity] Wait.human presents choices and routes on selection -
     SNITCH_CHECK(outcome.preferred_label == EdgeLabel{"[F] Fix"});
     SNITCH_CHECK(outcome.context_updates["human.gate.selected"] == "F");
     SNITCH_CHECK(outcome.context_updates["human.gate.label"] == "[F] Fix");
+}
+
+SNITCH_TEST_CASE("[parity] Parallel fan-out spawns branches with isolated context -- INT-PARITY")
+{
+    // DoD 11.12-013: ParallelHandler called directly; branches succeed; parent context unchanged.
+    TempLogsDir logs;
+    Context ctx;
+    (void)ctx.set(ContextKey{"parent.key"}, nlohmann::json{"original"});
+
+    ParallelHandler::RunFn fn = [](const Graph&, const NodeId&, const RunConfig&) -> Outcome {
+        return Outcome{.status = StageStatus::success};
+    };
+    ParallelHandler h{fn};
+
+    Graph g;
+    Node par;
+    par.id          = NodeId{"par"};
+    par.join_policy = JoinPolicy::wait_all;
+    par.max_parallel = MaxParallel{4};
+    g.nodes.push_back(par);
+    Node b0;
+    b0.id = NodeId{"b0"};
+    g.nodes.push_back(b0);
+    Node b1;
+    b1.id = NodeId{"b1"};
+    g.nodes.push_back(b1);
+    Edge e0;
+    e0.from = NodeId{"par"};
+    e0.to   = NodeId{"b0"};
+    g.edges.push_back(e0);
+    Edge e1;
+    e1.from = NodeId{"par"};
+    e1.to   = NodeId{"b1"};
+    g.edges.push_back(e1);
+
+    const Node* par_ptr = nullptr;
+    for (const auto& n : g.nodes) {
+        if (n.id == NodeId{"par"}) {
+            par_ptr = &n;
+            break;
+        }
+    }
+    SNITCH_REQUIRE(par_ptr != nullptr);
+
+    const Outcome out = h.execute(*par_ptr, ctx, g, logs.logs_root());
+
+    SNITCH_CHECK(out.status == StageStatus::success);
+    SNITCH_REQUIRE(out.context_updates.contains("parallel.results"));
+    SNITCH_CHECK(out.context_updates["parallel.results"].size() == 2);
+    SNITCH_CHECK(ctx.get(ContextKey{"parent.key"}) == nlohmann::json{"original"});
+}
+
+SNITCH_TEST_CASE("[parity] Parallel fan-in consolidates results by outcome rank -- INT-PARITY")
+{
+    // DoD 11.12-014: FanInHandler selects the success candidate over the fail candidate.
+    Context ctx;
+    nlohmann::json results = nlohmann::json::array();
+    results.push_back({{"id","b0"},{"status","fail"},{"score",0.0},{"failure_reason",""},{"notes",""}});
+    results.push_back({{"id","b1"},{"status","success"},{"score",0.0},{"failure_reason",""},{"notes",""}});
+    (void)ctx.set(ContextKey{"parallel.results"}, results);
+
+    FanInHandler h{nullptr};
+    Graph g;
+    Node fan_in_node;
+    fan_in_node.id = NodeId{"fan_in"};
+
+    const Outcome out = h.execute(fan_in_node, ctx, g, LogsRoot{"/tmp"});
+
+    SNITCH_CHECK(out.status == StageStatus::success);
+    SNITCH_REQUIRE(out.context_updates.contains("parallel.fan_in.best_id"));
+    SNITCH_CHECK(out.context_updates["parallel.fan_in.best_id"] == "b1");
+    SNITCH_REQUIRE(out.context_updates.contains("parallel.fan_in.best_outcome"));
 }

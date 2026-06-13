@@ -34,7 +34,8 @@ struct RunConfig {
 class Engine {
   public:
     // Default constructor: registers StartHandler, ExitHandler, ConditionalHandler,
-    // CodergenHandler(NoOpBackend), WaitForHumanHandler, and ParallelHandler for the built-in types.
+    // CodergenHandler(NoOpBackend), WaitForHumanHandler, ParallelHandler, and FanInHandler
+    // for the built-in types.
     Engine();
 
     explicit Engine(HandlerRegistry registry);

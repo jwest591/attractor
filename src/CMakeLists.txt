@@ -30,6 +30,7 @@ add_library(attractor STATIC
     handlers/manager_loop_handler.cpp
     handlers/wait_for_human_handler.cpp
     handlers/parallel_handler.cpp
+    handlers/fan_in_handler.cpp
     interviewers/auto_approve_interviewer.cpp
     interviewers/queue_interviewer.cpp
     interviewers/recording_interviewer.cpp

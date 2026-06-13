@@ -65,13 +65,21 @@ auto ParallelHandler::execute(const Node& node, Context& /*ctx*/,
         return Outcome::fail(DiagnosticMessage{"ParallelHandler: fan-out stopped unexpectedly"});
 
     nlohmann::json results_json = nlohmann::json::array();
-    for (const auto& r : results) {
+    for (std::size_t i = 0; i < results.size(); ++i) {
+        const auto& r = results[i];
         nlohmann::json entry = nlohmann::json::object();
+        entry["id"] = type_safe::get(branch_starts[i]);
         nlohmann::json status_j;
         to_json(status_j, r.status);
         entry["status"] = status_j;
         entry["failure_reason"] = type_safe::get(r.failure_reason);
         entry["notes"] = type_safe::get(r.notes);
+        if (r.context_updates.is_object() && r.context_updates.contains("parallel.score")
+                && r.context_updates.at("parallel.score").is_number()) {
+            entry["score"] = r.context_updates.at("parallel.score").get<double>();
+        } else {
+            entry["score"] = 0.0;
+        }
         results_json.push_back(entry);
     }
 

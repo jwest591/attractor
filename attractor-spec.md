@@ -1844,7 +1844,7 @@ This section defines how to validate that an implementation of this spec is comp
 - [x] **Wait.human handler:** Presents outgoing edge labels as choices to the interviewer, returns selected label as preferred_label
 - [ ] **Conditional handler:** Passes through; engine evaluates edge conditions against outcome/context
 - [x] **Parallel handler:** Fans out to multiple target nodes concurrently (or sequentially as fallback)
-- [ ] **Fan-in handler:** Waits for all parallel branches to complete before proceeding
+- [x] **Fan-in handler:** Waits for all parallel branches to complete before proceeding
 - [ ] **Tool handler:** Executes configured tool/command and returns result
 - [ ] Custom handlers can be registered by type string
 
@@ -1918,7 +1918,7 @@ Run this validation matrix -- each cell must pass:
 | Checkpoint save and resume produces same result   | [ ] |
 | Stylesheet applies model override to nodes by shape | [ ] |
 | Prompt variable expansion ($goal) works           | [ ] |
-| Parallel fan-out and fan-in complete correctly    | [ ] |
+| Parallel fan-out and fan-in complete correctly    | [x] |
 | Custom handler registration and execution works   | [ ] |
 | Pipeline with 10+ nodes completes without errors  | [ ] |
 
