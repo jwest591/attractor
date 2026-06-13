@@ -7,6 +7,8 @@
 #include "backends/claude_headless_backend.hpp"
 #include "backends/claude_tmux_backend.hpp"
 
+#include <unistd.h>
+
 #include <CLI/CLI.hpp>
 
 #include <chrono>
@@ -45,14 +47,17 @@ void render_event(const Event& event)
         event);
 }
 
-std::string generate_run_id()
+[[nodiscard]] std::string generate_run_id()
 {
     const auto now = std::chrono::system_clock::now();
     const auto tt  = std::chrono::system_clock::to_time_t(now);
     char buf[32]{};
     // NOLINTNEXTLINE(concurrency-mt-unsafe)
-    std::strftime(buf, sizeof(buf), "%Y%m%dT%H%M%SZ", std::gmtime(&tt));
-    return buf;
+    auto* const tm_ptr = std::gmtime(&tt);
+    if (tm_ptr != nullptr) {
+        std::strftime(buf, sizeof(buf), "%Y%m%dT%H%M%SZ", tm_ptr);
+    }
+    return std::string{buf} + "-" + std::to_string(static_cast<unsigned>(::getpid()));
 }
 
 bool write_manifest(const std::string& logs_root_str, const std::string& run_id, const Graph& graph)
@@ -77,7 +82,10 @@ bool write_manifest(const std::string& logs_root_str, const std::string& run_id,
     const auto tt   = std::chrono::system_clock::to_time_t(now);
     char buf[32]{};
     // NOLINTNEXTLINE(concurrency-mt-unsafe)
-    std::strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", std::gmtime(&tt));
+    auto* const tm_ptr = std::gmtime(&tt);
+    if (tm_ptr != nullptr) {
+        std::strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", tm_ptr);
+    }
     j["run_started"] = buf;
     f << j.dump(2) << "\n";
     return true;
@@ -106,11 +114,6 @@ int main(int argc, char* argv[])
     std::string logs_root_str{"./logs"};
     run->add_option("--logs-root", logs_root_str, "Base directory for run artifacts");
 
-    std::string run_id_str;
-    run->add_option("--run-id", run_id_str,
-        "Identifier for this run; used as a subdirectory of --logs-root "
-        "(default: generated from current timestamp; required when --resume)");
-
     CLI11_PARSE(app, argc, argv);
 
     if (logs_root_str.empty()) {
@@ -118,11 +121,26 @@ int main(int argc, char* argv[])
         return 1;
     }
 
-    if (run_id_str.empty()) {
-        if (resume_run) {
-            std::cerr << "error: --run-id is required when using --resume\n";
+    std::string run_id_str;
+    if (resume_run) {
+        namespace fs = std::filesystem;
+        std::error_code ec;
+        std::string latest;
+        for (const auto& entry : fs::directory_iterator{logs_root_str, ec}) {
+            if (entry.is_directory()) {
+                const auto name = entry.path().filename().string();
+                if (name > latest) {
+                    latest = name;
+                }
+            }
+        }
+        if (latest.empty()) {
+            std::cerr << "error: no previous run found in " << logs_root_str << "\n";
             return 1;
         }
+        run_id_str = std::move(latest);
+    }
+    else {
         run_id_str = generate_run_id();
     }
 
@@ -173,8 +191,8 @@ int main(int argc, char* argv[])
         return 1;
     }
 
-    // Write manifest before run
-    if (!write_manifest(logs_root_str, run_id_str, graph)) {
+    // Write manifest before run (skip on resume to preserve original run_started timestamp)
+    if (!resume_run && !write_manifest(logs_root_str, run_id_str, graph)) {
         std::cerr << "warning: failed to write manifest.json to " << logs_root_str << "\n";
     }
 

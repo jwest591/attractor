@@ -1,7 +1,5 @@
 #include "claude_headless_backend.hpp"
 
-#include <attractor/context.hpp>
-#include <attractor/graph.hpp>
 #include <attractor/handler.hpp>
 #include <attractor/types.hpp>
 
