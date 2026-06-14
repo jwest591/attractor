@@ -70,6 +70,8 @@ add_executable(attractor_cli_tests
     ../cli/backends/claude_headless_backend.cpp
     unit/backends/claude_tmux_backend_test.cpp
     ../cli/backends/claude_tmux_backend.cpp
+    unit/backends/handoff_aware_backend_test.cpp
+    ../cli/backends/handoff_aware_backend.cpp
 )
 
 target_link_libraries(attractor_cli_tests

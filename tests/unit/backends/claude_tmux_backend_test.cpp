@@ -309,3 +309,64 @@ exit 1
     SNITCH_REQUIRE(result.has_value());
     SNITCH_CHECK(type_safe::get(*result) == "mock response");
 }
+
+SNITCH_TEST_CASE("[claude_tmux] pre-existing handoff file triggers /clear then returns response -- 5.5-U-T-001")
+{
+    // Session "att-n1" already exists (has-session exits 0).
+    // Handoff file is pre-created to trigger the detection block in run().
+    // Mock script: on send-keys /clear → record clear in STATE, write new JSONL and marker
+    //              on send-keys <prompt> → append end_turn to transcript from marker
+
+    auto script = std::filesystem::temp_directory_path() / "att_test_tmux_55_t001.sh";
+    auto state  = std::filesystem::temp_directory_path() / "att_test_tmux_55_t001_state.txt";
+    TmpFile g_script{script};
+    TmpFile g_state{state};
+    TmpFile g_marker{std::filesystem::path{"/tmp/att-att-n1-transcript.txt"}};
+    TmpFile g_jsonl{std::filesystem::path{"/tmp/att-att-n1-55t001.jsonl"}};
+    TmpFile g_handoff{std::filesystem::current_path() / ".attractor" / "att-n1-handoff.md"};
+
+    std::filesystem::create_directories(std::filesystem::current_path() / ".attractor");
+    { std::ofstream f{g_handoff.path}; f << "continue from handoff"; }
+
+    write_script(script,
+        "#!/bin/sh\n"
+        "STATE=\"" + state.string() + "\"\n"
+        "JSONL2=\"/tmp/att-att-n1-55t001.jsonl\"\n"
+        "MARKER=\"/tmp/att-att-n1-transcript.txt\"\n"
+        "case \"$1\" in\n"
+        "  has-session) exit 0 ;;\n"
+        "  send-keys)\n"
+        "    if [ \"$5\" = \"/clear\" ]; then\n"
+        "      printf 'clear_sent\\n' >> \"$STATE\"\n"
+        "      touch \"$JSONL2\"\n"
+        "      printf '%s\\n' \"$JSONL2\" > \"$MARKER\"\n"
+        "    else\n"
+        "      TRANSCRIPT=$(cat \"$MARKER\" 2>/dev/null)\n"
+        "      if [ -n \"$TRANSCRIPT\" ]; then\n"
+        "        printf '{\"type\":\"assistant\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"mock response\"}],\"stop_reason\":\"end_turn\",\"usage\":{\"input_tokens\":0}}}\\n' >> \"$TRANSCRIPT\"\n"
+        "      fi\n"
+        "    fi\n"
+        "    exit 0 ;;\n"
+        "  *) exit 0 ;;\n"
+        "esac\n");
+
+    ClaudeCodeTmuxBackend backend{script.string()};
+    Node node;
+    node.id = NodeId{"n1"};
+    Context ctx;
+
+    auto result = backend.run(node, PromptText{"continue from handoff"}, ctx);
+
+    SNITCH_REQUIRE(result.has_value());
+    SNITCH_CHECK(type_safe::get(*result) == "mock response");
+    SNITCH_CHECK_FALSE(std::filesystem::exists(g_handoff.path));
+
+    // Verify /clear was explicitly sent to the tmux session
+    std::ifstream sf{state};
+    const std::string state_contents{std::istreambuf_iterator<char>(sf), {}};
+    SNITCH_CHECK(state_contents.find("clear_sent") != std::string::npos);
+
+    // m_sessions updated to new transcript path is verified indirectly: if the wrong
+    // path were used, send-keys for the actual prompt would append to the missing JSONL
+    // and result.has_value() above would fail.
+}

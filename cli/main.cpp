@@ -6,6 +6,7 @@
 #include <attractor/backends/noop_backend.hpp>
 #include "backends/claude_headless_backend.hpp"
 #include "backends/claude_tmux_backend.hpp"
+#include "backends/handoff_aware_backend.hpp"
 
 #include <unistd.h>
 
@@ -199,10 +200,12 @@ int main(int argc, char* argv[])
     // Build backend
     std::shared_ptr<CodergenBackend> backend_ptr;
     if (backend == "claude-headless") {
-        backend_ptr = std::make_shared<ClaudeCodeHeadlessBackend>();
+        backend_ptr = std::make_shared<HandoffAwareBackend>(
+            std::make_shared<ClaudeCodeHeadlessBackend>());
     }
     else if (backend == "claude-tmux") {
-        backend_ptr = std::make_shared<ClaudeCodeTmuxBackend>();
+        backend_ptr = std::make_shared<HandoffAwareBackend>(
+            std::make_shared<ClaudeCodeTmuxBackend>());
     }
     else {
         backend_ptr = std::make_shared<NoOpBackend>();

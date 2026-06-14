@@ -1,4 +1,5 @@
 #include "claude_tmux_backend.hpp"
+#include "backend_utils.hpp"
 
 #include <attractor/context.hpp>
 #include <attractor/graph.hpp>
@@ -61,26 +62,6 @@ std::string shell_escape(const std::string& s)
     }
     out += '\'';
     return out;
-}
-
-std::string derive_session_name(const attractor::Node& node)
-{
-    std::string raw = node.thread_id.has_value()
-        ? type_safe::get(*node.thread_id)
-        : type_safe::get(node.id);
-    std::string name = "att-" + raw;
-    for (char& c : name) {
-        if (!std::isalnum(static_cast<unsigned char>(c)) && c != '-' && c != '_') c = '-';
-    }
-    return name;
-}
-
-std::string compute_handoff_path(const std::string& session_name)
-{
-    const auto dir = std::filesystem::current_path() / ".attractor";
-    std::error_code ec;
-    std::filesystem::create_directories(dir, ec);
-    return (dir / (session_name + "-handoff.md")).string();
 }
 
 std::string poll_transcript_path(
@@ -358,12 +339,49 @@ auto ClaudeCodeTmuxBackend::run(const Node& node, const PromptText& prompt,
     const std::string session = derive_session_name(node);
     const std::string settings_path =
         std::string{ATTRACTOR_CLI_SCRIPTS_DIR} + "/att-tmux-backend.settings.json";
-    const std::string handoff_path = compute_handoff_path(session);
-    { std::error_code ec; std::filesystem::remove(std::filesystem::path(handoff_path), ec); }
+    auto handoff_path_result = compute_handoff_path(session);
+    if (!handoff_path_result) {
+        return std::unexpected(Outcome::fail(DiagnosticMessage{
+            "tmux: cannot create .attractor directory: " + handoff_path_result.error()}));
+    }
+    const std::string& handoff_path = *handoff_path_result;
 
     std::optional<std::chrono::steady_clock::time_point> deadline;
     if (node.timeout) {
         deadline = std::chrono::steady_clock::now() + node.timeout->get_value();
+    }
+
+    // Detect context-handoff triggered by context-ceiling.sh in the previous run.
+    // Unconditional remove is atomic: had_handoff=true iff the file existed and was removed.
+    std::error_code handoff_ec;
+    const bool had_handoff = std::filesystem::remove(std::filesystem::path(handoff_path), handoff_ec);
+    if (handoff_ec) {
+        return std::unexpected(Outcome::fail(
+            DiagnosticMessage{"tmux: cannot remove handoff file: " + handoff_ec.message()}));
+    }
+    if (had_handoff) {
+        // Remove transcript marker so poll_transcript_path detects the new session
+        const std::string marker = "/tmp/att-" + session + "-transcript.txt";
+        { std::error_code ec; std::filesystem::remove(std::filesystem::path(marker), ec); }
+
+        const std::string clear_cmd = m_tmux_bin + " send-keys -t " + session
+            + " -- /clear Enter";
+        if (tmux_system(clear_cmd) != 0) {
+            return std::unexpected(Outcome::fail(
+                DiagnosticMessage{"tmux: /clear failed for " + session}));
+        }
+
+        // Wait for SessionStart/clear hook to rewrite the transcript marker
+        const std::string new_path = poll_transcript_path(session, deadline);
+        if (new_path.empty()) {
+            return std::unexpected(Outcome::fail(DiagnosticMessage{
+                "tmux: timeout waiting for post-/clear session for " + session}));
+        }
+        {
+            std::lock_guard lock{m_mutex};
+            m_sessions[session] = new_path;
+        }
+        // Fall through — transcript_path acquisition below will use the updated cache
     }
 
     std::string transcript_path;

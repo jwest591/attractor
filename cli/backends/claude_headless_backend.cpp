@@ -1,4 +1,5 @@
 #include "claude_headless_backend.hpp"
+#include "backend_utils.hpp"
 
 #include <attractor/context.hpp>
 #include <attractor/graph.hpp>
@@ -66,28 +67,6 @@ std::string extract_error_message(const std::string& line)
     const auto pos = line.find("\"error\":{");
     if (pos == std::string::npos) return {};
     return extract_json_string(line.substr(pos), "message").value_or(std::string{});
-}
-
-// ---- Session name and handoff path ------------------------------------------
-
-std::string derive_session_name(const attractor::Node& node)
-{
-    std::string raw = node.thread_id.has_value()
-        ? type_safe::get(*node.thread_id)
-        : type_safe::get(node.id);
-    std::string name = "att-" + raw;
-    for (char& c : name) {
-        if (!std::isalnum(static_cast<unsigned char>(c)) && c != '-' && c != '_') c = '-';
-    }
-    return name;
-}
-
-std::string compute_handoff_path(const std::string& session_name)
-{
-    const auto dir = std::filesystem::current_path() / ".attractor";
-    std::error_code ec;
-    std::filesystem::create_directories(dir, ec);
-    return (dir / (session_name + "-handoff.md")).string();
 }
 
 // ---- Stream-JSON parsing ----------------------------------------------------
@@ -341,7 +320,12 @@ auto ClaudeCodeHeadlessBackend::run(const Node& node, const PromptText& prompt,
     }
 
     const std::string session_name = derive_session_name(node);
-    const std::string handoff_path = compute_handoff_path(session_name);
+    auto handoff_path_result = compute_handoff_path(session_name);
+    if (!handoff_path_result) {
+        return std::unexpected(Outcome::fail(DiagnosticMessage{
+            "headless: cannot create .attractor directory: " + handoff_path_result.error()}));
+    }
+    const std::string& handoff_path = *handoff_path_result;
     { std::error_code ec; std::filesystem::remove(std::filesystem::path(handoff_path), ec); }
 
     constexpr int k_max_retries = 3;

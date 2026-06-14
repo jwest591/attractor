@@ -4,6 +4,7 @@ add_executable(attractor_cli
     main.cpp
     backends/claude_headless_backend.cpp
     backends/claude_tmux_backend.cpp
+    backends/handoff_aware_backend.cpp
 )
 
 set_target_properties(attractor_cli PROPERTIES
