@@ -2,7 +2,6 @@
 
 #include <attractor/graph.hpp>
 #include <attractor/types.hpp>
-#include <string>
 #include <type_safe/strong_typedef.hpp>
 
 namespace attractor {

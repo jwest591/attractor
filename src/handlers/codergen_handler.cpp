@@ -3,7 +3,6 @@
 #include <attractor/context.hpp>
 #include <attractor/graph.hpp>
 #include <attractor/types.hpp>
-#include <expected>
 #include <filesystem>
 #include <fstream>
 #include <nlohmann/json.hpp>
@@ -47,8 +46,8 @@ void write_status(const std::filesystem::path& stage_dir, const Outcome& outcome
 
 CodergenHandler::CodergenHandler(std::shared_ptr<CodergenBackend> backend) : m_backend{std::move(backend)} {}
 
-auto CodergenHandler::execute(const Node& node, Context& ctx, const Graph& graph,
-                              const LogsRoot& logs_root) const -> Outcome
+auto CodergenHandler::execute(const Node& node, Context& ctx, const Graph& graph, const LogsRoot& logs_root) const
+    -> Outcome
 {
     const auto& id_str = type_safe::get(node.id);
     if (id_str.find('/') != std::string::npos || id_str.find("..") != std::string::npos) {

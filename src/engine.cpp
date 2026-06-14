@@ -1,19 +1,19 @@
 #include <attractor/engine.hpp>
 
 #include <algorithm>
-#include <attractor/condition_eval.hpp>
 #include <attractor/backends/noop_backend.hpp>
 #include <attractor/checkpoint.hpp>
-#include <attractor/events.hpp>
+#include <attractor/condition_eval.hpp>
 #include <attractor/context.hpp>
+#include <attractor/events.hpp>
 #include <attractor/graph.hpp>
 #include <attractor/handler_registry.hpp>
 #include <attractor/handlers/codergen_handler.hpp>
 #include <attractor/handlers/conditional_handler.hpp>
 #include <attractor/handlers/exit_handler.hpp>
-#include <attractor/handlers/start_handler.hpp>
 #include <attractor/handlers/fan_in_handler.hpp>
 #include <attractor/handlers/parallel_handler.hpp>
+#include <attractor/handlers/start_handler.hpp>
 #include <attractor/handlers/wait_for_human_handler.hpp>
 #include <attractor/interviewer.hpp>
 #include <attractor/types.hpp>
@@ -35,8 +35,7 @@ namespace {
 const Node* find_start_node(const Graph& graph)
 {
     for (const auto& node : graph.nodes) {
-        const auto& id = type_safe::get(node.id);
-        if (node.shape == NodeShape::mdiamond || id == "start" || id == "Start") {
+        if (node.shape == NodeShape::mdiamond || node.id == "start" || node.id == "Start") {
             return &node;
         }
     }
@@ -45,8 +44,7 @@ const Node* find_start_node(const Graph& graph)
 
 bool is_terminal(const Node& node) noexcept
 {
-    const auto& id = type_safe::get(node.id);
-    return node.shape == NodeShape::msquare || id == "exit" || id == "end";
+    return node.shape == NodeShape::msquare || node.id == "exit" || node.id == "end";
 }
 
 const Node* find_node(const Graph& graph, const NodeId& id)
@@ -100,9 +98,9 @@ std::string trim(const std::string& s)
     return s.substr(start, end - start + 1);
 }
 
-std::string normalize_label(const std::string& s)
+EdgeLabel normalize_label(const EdgeLabel& s)
 {
-    std::string t = trim(s);
+    std::string t = trim(type_safe::get(s));
 
     if (t.size() >= 4 && t[0] == '[') {
         if (t[2] == ']' && t[3] == ' ') {
@@ -118,7 +116,7 @@ std::string normalize_label(const std::string& s)
     }
 
     std::transform(t.begin(), t.end(), t.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-    return t;
+    return EdgeLabel(t);
 }
 
 std::string lookup_context(const nlohmann::json& snapshot, std::string_view path)
@@ -291,10 +289,10 @@ const Edge* select_edge(const Node& node, const Outcome& outcome, const nlohmann
 
     // Step 2: preferred_label match (first match among unconditional edges)
     if (!outcome.preferred_label.empty()) {
-        const std::string norm_pref = normalize_label(type_safe::get(outcome.preferred_label));
-        for (const Edge* e : unconditional_candidates) {
-            if (!e->label.empty() && normalize_label(type_safe::get(e->label)) == norm_pref) {
-                return e;
+        const auto norm_pref = normalize_label(outcome.preferred_label);
+        for (const auto* edge : unconditional_candidates) {
+            if (!edge->label.empty() && normalize_label(edge->label) == norm_pref) {
+                return edge;
             }
         }
     }
@@ -302,9 +300,9 @@ const Edge* select_edge(const Node& node, const Outcome& outcome, const nlohmann
     // Step 3: suggested_next_ids match (first id in list order, first matching edge)
     if (!outcome.suggested_next_ids.empty()) {
         for (const NodeId& nid : outcome.suggested_next_ids) {
-            for (const Edge* e : unconditional_candidates) {
-                if (e->to == nid) {
-                    return e;
+            for (const auto* edge : unconditional_candidates) {
+                if (edge->to == nid) {
+                    return edge;
                 }
             }
         }
@@ -355,8 +353,7 @@ auto resolve_fidelity(const Node& node, const Edge* incoming_edge, const Graph& 
     return FidelityMode::compact;
 }
 
-auto resolve_thread_key(const Node& node, const Edge* incoming_edge,
-                         const Graph& graph) -> ThreadId
+auto resolve_thread_key(const Node& node, const Edge* incoming_edge, const Graph& graph) -> ThreadId
 {
     (void)graph;
     if (node.thread_id.has_value()) {
@@ -376,40 +373,31 @@ void Engine::register_default_handlers(std::shared_ptr<CodergenBackend> backend)
     m_registry.register_handler(HandlerTypeName{"conditional"}, std::make_unique<ConditionalHandler>());
     static AutoApproveInterviewer k_default_interviewer;
     m_registry.register_handler(HandlerTypeName{"wait.human"},
-        std::make_unique<WaitForHumanHandler>(k_default_interviewer));
-    m_registry.register_handler(HandlerTypeName{"parallel"},
-        std::make_unique<ParallelHandler>(
-            [this](const Graph& g, const NodeId& id, const RunConfig& cfg) -> Outcome {
-                return run_from(g, id, cfg);
-            }));
-    m_registry.register_handler(HandlerTypeName{"parallel.fan_in"},
-        std::make_unique<FanInHandler>(std::move(backend)));
+                                std::make_unique<WaitForHumanHandler>(k_default_interviewer));
+    m_registry.register_handler(
+        HandlerTypeName{"parallel"},
+        std::make_unique<ParallelHandler>([this](const Graph& g, const NodeId& id, const RunConfig& cfg) -> Outcome {
+            return run_from(g, id, cfg);
+        }));
+    m_registry.register_handler(HandlerTypeName{"parallel.fan_in"}, std::make_unique<FanInHandler>(std::move(backend)));
     m_registry.set_default_handler(std::make_unique<StartHandler>());
 }
 
-Engine::Engine()
-{
-    register_default_handlers(std::make_shared<NoOpBackend>());
-}
+Engine::Engine() { register_default_handlers(std::make_shared<NoOpBackend>()); }
 
 Engine::Engine(HandlerRegistry registry) : m_registry{std::move(registry)} {}
 
 Engine::Engine(HandlerRegistry registry, EventObserver on_event)
-    : m_registry{std::move(registry)}, m_on_event{std::move(on_event)}
-{}
-
-Engine::Engine(EventObserver on_event) : Engine()
+    : m_registry{std::move(registry)}
+    , m_on_event{std::move(on_event)}
 {
-    m_on_event = std::move(on_event);
 }
 
-Engine::Engine(std::shared_ptr<CodergenBackend> backend)
-{
-    register_default_handlers(std::move(backend));
-}
+Engine::Engine(EventObserver on_event) : Engine() { m_on_event = std::move(on_event); }
 
-Engine::Engine(std::shared_ptr<CodergenBackend> backend, EventObserver on_event)
-    : Engine(std::move(backend))
+Engine::Engine(std::shared_ptr<CodergenBackend> backend) { register_default_handlers(std::move(backend)); }
+
+Engine::Engine(std::shared_ptr<CodergenBackend> backend, EventObserver on_event) : Engine(std::move(backend))
 {
     m_on_event = std::move(on_event);
 }
@@ -502,7 +490,9 @@ auto Engine::run_from(const Graph& graph, const NodeId& start_id, const RunConfi
         const int node_index = static_cast<int>(completed_nodes.size());
 
         if (m_on_event) {
-            m_on_event(Event{StageStarted{node->id, node_index}});
+            m_on_event(Event{
+                StageStarted{node->id, node_index}
+            });
         }
 
         const Handler& handler = m_registry.resolve(*node);
@@ -528,19 +518,20 @@ auto Engine::run_from(const Graph& graph, const NodeId& start_id, const RunConfi
         if (outcome.status == StageStatus::retry) {
             if (static_cast<bool>(node->allow_partial)) {
                 outcome = Outcome{.status = StageStatus::partial_success,
-                                  .failure_reason = DiagnosticMessage{"Retry exhausted (partial): " +
-                                                                       type_safe::get(node->id)}};
+                                  .failure_reason =
+                                      DiagnosticMessage{"Retry exhausted (partial): " + type_safe::get(node->id)}};
             }
             else {
-                outcome = Outcome::fail(
-                    DiagnosticMessage{"Retry exhausted: " + type_safe::get(node->id)});
+                outcome = Outcome::fail(DiagnosticMessage{"Retry exhausted: " + type_safe::get(node->id)});
             }
             node_outcomes[node->id] = outcome;
         }
 
         // Emit StageCompleted after final outcome is determined.
         if (m_on_event) {
-            m_on_event(Event{StageCompleted{node->id, node_index}});
+            m_on_event(Event{
+                StageCompleted{node->id, node_index}
+            });
         }
 
         // Merge context_updates into persistent context; set engine-controlled keys.

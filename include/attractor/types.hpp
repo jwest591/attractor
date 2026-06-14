@@ -20,6 +20,7 @@ namespace ts = type_safe;
 struct NodeId
     : ts::strong_typedef<NodeId, std::string>
     , ts::strong_typedef_op::equality_comparison<NodeId>
+    , ts::strong_typedef_op::mixed_equality_comparison<NodeId, std::string, const char*>
     , ts::strong_typedef_op::relational_comparison<NodeId> {
     using strong_typedef::strong_typedef;
 
