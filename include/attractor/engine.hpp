@@ -63,6 +63,8 @@ class Engine {
     HandlerRegistry m_registry;
     EventObserver m_on_event;
 
+    void register_default_handlers(std::shared_ptr<CodergenBackend> backend);
+
     [[nodiscard]] auto run_from(const Graph& graph, const NodeId& start_id, const RunConfig& config) const -> Outcome;
 };
 

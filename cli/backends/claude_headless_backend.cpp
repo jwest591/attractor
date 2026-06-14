@@ -138,6 +138,8 @@ struct SubprocessResult {
         if (ret == 0) { result.timed_out = true; break; }
         if (ret < 0) {
             if (errno == EINTR) continue;
+            kill(pid, SIGKILL);
+            waitpid(pid, nullptr, 0);
             break;
         }
 

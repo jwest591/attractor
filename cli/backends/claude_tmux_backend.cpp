@@ -249,6 +249,10 @@ auto ClaudeCodeTmuxBackend::run(const Node& node, const PromptText& prompt,
     if (!response) {
         return std::unexpected(Outcome::fail(DiagnosticMessage{"timeout"}));
     }
+    if (response->empty()) {
+        return std::unexpected(
+            Outcome::fail(DiagnosticMessage{"tmux: assistant turn contained no text content"}));
+    }
 
     return LlmResponse{std::move(*response)};
 }

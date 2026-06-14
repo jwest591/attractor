@@ -5,7 +5,7 @@
 
 namespace attractor {
 
-// ── String strong typedefs ────────────────────────────────────────────────────
+// -- String strong typedefs ----------------------------------------------------
 
 void to_json(nlohmann::json& j, const NodeId& v) { j = type_safe::get(v); }
 
@@ -135,7 +135,7 @@ ATTRACTOR_STRING_TYPEDEF_JSON(LlmResponse)
 
 #undef ATTRACTOR_STRING_TYPEDEF_JSON
 
-// ── Int constrained types ─────────────────────────────────────────────────────
+// -- Int constrained types ----------------------------------------------------─
 
 void to_json(nlohmann::json& j, const MaxRetries& v) { j = v.get_value(); }
 
@@ -171,7 +171,7 @@ void from_json(const nlohmann::json& j, Port& v)
     v = Port{val};
 }
 
-// ── TimeoutDuration: serialize as int64 milliseconds ─────────────────────────
+// -- TimeoutDuration: serialize as int64 milliseconds ------------------------─
 
 void to_json(nlohmann::json& j, const TimeoutDuration& v) { j = v.get_value().count(); }
 
@@ -185,7 +185,7 @@ void from_json(const nlohmann::json& j, TimeoutDuration& v)
     v = TimeoutDuration{ms};
 }
 
-// ── Enum classes ──────────────────────────────────────────────────────────────
+// -- Enum classes --------------------------------------------------------------
 
 static const std::pair<StageStatus, std::string_view> k_stage_status_map[] = {
     {StageStatus::success,         "success"        },

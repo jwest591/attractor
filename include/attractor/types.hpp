@@ -15,7 +15,7 @@ namespace attractor {
 
 namespace ts = type_safe;
 
-// ── String strong typedefs (AC1) ──────────────────────────────────────────────
+// -- String strong typedefs (AC1) ----------------------------------------------
 
 struct NodeId
     : ts::strong_typedef<NodeId, std::string>
@@ -254,7 +254,7 @@ struct LlmResponse
     bool empty() const noexcept { return static_cast<std::string>(*this).empty(); }
 };
 
-// ── Constrained types (AC2) ───────────────────────────────────────────────────
+// -- Constrained types (AC2) --------------------------------------------------─
 // Each constrained type uses its own constraint struct so the four `using`
 // aliases produce distinct instantiations of ts::constrained_type.
 
@@ -289,7 +289,7 @@ struct max_parallel_constraint {
 
 using MaxParallel = ts::constrained_type<int, max_parallel_constraint, ts::assertion_verifier>;
 
-// ── Enum classes ──────────────────────────────────────────────────────────────
+// -- Enum classes --------------------------------------------------------------
 
 enum class StageStatus { success, partial_success, fail, retry, skipped };
 
@@ -305,7 +305,7 @@ enum class ReasoningEffort { low, medium, high };
 
 enum class JoinPolicy { wait_all, first_success };
 
-// ── JSON serialization declarations (defined in src/types.cpp) ───────────────
+// -- JSON serialization declarations (defined in src/types.cpp) --------------─
 
 void to_json(nlohmann::json& j, const NodeId& v);
 void from_json(const nlohmann::json& j, NodeId& v);

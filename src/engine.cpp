@@ -368,38 +368,7 @@ auto resolve_thread_key(const Node& node, const Edge* incoming_edge,
     return ThreadId{type_safe::get(node.id)};
 }
 
-Engine::Engine()
-{
-    auto noop = std::make_shared<NoOpBackend>();
-    m_registry.register_handler(HandlerTypeName{"start"}, std::make_unique<StartHandler>());
-    m_registry.register_handler(HandlerTypeName{"exit"}, std::make_unique<ExitHandler>());
-    m_registry.register_handler(HandlerTypeName{"codergen"}, std::make_unique<CodergenHandler>(noop));
-    m_registry.register_handler(HandlerTypeName{"conditional"}, std::make_unique<ConditionalHandler>());
-    static AutoApproveInterviewer k_default_interviewer;
-    m_registry.register_handler(HandlerTypeName{"wait.human"},
-        std::make_unique<WaitForHumanHandler>(k_default_interviewer));
-    m_registry.register_handler(HandlerTypeName{"parallel"},
-        std::make_unique<ParallelHandler>(
-            [this](const Graph& g, const NodeId& id, const RunConfig& cfg) -> Outcome {
-                return run_from(g, id, cfg);
-            }));
-    m_registry.register_handler(HandlerTypeName{"parallel.fan_in"},
-        std::make_unique<FanInHandler>(noop));
-    m_registry.set_default_handler(std::make_unique<StartHandler>());
-}
-
-Engine::Engine(HandlerRegistry registry) : m_registry{std::move(registry)} {}
-
-Engine::Engine(HandlerRegistry registry, EventObserver on_event)
-    : m_registry{std::move(registry)}, m_on_event{std::move(on_event)}
-{}
-
-Engine::Engine(EventObserver on_event) : Engine()
-{
-    m_on_event = std::move(on_event);
-}
-
-Engine::Engine(std::shared_ptr<CodergenBackend> backend)
+void Engine::register_default_handlers(std::shared_ptr<CodergenBackend> backend)
 {
     m_registry.register_handler(HandlerTypeName{"start"}, std::make_unique<StartHandler>());
     m_registry.register_handler(HandlerTypeName{"exit"}, std::make_unique<ExitHandler>());
@@ -416,6 +385,27 @@ Engine::Engine(std::shared_ptr<CodergenBackend> backend)
     m_registry.register_handler(HandlerTypeName{"parallel.fan_in"},
         std::make_unique<FanInHandler>(std::move(backend)));
     m_registry.set_default_handler(std::make_unique<StartHandler>());
+}
+
+Engine::Engine()
+{
+    register_default_handlers(std::make_shared<NoOpBackend>());
+}
+
+Engine::Engine(HandlerRegistry registry) : m_registry{std::move(registry)} {}
+
+Engine::Engine(HandlerRegistry registry, EventObserver on_event)
+    : m_registry{std::move(registry)}, m_on_event{std::move(on_event)}
+{}
+
+Engine::Engine(EventObserver on_event) : Engine()
+{
+    m_on_event = std::move(on_event);
+}
+
+Engine::Engine(std::shared_ptr<CodergenBackend> backend)
+{
+    register_default_handlers(std::move(backend));
 }
 
 Engine::Engine(std::shared_ptr<CodergenBackend> backend, EventObserver on_event)
