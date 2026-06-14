@@ -158,16 +158,15 @@ struct SubprocessResult {
         // NOLINTNEXTLINE(concurrency-mt-unsafe) -- child process only
         setenv("CLAUDE_HANDOFF_FILE", handoff_path.c_str(), 1);
 
-        const std::string settings_path =
-            std::string{ATTRACTOR_CLI_SCRIPTS_DIR} + "/att-headless-backend.settings.json";
+        const std::string scripts_dir{ATTRACTOR_CLI_SCRIPTS_DIR};
+        const std::string settings_path = scripts_dir + "/att-headless-backend.settings.json";
+        const std::string shell_cmd =
+            "set -o pipefail; '" + exe + "'"
+            + " -p --output-format stream-json --settings '" + settings_path + "'"
+            + " | '" + scripts_dir + "/ctx-usage.sh' parse-stream";
         // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
-        const char* argv[] = {
-            exe.c_str(), "-p",
-            "--output-format", "stream-json",
-            "--settings", settings_path.c_str(),
-            nullptr
-        };
-        execvp(exe.c_str(), const_cast<char**>(argv));
+        const char* sh_argv[] = {"bash", "-c", shell_cmd.c_str(), nullptr};
+        execvp("/bin/bash", const_cast<char**>(sh_argv));
         _exit(127);
     }
 

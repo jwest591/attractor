@@ -6,8 +6,10 @@
 #include <attractor/types.hpp>
 #include <snitch/snitch.hpp>
 #include <type_safe/strong_typedef.hpp>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <unistd.h>
 
 using namespace attractor;
 
@@ -20,6 +22,17 @@ struct TmpFile {
     TmpFile& operator=(const TmpFile&) = delete;
     ~TmpFile() noexcept { std::error_code ec; std::filesystem::remove(path, ec); }
     std::filesystem::path path;
+};
+
+// RAII guard that unsets an environment variable on scope exit.
+// NOLINTNEXTLINE(cppcoreguidelines-special-member-functions) -- move intentionally omitted; guard is always local
+struct EnvGuard {
+    explicit EnvGuard(const char* name) : m_name{name} {}
+    EnvGuard(const EnvGuard&) = delete;
+    EnvGuard& operator=(const EnvGuard&) = delete;
+    // NOLINTNEXTLINE(concurrency-mt-unsafe) -- test binary is single-threaded; env mutation is test-local
+    ~EnvGuard() noexcept { unsetenv(m_name); }
+    const char* m_name;
 };
 }  // namespace
 
@@ -175,4 +188,75 @@ SNITCH_TEST_CASE("[claude_headless] non-rate-limit API error returns FAIL immedi
     SNITCH_REQUIRE_FALSE(result.has_value());
     const auto& reason = type_safe::get(result.error().failure_reason);
     SNITCH_CHECK(reason.find("overloaded_error") != std::string::npos);
+}
+
+SNITCH_TEST_CASE("[claude_headless] parse-stream interposed: usage file written for session -- 5.6-U-001")
+{
+    auto tmp_sh    = std::filesystem::temp_directory_path() / "att_test_usage_001.sh";
+    auto tmp_usage = std::filesystem::temp_directory_path() / "att_test_ctx_usage_001.json";
+    TmpFile guard_sh{tmp_sh};
+    TmpFile guard_usage{tmp_usage};
+    TmpFile g_handoff{std::filesystem::current_path() / ".attractor" / "att-n1-handoff.md"};
+    {
+        std::ofstream f{tmp_sh};
+        f << "#!/bin/sh\n"
+             "printf '%s\\n' "
+             "'{\"type\":\"message_start\",\"session_id\":\"test-session-001\","
+             "\"usage\":{\"input_tokens\":1000,\"output_tokens\":200}}' "
+             "'{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"hello\"}}' "
+             "'{\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"}}'\n";
+    }
+    std::filesystem::permissions(tmp_sh, std::filesystem::perms::owner_exec
+        | std::filesystem::perms::owner_read | std::filesystem::perms::owner_write);
+
+    // NOLINTNEXTLINE(concurrency-mt-unsafe)
+    setenv("CLAUDE_USAGE_FILE", tmp_usage.string().c_str(), 1);
+    EnvGuard env_guard{"CLAUDE_USAGE_FILE"};
+
+    ClaudeCodeHeadlessBackend backend{tmp_sh.string()};
+    Node node;
+    node.id = NodeId{"n1"};
+    Context ctx;
+
+    auto result = backend.run(node, PromptText{"hello"}, ctx);
+
+    SNITCH_REQUIRE(result.has_value());
+    SNITCH_CHECK(type_safe::get(*result) == "hello");
+    SNITCH_CHECK(std::filesystem::exists(tmp_usage));
+}
+
+SNITCH_TEST_CASE("[claude_headless] parse-stream passthrough: multi-delta text assembled with usage fields present -- 5.6-U-002")
+{
+    auto tmp_sh    = std::filesystem::temp_directory_path() / "att_test_passthrough_002.sh";
+    auto tmp_usage = std::filesystem::temp_directory_path() / "att_test_ctx_usage_002.json";
+    TmpFile guard_sh{tmp_sh};
+    TmpFile guard_usage{tmp_usage};
+    TmpFile g_handoff{std::filesystem::current_path() / ".attractor" / "att-n1-handoff.md"};
+    {
+        std::ofstream f{tmp_sh};
+        f << "#!/bin/sh\n"
+             "printf '%s\\n' "
+             "'{\"type\":\"message_start\",\"session_id\":\"test-session-002\","
+             "\"usage\":{\"input_tokens\":500,\"output_tokens\":100}}' "
+             "'{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"part1 \"}}' "
+             "'{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"part2\"}}' "
+             "'{\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"}}'\n";
+    }
+    std::filesystem::permissions(tmp_sh, std::filesystem::perms::owner_exec
+        | std::filesystem::perms::owner_read | std::filesystem::perms::owner_write);
+
+    // NOLINTNEXTLINE(concurrency-mt-unsafe)
+    setenv("CLAUDE_USAGE_FILE", tmp_usage.string().c_str(), 1);
+    EnvGuard env_guard{"CLAUDE_USAGE_FILE"};
+
+    ClaudeCodeHeadlessBackend backend{tmp_sh.string()};
+    Node node;
+    node.id = NodeId{"n1"};
+    Context ctx;
+
+    auto result = backend.run(node, PromptText{"hello"}, ctx);
+
+    SNITCH_REQUIRE(result.has_value());
+    SNITCH_CHECK(type_safe::get(*result) == "part1 part2");
+    SNITCH_CHECK(std::filesystem::exists(tmp_usage));
 }
