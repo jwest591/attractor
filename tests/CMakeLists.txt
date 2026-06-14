@@ -85,9 +85,12 @@ target_include_directories(attractor_cli_tests
         ${CMAKE_SOURCE_DIR}/cli/backends
 )
 
+option(ATTRACTOR_ENABLE_SLOW_TESTS "Enable slow tests (e.g. rate-limit retry with sleep)" OFF)
+
 target_compile_definitions(attractor_cli_tests
     PRIVATE
         ATTRACTOR_CLI_SCRIPTS_DIR="${CMAKE_SOURCE_DIR}/cli/scripts"
+        $<$<BOOL:${ATTRACTOR_ENABLE_SLOW_TESTS}>:ATTRACTOR_ENABLE_SLOW_TESTS>
 )
 
 # ── CTest registration ─────────────────────────────────────────────────────────

@@ -23,13 +23,17 @@ struct TmpFile {
 };
 }  // namespace
 
-SNITCH_TEST_CASE("[claude_headless] stdout from subprocess returned as LlmResponse -- 5.2-U-001")
+SNITCH_TEST_CASE("[claude_headless] stream-json end_turn assembled as LlmResponse -- 5.2-U-001")
 {
     auto tmp = std::filesystem::temp_directory_path() / "att_test_echo.sh";
     TmpFile guard{tmp};
+    TmpFile g_handoff{std::filesystem::current_path() / ".attractor" / "att-n1-handoff.md"};
     {
         std::ofstream f{tmp};
-        f << "#!/bin/sh\ncat\n";
+        f << "#!/bin/sh\n"
+             "printf '%s\\n' "
+             "'{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"hello world\"}}' "
+             "'{\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"}}'\n";
     }
     std::filesystem::permissions(tmp, std::filesystem::perms::owner_exec
         | std::filesystem::perms::owner_read | std::filesystem::perms::owner_write);
@@ -38,9 +42,8 @@ SNITCH_TEST_CASE("[claude_headless] stdout from subprocess returned as LlmRespon
     Node node;
     node.id = NodeId{"n1"};
     Context ctx;
-    const PromptText prompt{"hello world"};
 
-    auto result = echo_backend.run(node, prompt, ctx);
+    auto result = echo_backend.run(node, PromptText{"hello world"}, ctx);
 
     SNITCH_REQUIRE(result.has_value());
     SNITCH_CHECK(type_safe::get(*result) == "hello world");
@@ -91,4 +94,85 @@ SNITCH_TEST_CASE("[claude_headless] timeout kills subprocess and returns FAIL --
     SNITCH_REQUIRE_FALSE(result.has_value());
     SNITCH_CHECK(type_safe::get(result.error().failure_reason) == "timeout");
     SNITCH_CHECK(result.error().status == StageStatus::fail);
+}
+
+SNITCH_TEST_CASE("[claude_headless] stream-json text_delta events assembled into LlmResponse -- 5.4-U-006")
+{
+    auto tmp = std::filesystem::temp_directory_path() / "att_test_stream_006.sh";
+    TmpFile guard{tmp};
+    TmpFile g_handoff{std::filesystem::current_path() / ".attractor" / "att-n1-handoff.md"};
+    {
+        std::ofstream f{tmp};
+        f << "#!/bin/sh\n"
+             "printf '%s\\n' "
+             "'{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"hello \"}}' "
+             "'{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"world\"}}' "
+             "'{\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"}}'\n";
+    }
+    std::filesystem::permissions(tmp, std::filesystem::perms::owner_exec
+        | std::filesystem::perms::owner_read | std::filesystem::perms::owner_write);
+
+    ClaudeCodeHeadlessBackend backend{tmp.string()};
+    Node node;
+    node.id = NodeId{"n1"};
+    Context ctx;
+
+    auto result = backend.run(node, PromptText{"prompt"}, ctx);
+
+    SNITCH_REQUIRE(result.has_value());
+    SNITCH_CHECK(type_safe::get(*result) == "hello world");
+}
+
+#ifdef ATTRACTOR_ENABLE_SLOW_TESTS
+SNITCH_TEST_CASE("[claude_headless][slow] rate_limit_error exhausts retries and returns FAIL -- 5.4-U-007")
+{
+    auto tmp = std::filesystem::temp_directory_path() / "att_test_ratelimit_007.sh";
+    TmpFile guard{tmp};
+    TmpFile g_handoff{std::filesystem::current_path() / ".attractor" / "att-n1-handoff.md"};
+    {
+        std::ofstream f{tmp};
+        f << "#!/bin/sh\n"
+             "printf '%s\\n' "
+             "'{\"type\":\"error\",\"error\":{\"type\":\"rate_limit_error\",\"message\":\"Too Many Requests\"}}'\n";
+    }
+    std::filesystem::permissions(tmp, std::filesystem::perms::owner_exec
+        | std::filesystem::perms::owner_read | std::filesystem::perms::owner_write);
+
+    ClaudeCodeHeadlessBackend backend{tmp.string()};
+    Node node;
+    node.id = NodeId{"n1"};
+    Context ctx;
+
+    auto result = backend.run(node, PromptText{"prompt"}, ctx);
+
+    SNITCH_REQUIRE_FALSE(result.has_value());
+    const auto& reason = type_safe::get(result.error().failure_reason);
+    SNITCH_CHECK(reason.find("rate_limit_error") != std::string::npos);
+}
+#endif  // ATTRACTOR_ENABLE_SLOW_TESTS
+
+SNITCH_TEST_CASE("[claude_headless] non-rate-limit API error returns FAIL immediately -- 5.4-U-008")
+{
+    auto tmp = std::filesystem::temp_directory_path() / "att_test_apierr_008.sh";
+    TmpFile guard{tmp};
+    TmpFile g_handoff{std::filesystem::current_path() / ".attractor" / "att-n1-handoff.md"};
+    {
+        std::ofstream f{tmp};
+        f << "#!/bin/sh\n"
+             "printf '%s\\n' "
+             "'{\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"Service overloaded\"}}'\n";
+    }
+    std::filesystem::permissions(tmp, std::filesystem::perms::owner_exec
+        | std::filesystem::perms::owner_read | std::filesystem::perms::owner_write);
+
+    ClaudeCodeHeadlessBackend backend{tmp.string()};
+    Node node;
+    node.id = NodeId{"n1"};
+    Context ctx;
+
+    auto result = backend.run(node, PromptText{"prompt"}, ctx);
+
+    SNITCH_REQUIRE_FALSE(result.has_value());
+    const auto& reason = type_safe::get(result.error().failure_reason);
+    SNITCH_CHECK(reason.find("overloaded_error") != std::string::npos);
 }

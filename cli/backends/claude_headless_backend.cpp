@@ -7,12 +7,17 @@
 #include <type_safe/strong_typedef.hpp>
 
 #include <array>
+#include <cctype>
 #include <cerrno>
 #include <chrono>
 #include <climits>
+#include <filesystem>
 #include <optional>
+#include <sstream>
 #include <string>
+#include <thread>
 
+#include <cstdlib>
 #include <dirent.h>
 #include <poll.h>
 #include <signal.h>
@@ -22,6 +27,99 @@
 
 namespace {
 
+// ---- JSON helpers (minimal, duplicated from claude_tmux_backend.cpp) --------
+
+std::optional<std::string> extract_json_string(const std::string& json, const std::string& key)
+{
+    const std::string needle = "\"" + key + "\":\"";
+    const auto pos = json.find(needle);
+    if (pos == std::string::npos) return std::nullopt;
+    std::string out;
+    for (std::size_t i = pos + needle.size(); i < json.size(); ++i) {
+        if (json[i] == '"') return out;
+        if (json[i] == '\\' && i + 1 < json.size()) {
+            ++i;
+            switch (json[i]) {
+                case '"':  out += '"';  break;
+                case '\\': out += '\\'; break;
+                case 'n':  out += '\n'; break;
+                case 'r':  out += '\r'; break;
+                case 't':  out += '\t'; break;
+                default:   out += json[i]; break;
+            }
+        } else {
+            out += json[i];
+        }
+    }
+    return std::nullopt;
+}
+
+std::string extract_error_type(const std::string& line)
+{
+    const auto pos = line.find("\"error\":{");
+    if (pos == std::string::npos) return {};
+    return extract_json_string(line.substr(pos), "type").value_or(std::string{});
+}
+
+std::string extract_error_message(const std::string& line)
+{
+    const auto pos = line.find("\"error\":{");
+    if (pos == std::string::npos) return {};
+    return extract_json_string(line.substr(pos), "message").value_or(std::string{});
+}
+
+// ---- Session name and handoff path ------------------------------------------
+
+std::string derive_session_name(const attractor::Node& node)
+{
+    std::string raw = node.thread_id.has_value()
+        ? type_safe::get(*node.thread_id)
+        : type_safe::get(node.id);
+    std::string name = "att-" + raw;
+    for (char& c : name) {
+        if (!std::isalnum(static_cast<unsigned char>(c)) && c != '-' && c != '_') c = '-';
+    }
+    return name;
+}
+
+std::string compute_handoff_path(const std::string& session_name)
+{
+    const auto dir = std::filesystem::current_path() / ".attractor";
+    std::error_code ec;
+    std::filesystem::create_directories(dir, ec);
+    return (dir / (session_name + "-handoff.md")).string();
+}
+
+// ---- Stream-JSON parsing ----------------------------------------------------
+
+struct HeadlessStreamResult {
+    std::string text;
+    std::string stop_reason;
+    std::string error_type;
+    std::string error_message;
+};
+
+HeadlessStreamResult parse_stream_json(const std::string& stdout_data)
+{
+    HeadlessStreamResult result;
+    std::istringstream ss(stdout_data);
+    std::string line;
+    while (std::getline(ss, line)) {
+        if (line.find("\"type\":\"content_block_delta\"") != std::string::npos
+            && line.find("\"type\":\"text_delta\"") != std::string::npos) {
+            if (auto t = extract_json_string(line, "text")) result.text += *t;
+        } else if (line.find("\"type\":\"message_delta\"") != std::string::npos) {
+            if (auto r = extract_json_string(line, "stop_reason")) result.stop_reason = *r;
+        } else if (line.find("\"type\":\"error\"") != std::string::npos) {
+            result.error_type    = extract_error_type(line);
+            result.error_message = extract_error_message(line);
+        }
+    }
+    return result;
+}
+
+// ---- Subprocess -------------------------------------------------------------
+
 struct SubprocessResult {
     std::string stdout_data;
     std::string stderr_data;
@@ -30,7 +128,8 @@ struct SubprocessResult {
 };
 
 [[nodiscard]] auto run_subprocess(const std::string& exe, const std::string& prompt,
-                                  std::optional<std::chrono::milliseconds> timeout)
+                                  std::optional<std::chrono::milliseconds> timeout,
+                                  const std::string& handoff_path)
     -> SubprocessResult
 {
     int stdin_fd[2]  = {-1, -1};
@@ -49,7 +148,7 @@ struct SubprocessResult {
 
     pid_t pid = fork();
 
-    // Fix: fork() == -1 not handled — waitpid(-1) reaps any child; kill(-1,SIGKILL) is dangerous
+    // Fix: fork() == -1 not handled
     if (pid < 0) {
         for (int fd : {stdin_fd[0], stdin_fd[1], stdout_fd[0], stdout_fd[1], stderr_fd[0], stderr_fd[1]}) {
             close(fd);
@@ -64,7 +163,7 @@ struct SubprocessResult {
         dup2(stdout_fd[1], STDOUT_FILENO);
         dup2(stderr_fd[1], STDERR_FILENO);
 
-        // Fix: Close all inherited fds >= 3 (pipe originals + any other parent fds)
+        // Fix: Close all inherited fds >= 3
         if (DIR* dirp = opendir("/proc/self/fd"); dirp != nullptr) {
             int dir_fd = dirfd(dirp);
             while (const auto* ent = readdir(dirp)) {
@@ -77,8 +176,18 @@ struct SubprocessResult {
             closedir(dirp);
         }
 
+        // NOLINTNEXTLINE(concurrency-mt-unsafe) -- child process only
+        setenv("CLAUDE_HANDOFF_FILE", handoff_path.c_str(), 1);
+
+        const std::string settings_path =
+            std::string{ATTRACTOR_CLI_SCRIPTS_DIR} + "/att-headless-backend.settings.json";
         // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
-        const char* argv[] = {exe.c_str(), "-p", "--output-format", "text", nullptr};
+        const char* argv[] = {
+            exe.c_str(), "-p",
+            "--output-format", "stream-json",
+            "--settings", settings_path.c_str(),
+            nullptr
+        };
         execvp(exe.c_str(), const_cast<char**>(argv));
         _exit(127);
     }
@@ -144,7 +253,7 @@ struct SubprocessResult {
         }
 
         if ((fds[0].revents & POLLIN) != 0) {
-            // Fix: Retry read on EINTR — EINTR must not be treated as EOF
+            // Fix: Retry read on EINTR
             ssize_t n;
             do { n = read(stdout_fd[0], buf.data(), buf.size()); } while (n < 0 && errno == EINTR);
             if (n > 0) result.stdout_data.append(buf.data(), static_cast<std::size_t>(n));
@@ -176,8 +285,7 @@ struct SubprocessResult {
 
         if (stdin_slot >= 0) {
             // Fix: Check POLLERR before POLLOUT — both can be set simultaneously when the
-            // child closes its read-end; taking the POLLOUT branch would call write() on a
-            // broken pipe and raise SIGPIPE, killing the parent with the default handler.
+            // child closes its read-end; taking POLLOUT branch calls write() on a broken pipe.
             if ((fds[stdin_slot].revents & POLLERR) != 0) {
                 close(stdin_fd[1]);
                 stdin_fd[1] = -1;
@@ -206,8 +314,7 @@ struct SubprocessResult {
     close(stderr_fd[0]);
 
     int status = 0;
-    // Fix: Retry waitpid on EINTR — a signal arriving during the wait would otherwise
-    // leave the child as a zombie and return with status uninitialized.
+    // Fix: Retry waitpid on EINTR
     { int wp; do { wp = waitpid(pid, &status, 0); } while (wp < 0 && errno == EINTR); }
     result.exit_code = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
 
@@ -227,24 +334,62 @@ auto ClaudeCodeHeadlessBackend::run(const Node& node, const PromptText& prompt,
     -> std::expected<LlmResponse, Outcome>
 {
     std::optional<std::chrono::milliseconds> timeout_ms;
+    std::optional<std::chrono::steady_clock::time_point> deadline;
     if (node.timeout) {
         timeout_ms = node.timeout->get_value();
+        deadline = std::chrono::steady_clock::now() + *timeout_ms;
     }
 
-    auto result = run_subprocess(m_claude_exe, type_safe::get(prompt), timeout_ms);
+    const std::string session_name = derive_session_name(node);
+    const std::string handoff_path = compute_handoff_path(session_name);
+    { std::error_code ec; std::filesystem::remove(std::filesystem::path(handoff_path), ec); }
 
-    if (result.timed_out) {
-        return std::unexpected(Outcome::fail(DiagnosticMessage{"timeout"}));
+    constexpr int k_max_retries = 3;
+    for (int attempt = 0; attempt <= k_max_retries; ++attempt) {
+        auto result = run_subprocess(m_claude_exe, type_safe::get(prompt),
+                                     timeout_ms, handoff_path);
+
+        if (result.timed_out) {
+            return std::unexpected(Outcome::fail(DiagnosticMessage{"timeout"}));
+        }
+
+        if (result.exit_code != 0) {
+            std::string reason = result.stderr_data.empty()
+                ? "claude exited with code " + std::to_string(result.exit_code)
+                : result.stderr_data;
+            return std::unexpected(Outcome::fail(DiagnosticMessage{std::move(reason)}));
+        }
+
+        auto parsed = parse_stream_json(result.stdout_data);
+
+        if (parsed.stop_reason == "end_turn") {
+            return LlmResponse{std::move(parsed.text)};
+        }
+
+        if (parsed.stop_reason == "max_tokens") {
+            return std::unexpected(Outcome::fail(DiagnosticMessage{
+                "headless: response truncated (max_tokens)"}));
+        }
+
+        if (!parsed.error_type.empty()) {
+            if (parsed.error_type != "rate_limit_error" || attempt == k_max_retries) {
+                std::string msg = parsed.error_type == "rate_limit_error"
+                    ? "headless: rate_limit_error: max retries (" + std::to_string(k_max_retries)
+                      + ") exhausted: " + parsed.error_message
+                    : "headless: API error [" + parsed.error_type + "]: " + parsed.error_message;
+                return std::unexpected(Outcome::fail(DiagnosticMessage{std::move(msg)}));
+            }
+            const auto wake = std::chrono::steady_clock::now() + std::chrono::seconds{10};
+            if (!deadline || wake < *deadline) {
+                std::this_thread::sleep_until(wake);
+            }
+            continue;
+        }
+
+        // stdout non-empty but no recognisable stop_reason -- treat as success
+        return LlmResponse{std::move(parsed.text)};
     }
-
-    if (result.exit_code != 0) {
-        std::string reason = result.stderr_data.empty()
-            ? "claude exited with code " + std::to_string(result.exit_code)
-            : result.stderr_data;
-        return std::unexpected(Outcome::fail(DiagnosticMessage{std::move(reason)}));
-    }
-
-    return LlmResponse{result.stdout_data};
+    __builtin_unreachable();  // loop always returns on final attempt
 }
 
 }  // namespace attractor

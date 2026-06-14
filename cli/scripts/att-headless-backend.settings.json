@@ -1,20 +1,10 @@
 {
-  "_comment": "Settings for ClaudeCodeTmuxBackend. Pass via: claude --settings /abs/path/to/att-tmux-backend.settings.json. Do NOT add a $schema field (breaks hook registration on v2.1.114+).",
-  "statusLine": {
-    "type": "command",
-    "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/att-status-line.sh'",
-    "padding": 0
-  },
+  "_comment": "Settings for ClaudeCodeHeadlessBackend. Do NOT add a $schema field (breaks hook registration on v2.1.114+).",
   "hooks": {
     "SessionStart": [
       {
         "matcher": "startup",
         "hooks": [
-          {
-            "type": "command",
-            "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/att-session-start.sh'",
-            "timeout": 5000
-          },
           {
             "type": "command",
             "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/ctx-usage.sh init'",

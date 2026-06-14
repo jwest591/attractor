@@ -187,3 +187,125 @@ exit 1
     SNITCH_CHECK(type_safe::get(result.error().failure_reason) == "timeout");
     SNITCH_CHECK(result.error().status == StageStatus::fail);
 }
+
+SNITCH_TEST_CASE("[claude_tmux] max_tokens response returns FAIL with max_tokens diagnostic -- 5.4-U-001")
+{
+    auto script = std::filesystem::temp_directory_path() / "att_test_tmux_54_001.sh";
+    TmpFile g_script{script};
+    TmpFile g_marker{std::filesystem::path{"/tmp/att-att-n1-transcript.txt"}};
+    TmpFile g_jsonl{std::filesystem::path{"/tmp/att-att-n1-test.jsonl"}};
+    TmpFile g_handoff{std::filesystem::current_path() / ".attractor" / "att-n1-handoff.md"};
+
+    write_script(script, R"(#!/bin/sh
+case "$1" in
+  has-session) exit 1 ;;
+  new-session)
+    NAME="$4"
+    JSONL="/tmp/att-${NAME}-test.jsonl"
+    touch "$JSONL"
+    printf '%s\n' "$JSONL" > "/tmp/att-${NAME}-transcript.txt"
+    exit 0 ;;
+  send-keys)
+    NAME="$3"
+    JSONL="/tmp/att-${NAME}-test.jsonl"
+    printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"partial"}],"stop_reason":"max_tokens"}}\n' >> "$JSONL"
+    exit 0 ;;
+esac
+exit 1
+)");
+
+    ClaudeCodeTmuxBackend backend{script.string()};
+    Node node;
+    node.id = NodeId{"n1"};
+    node.timeout = TimeoutDuration{std::chrono::milliseconds{500}};
+    Context ctx;
+
+    auto result = backend.run(node, PromptText{"prompt"}, ctx);
+
+    SNITCH_REQUIRE_FALSE(result.has_value());
+    const auto& reason = type_safe::get(result.error().failure_reason);
+    SNITCH_CHECK(reason.find("max_tokens") != std::string::npos);
+}
+
+SNITCH_TEST_CASE("[claude_tmux] rate_limit_error exhausts retries and returns FAIL -- 5.4-U-002")
+{
+    // The mock writes a local_command event with a past date when /usage is sent so
+    // parse_reset_duration returns 0s; the node timeout is shorter than the 5s sleep
+    // buffer so no actual sleep occurs between retries.
+    auto script = std::filesystem::temp_directory_path() / "att_test_tmux_54_002.sh";
+    TmpFile g_script{script};
+    TmpFile g_marker{std::filesystem::path{"/tmp/att-att-n1-transcript.txt"}};
+    TmpFile g_jsonl{std::filesystem::path{"/tmp/att-att-n1-test.jsonl"}};
+    TmpFile g_handoff{std::filesystem::current_path() / ".attractor" / "att-n1-handoff.md"};
+
+    write_script(script, R"(#!/bin/sh
+case "$1" in
+  has-session) exit 1 ;;
+  new-session)
+    NAME="$4"
+    JSONL="/tmp/att-${NAME}-test.jsonl"
+    touch "$JSONL"
+    printf '%s\n' "$JSONL" > "/tmp/att-${NAME}-transcript.txt"
+    exit 0 ;;
+  send-keys)
+    NAME="$3"
+    JSONL="/tmp/att-${NAME}-test.jsonl"
+    if [ "$5" = "/usage" ]; then
+      printf '{"type":"system","subtype":"local_command","content":"<local-command-stdout>Current session: 99%% used - resets 2000-01-01 00:00:00 (UTC)</local-command-stdout>"}\n' >> "$JSONL"
+    else
+      printf '{"type":"error","error":{"type":"rate_limit_error","message":"Too Many Requests"}}\n' >> "$JSONL"
+    fi
+    exit 0 ;;
+esac
+exit 1
+)");
+
+    ClaudeCodeTmuxBackend backend{script.string()};
+    Node node;
+    node.id = NodeId{"n1"};
+    node.timeout = TimeoutDuration{std::chrono::milliseconds{2000}};
+    Context ctx;
+
+    auto result = backend.run(node, PromptText{"prompt"}, ctx);
+
+    SNITCH_REQUIRE_FALSE(result.has_value());
+    const auto& reason = type_safe::get(result.error().failure_reason);
+    SNITCH_CHECK(reason.find("rate_limit_error") != std::string::npos);
+}
+
+SNITCH_TEST_CASE("[claude_tmux] end_turn with input_tokens does not corrupt happy path -- 5.4-U-003")
+{
+    auto script = std::filesystem::temp_directory_path() / "att_test_tmux_54_003.sh";
+    TmpFile g_script{script};
+    TmpFile g_marker{std::filesystem::path{"/tmp/att-att-n1-transcript.txt"}};
+    TmpFile g_jsonl{std::filesystem::path{"/tmp/att-att-n1-test.jsonl"}};
+    TmpFile g_handoff{std::filesystem::current_path() / ".attractor" / "att-n1-handoff.md"};
+
+    write_script(script, R"(#!/bin/sh
+case "$1" in
+  has-session) exit 1 ;;
+  new-session)
+    NAME="$4"
+    JSONL="/tmp/att-${NAME}-test.jsonl"
+    touch "$JSONL"
+    printf '%s\n' "$JSONL" > "/tmp/att-${NAME}-transcript.txt"
+    exit 0 ;;
+  send-keys)
+    NAME="$3"
+    JSONL="/tmp/att-${NAME}-test.jsonl"
+    printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"mock response"}],"stop_reason":"end_turn","usage":{"input_tokens":42}}}\n' >> "$JSONL"
+    exit 0 ;;
+esac
+exit 1
+)");
+
+    ClaudeCodeTmuxBackend backend{script.string()};
+    Node node;
+    node.id = NodeId{"n1"};
+    Context ctx;
+
+    auto result = backend.run(node, PromptText{"hello"}, ctx);
+
+    SNITCH_REQUIRE(result.has_value());
+    SNITCH_CHECK(type_safe::get(*result) == "mock response");
+}

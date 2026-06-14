@@ -65,6 +65,17 @@ Or run the test binary directly to filter by tag:
 ./build/debug/tests/attractor_unit_tests --list-tests
 ```
 
+### Slow tests
+
+`5.4-U-007` (headless rate-limit retry) takes ~30 s because it exercises three real
+`sleep_for(10s)` calls. It is excluded from the default build. To include it:
+
+```sh
+cmake --preset debug -DATTRACTOR_ENABLE_SLOW_TESTS=ON
+cmake --build build/debug --target attractor_cli_tests
+ctest --preset debug --output-on-failure
+```
+
 ## Release build
 
 ```sh
