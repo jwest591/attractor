@@ -10,6 +10,10 @@ set_target_properties(attractor_cli PROPERTIES
     OUTPUT_NAME "attractor"
 )
 
+target_compile_definitions(attractor_cli PRIVATE
+    ATTRACTOR_CLI_SCRIPTS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/scripts"
+)
+
 target_link_libraries(attractor_cli
     PRIVATE
         attractor::attractor

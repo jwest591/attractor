@@ -68,6 +68,8 @@ add_executable(attractor_cli_tests
     support/main_stub.cpp
     unit/backends/claude_headless_backend_test.cpp
     ../cli/backends/claude_headless_backend.cpp
+    unit/backends/claude_tmux_backend_test.cpp
+    ../cli/backends/claude_tmux_backend.cpp
 )
 
 target_link_libraries(attractor_cli_tests
@@ -81,6 +83,11 @@ target_include_directories(attractor_cli_tests
         ${CMAKE_CURRENT_SOURCE_DIR}/support
         ${CMAKE_SOURCE_DIR}/cli
         ${CMAKE_SOURCE_DIR}/cli/backends
+)
+
+target_compile_definitions(attractor_cli_tests
+    PRIVATE
+        ATTRACTOR_CLI_SCRIPTS_DIR="${CMAKE_SOURCE_DIR}/cli/scripts"
 )
 
 # ── CTest registration ─────────────────────────────────────────────────────────
