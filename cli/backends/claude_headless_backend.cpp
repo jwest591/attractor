@@ -84,11 +84,16 @@ HeadlessStreamResult parse_stream_json(const std::string& stdout_data)
     std::istringstream ss(stdout_data);
     std::string line;
     while (std::getline(ss, line)) {
-        if (line.find("\"type\":\"content_block_delta\"") != std::string::npos
-            && line.find("\"type\":\"text_delta\"") != std::string::npos) {
-            if (auto t = extract_json_string(line, "text")) result.text += *t;
-        } else if (line.find("\"type\":\"message_delta\"") != std::string::npos) {
-            if (auto r = extract_json_string(line, "stop_reason")) result.stop_reason = *r;
+        // claude CLI --output-format stream-json emits a final "result" event
+        // with the full response text and stop_reason.
+        if (line.find("\"type\":\"result\"") != std::string::npos) {
+            if (line.find("\"is_error\":true") != std::string::npos) {
+                result.error_type    = extract_json_string(line, "subtype").value_or("error");
+                result.error_message = extract_json_string(line, "result").value_or(std::string{});
+            } else {
+                if (auto t = extract_json_string(line, "result"))      result.text        = *t;
+                if (auto r = extract_json_string(line, "stop_reason")) result.stop_reason = *r;
+            }
         } else if (line.find("\"type\":\"error\"") != std::string::npos) {
             result.error_type    = extract_error_type(line);
             result.error_message = extract_error_message(line);
@@ -162,7 +167,7 @@ struct SubprocessResult {
         const std::string settings_path = scripts_dir + "/att-headless-backend.settings.json";
         const std::string shell_cmd =
             "set -o pipefail; '" + exe + "'"
-            + " -p --output-format stream-json --settings '" + settings_path + "'"
+            + " -p --dangerously-skip-permissions --output-format stream-json --verbose --settings '" + settings_path + "'"
             + " | '" + scripts_dir + "/ctx-usage.sh' parse-stream";
         // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
         const char* sh_argv[] = {"bash", "-c", shell_cmd.c_str(), nullptr};

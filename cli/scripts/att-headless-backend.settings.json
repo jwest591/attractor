@@ -1,5 +1,6 @@
 {
   "_comment": "Settings for ClaudeCodeHeadlessBackend. Do NOT add a $schema field (breaks hook registration on v2.1.114+).",
+  "skipDangerousModePermissionPrompt": true,
   "hooks": {
     "SessionStart": [
       {
