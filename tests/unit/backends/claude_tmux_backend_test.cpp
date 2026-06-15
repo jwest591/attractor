@@ -40,14 +40,14 @@ void write_script(const std::filesystem::path& p, const std::string& content)
 }  // namespace
 
 // Session name derived from NodeId{"n1"} with no thread_id: "att-n1"
-// Marker file:   /tmp/att-att-n1-transcript.txt
+// Marker file:   .attractor/att-att-n1-transcript.txt
 // JSONL file:    /tmp/att-att-n1-test.jsonl  (written by mock new-session)
 
 SNITCH_TEST_CASE("[claude_tmux] first run creates session and returns LlmResponse -- 5.3-U-001")
 {
     auto script = std::filesystem::temp_directory_path() / "att_test_tmux_001.sh";
     TmpFile g_script{script};
-    TmpFile g_marker{std::filesystem::path{"/tmp/att-att-n1-transcript.txt"}};
+    TmpFile g_marker{std::filesystem::current_path() / ".attractor" / "att-att-n1-transcript.txt"};
     TmpFile g_jsonl{std::filesystem::path{"/tmp/att-att-n1-test.jsonl"}};
 
     write_script(script, R"(#!/bin/sh
@@ -57,7 +57,7 @@ case "$1" in
     NAME="$4"
     JSONL="/tmp/att-${NAME}-test.jsonl"
     touch "$JSONL"
-    printf '%s\n' "$JSONL" > "/tmp/att-${NAME}-transcript.txt"
+    printf '%s\n' "$JSONL" > ".attractor/att-${NAME}-transcript.txt"
     exit 0 ;;
   send-keys)
     NAME="$3"
@@ -85,7 +85,7 @@ SNITCH_TEST_CASE("[claude_tmux] second run reuses cached session without new-ses
     auto state  = std::filesystem::temp_directory_path() / "att_test_tmux_002_state.txt";
     TmpFile g_script{script};
     TmpFile g_state{state};
-    TmpFile g_marker{std::filesystem::path{"/tmp/att-att-n1-transcript.txt"}};
+    TmpFile g_marker{std::filesystem::current_path() / ".attractor" / "att-att-n1-transcript.txt"};
     TmpFile g_jsonl{std::filesystem::path{"/tmp/att-att-n1-test.jsonl"}};
 
     // Embed state file path so mock can record new-session invocations
@@ -98,7 +98,7 @@ SNITCH_TEST_CASE("[claude_tmux] second run reuses cached session without new-ses
         "    NAME=\"$4\"\n"
         "    JSONL=\"/tmp/att-${NAME}-test.jsonl\"\n"
         "    touch \"$JSONL\"\n"
-        "    printf '%s\\n' \"$JSONL\" > \"/tmp/att-${NAME}-transcript.txt\"\n"
+        "    printf '%s\\n' \"$JSONL\" > \".attractor/att-${NAME}-transcript.txt\"\n"
         "    printf 'new-session\\n' >> \"$STATE\"\n"
         "    exit 0 ;;\n"
         "  send-keys)\n"
@@ -157,7 +157,7 @@ SNITCH_TEST_CASE("[claude_tmux] timeout waiting for end_turn returns FAIL outcom
 {
     auto script = std::filesystem::temp_directory_path() / "att_test_tmux_004.sh";
     TmpFile g_script{script};
-    TmpFile g_marker{std::filesystem::path{"/tmp/att-att-n1-transcript.txt"}};
+    TmpFile g_marker{std::filesystem::current_path() / ".attractor" / "att-att-n1-transcript.txt"};
     TmpFile g_jsonl{std::filesystem::path{"/tmp/att-att-n1-test.jsonl"}};
 
     // send-keys does NOT append an end_turn entry, forcing wait_for_end_turn to time out
@@ -168,7 +168,7 @@ case "$1" in
     NAME="$4"
     JSONL="/tmp/att-${NAME}-test.jsonl"
     touch "$JSONL"
-    printf '%s\n' "$JSONL" > "/tmp/att-${NAME}-transcript.txt"
+    printf '%s\n' "$JSONL" > ".attractor/att-${NAME}-transcript.txt"
     exit 0 ;;
   send-keys) exit 0 ;;
 esac
@@ -192,7 +192,7 @@ SNITCH_TEST_CASE("[claude_tmux] max_tokens response returns FAIL with max_tokens
 {
     auto script = std::filesystem::temp_directory_path() / "att_test_tmux_54_001.sh";
     TmpFile g_script{script};
-    TmpFile g_marker{std::filesystem::path{"/tmp/att-att-n1-transcript.txt"}};
+    TmpFile g_marker{std::filesystem::current_path() / ".attractor" / "att-att-n1-transcript.txt"};
     TmpFile g_jsonl{std::filesystem::path{"/tmp/att-att-n1-test.jsonl"}};
     TmpFile g_handoff{std::filesystem::current_path() / ".attractor" / "att-n1-handoff.md"};
 
@@ -203,7 +203,7 @@ case "$1" in
     NAME="$4"
     JSONL="/tmp/att-${NAME}-test.jsonl"
     touch "$JSONL"
-    printf '%s\n' "$JSONL" > "/tmp/att-${NAME}-transcript.txt"
+    printf '%s\n' "$JSONL" > ".attractor/att-${NAME}-transcript.txt"
     exit 0 ;;
   send-keys)
     NAME="$3"
@@ -234,7 +234,7 @@ SNITCH_TEST_CASE("[claude_tmux] rate_limit_error exhausts retries and returns FA
     // buffer so no actual sleep occurs between retries.
     auto script = std::filesystem::temp_directory_path() / "att_test_tmux_54_002.sh";
     TmpFile g_script{script};
-    TmpFile g_marker{std::filesystem::path{"/tmp/att-att-n1-transcript.txt"}};
+    TmpFile g_marker{std::filesystem::current_path() / ".attractor" / "att-att-n1-transcript.txt"};
     TmpFile g_jsonl{std::filesystem::path{"/tmp/att-att-n1-test.jsonl"}};
     TmpFile g_handoff{std::filesystem::current_path() / ".attractor" / "att-n1-handoff.md"};
 
@@ -245,7 +245,7 @@ case "$1" in
     NAME="$4"
     JSONL="/tmp/att-${NAME}-test.jsonl"
     touch "$JSONL"
-    printf '%s\n' "$JSONL" > "/tmp/att-${NAME}-transcript.txt"
+    printf '%s\n' "$JSONL" > ".attractor/att-${NAME}-transcript.txt"
     exit 0 ;;
   send-keys)
     NAME="$3"
@@ -277,7 +277,7 @@ SNITCH_TEST_CASE("[claude_tmux] end_turn with input_tokens does not corrupt happ
 {
     auto script = std::filesystem::temp_directory_path() / "att_test_tmux_54_003.sh";
     TmpFile g_script{script};
-    TmpFile g_marker{std::filesystem::path{"/tmp/att-att-n1-transcript.txt"}};
+    TmpFile g_marker{std::filesystem::current_path() / ".attractor" / "att-att-n1-transcript.txt"};
     TmpFile g_jsonl{std::filesystem::path{"/tmp/att-att-n1-test.jsonl"}};
     TmpFile g_handoff{std::filesystem::current_path() / ".attractor" / "att-n1-handoff.md"};
 
@@ -288,7 +288,7 @@ case "$1" in
     NAME="$4"
     JSONL="/tmp/att-${NAME}-test.jsonl"
     touch "$JSONL"
-    printf '%s\n' "$JSONL" > "/tmp/att-${NAME}-transcript.txt"
+    printf '%s\n' "$JSONL" > ".attractor/att-${NAME}-transcript.txt"
     exit 0 ;;
   send-keys)
     NAME="$3"
@@ -321,7 +321,7 @@ SNITCH_TEST_CASE("[claude_tmux] pre-existing handoff file triggers /clear then r
     auto state  = std::filesystem::temp_directory_path() / "att_test_tmux_55_t001_state.txt";
     TmpFile g_script{script};
     TmpFile g_state{state};
-    TmpFile g_marker{std::filesystem::path{"/tmp/att-att-n1-transcript.txt"}};
+    TmpFile g_marker{std::filesystem::current_path() / ".attractor" / "att-att-n1-transcript.txt"};
     TmpFile g_jsonl{std::filesystem::path{"/tmp/att-att-n1-55t001.jsonl"}};
     TmpFile g_handoff{std::filesystem::current_path() / ".attractor" / "att-n1-handoff.md"};
 
@@ -332,7 +332,7 @@ SNITCH_TEST_CASE("[claude_tmux] pre-existing handoff file triggers /clear then r
         "#!/bin/sh\n"
         "STATE=\"" + state.string() + "\"\n"
         "JSONL2=\"/tmp/att-att-n1-55t001.jsonl\"\n"
-        "MARKER=\"/tmp/att-att-n1-transcript.txt\"\n"
+        "MARKER=\".attractor/att-att-n1-transcript.txt\"\n"
         "case \"$1\" in\n"
         "  has-session) exit 0 ;;\n"
         "  send-keys)\n"

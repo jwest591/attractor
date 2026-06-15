@@ -69,7 +69,9 @@ std::string poll_transcript_path(
     std::optional<std::chrono::steady_clock::time_point> deadline)
 {
     constexpr auto poll_interval = std::chrono::milliseconds{200};
-    const std::string marker = "/tmp/att-" + name + "-transcript.txt";
+    auto marker_result = attractor::compute_transcript_marker_path(name);
+    if (!marker_result) return {};
+    const std::string marker = *marker_result;
     const auto eff_deadline = deadline.value_or(
         std::chrono::steady_clock::now() + k_session_start_timeout);
 
@@ -361,8 +363,12 @@ auto ClaudeCodeTmuxBackend::run(const Node& node, const PromptText& prompt,
     }
     if (had_handoff) {
         // Remove transcript marker so poll_transcript_path detects the new session
-        const std::string marker = "/tmp/att-" + session + "-transcript.txt";
-        { std::error_code ec; std::filesystem::remove(std::filesystem::path(marker), ec); }
+        auto marker_result = compute_transcript_marker_path(session);
+        if (!marker_result) {
+            return std::unexpected(Outcome::fail(DiagnosticMessage{
+                "tmux: cannot create .attractor directory: " + marker_result.error()}));
+        }
+        { std::error_code ec; std::filesystem::remove(std::filesystem::path(*marker_result), ec); }
 
         const std::string clear_cmd = m_tmux_bin + " send-keys -t " + session
             + " -- /clear Enter";

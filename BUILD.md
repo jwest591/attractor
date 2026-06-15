@@ -4,10 +4,25 @@ All commands run from the project root (`polestar/attractor/`).
 
 ## Prerequisites
 
-- CMake 3.25+
+### Build tools
+
+- CMake 3.30+
 - Ninja
 - GCC 15+ or Clang 20+
 - vcpkg (installed at `/home/agent/vcpkg` or any path; the toolchain file handles discovery)
+
+### Runtime tools
+
+These are not needed to compile, but are required at runtime and for the full test suite:
+
+| Tool | Minimum | Required by |
+|------|---------|-------------|
+| `bash` | any modern | `claude-headless` backend (`execvp("/bin/bash", ...)`) |
+| `jq` | 1.6+ | All CLI scripts (`ctx-usage.sh`, `context-ceiling.sh`, `att-session-start.sh`, `att-status-line.sh`); unit tests 5.6-U-001 and 5.6-U-002 |
+| `claude` | latest | `claude-headless` and `claude-tmux` backends (the Claude Code CLI executable) |
+| `tmux` | 3.0+ | `claude-tmux` backend only |
+
+`jq` must be on `PATH` when running the test suite — tests 5.6-U-001 and 5.6-U-002 invoke `ctx-usage.sh parse-stream` via a mock shell script, which calls `jq` directly.
 
 ## Debug build (development)
 

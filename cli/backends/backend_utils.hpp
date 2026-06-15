@@ -33,6 +33,16 @@ inline std::string derive_session_name(const Node& node)
     return (dir / (session_name + "-handoff.md")).string();
 }
 
+[[nodiscard]] inline std::expected<std::string, std::string> compute_transcript_marker_path(
+    const std::string& session_name)
+{
+    const auto dir = std::filesystem::current_path() / ".attractor";
+    std::error_code ec;
+    std::filesystem::create_directories(dir, ec);
+    if (ec) return std::unexpected(ec.message());
+    return (dir / ("att-" + session_name + "-transcript.txt")).string();
+}
+
 } // namespace attractor
 
 #endif // ATTRACTOR_CLI_BACKENDS_BACKEND_UTILS_HPP

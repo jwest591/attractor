@@ -1,5 +1,7 @@
 {
   "_comment": "Settings for ClaudeCodeTmuxBackend. Pass via: claude --settings /abs/path/to/att-tmux-backend.settings.json. Do NOT add a $schema field (breaks hook registration on v2.1.114+).",
+  "_comment_danger_prompt": "skipDangerousModePermissionPrompt suppresses the interactive confirmation prompt that Claude Code shows when running in --dangerously-skip-permissions mode. ClaudeCodeTmuxBackend drives an automated pipeline session and cannot respond to interactive prompts; without this flag the session stalls waiting for user input that never arrives.",
+  "skipDangerousModePermissionPrompt":true,
   "statusLine": {
     "type": "command",
     "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/att-status-line.sh'",
