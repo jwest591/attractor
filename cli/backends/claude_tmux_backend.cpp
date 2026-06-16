@@ -275,8 +275,15 @@ TurnResult wait_for_end_turn(const std::string& transcript_path, long baseline_o
 
             if (partial.find("\"type\":\"assistant\"") != std::string::npos) {
                 if (partial.find("\"stop_reason\":\"end_turn\"") != std::string::npos) {
+                    auto text = extract_response_text(partial);
+                    // Extended thinking emits a thinking-only end_turn event before the
+                    // text-bearing one; skip it and keep reading for the text response.
+                    if (text.empty()) {
+                        partial.clear();
+                        continue;
+                    }
                     fclose(fp);  // NOLINT(cppcoreguidelines-owning-memory)
-                    return EndTurn{extract_response_text(partial), extract_input_tokens(partial)};
+                    return EndTurn{std::move(text), extract_input_tokens(partial)};
                 }
                 if (partial.find("\"stop_reason\":\"max_tokens\"") != std::string::npos) {
                     fclose(fp);  // NOLINT(cppcoreguidelines-owning-memory)
