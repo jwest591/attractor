@@ -499,7 +499,8 @@ SNITCH_TEST_CASE("[engine] Engine(backend, observer) uses injected backend not N
         }
     };
 
-    auto spy = std::make_shared<SpyBackend>();
+    auto spy = std::make_unique<SpyBackend>();
+    SpyBackend* spy_ptr = spy.get();
     TempLogsDir logs;
 
     auto result = parse_graph(R"(
@@ -512,9 +513,9 @@ SNITCH_TEST_CASE("[engine] Engine(backend, observer) uses injected backend not N
     )");
     SNITCH_REQUIRE(result.has_value());
 
-    Engine engine{spy, nullptr};
+    Engine engine{std::move(spy), nullptr};
     const auto outcome = engine.run(*result, RunConfig{.logs_root = logs.logs_root()});
 
     SNITCH_CHECK(outcome.status == StageStatus::success);
-    SNITCH_CHECK(spy->called);
+    SNITCH_CHECK(spy_ptr->called);
 }

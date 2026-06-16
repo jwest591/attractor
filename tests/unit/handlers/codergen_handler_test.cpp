@@ -106,8 +106,8 @@ SNITCH_TEST_CASE("[codergen_handler] NoOpBackend::run makes no external calls")
 SNITCH_TEST_CASE("[codergen_handler] execute with NoOpBackend returns SUCCESS -- 2.2-U-003")
 {
     ScopedTempDir tmp;
-    auto backend = std::make_shared<NoOpBackend>();
-    CodergenHandler h{backend};
+    NoOpBackend backend;
+    CodergenHandler h{&backend};
     Context ctx;
     Graph g;
     Node n = make_codergen_node("plan", "Analyze this");
@@ -121,8 +121,8 @@ SNITCH_TEST_CASE("[codergen_handler] execute with NoOpBackend returns SUCCESS --
 SNITCH_TEST_CASE("[codergen_handler] execute expands $goal in prompt")
 {
     ScopedTempDir tmp;
-    auto backend = std::make_shared<NoOpBackend>();
-    CodergenHandler h{backend};
+    NoOpBackend backend;
+    CodergenHandler h{&backend};
     Context ctx;
     Graph g = make_graph_with_goal("Write tests");
     Node n = make_codergen_node("plan", "Plan how to: $goal");
@@ -138,8 +138,8 @@ SNITCH_TEST_CASE("[codergen_handler] execute expands $goal in prompt")
 SNITCH_TEST_CASE("[codergen_handler] execute writes prompt.md to stage directory")
 {
     ScopedTempDir tmp;
-    auto backend = std::make_shared<NoOpBackend>();
-    CodergenHandler h{backend};
+    NoOpBackend backend;
+    CodergenHandler h{&backend};
     Context ctx;
     Graph g;
     Node n = make_codergen_node("my_stage", "Analyze requirements");
@@ -153,8 +153,8 @@ SNITCH_TEST_CASE("[codergen_handler] execute writes prompt.md to stage directory
 SNITCH_TEST_CASE("[codergen_handler] execute sets last_response in context_updates")
 {
     ScopedTempDir tmp;
-    auto backend = std::make_shared<NoOpBackend>();
-    CodergenHandler h{backend};
+    NoOpBackend backend;
+    CodergenHandler h{&backend};
     Context ctx;
     Graph g;
     Node n = make_codergen_node("work", "Do something");
@@ -235,8 +235,8 @@ SNITCH_TEST_CASE("[codergen_handler] multiple $goal occurrences all expanded")
 SNITCH_TEST_CASE("[codergen_handler] backend failure propagates as Outcome::fail")
 {
     ScopedTempDir tmp;
-    auto backend = std::make_shared<FailingBackend>();
-    CodergenHandler h{backend};
+    FailingBackend backend;
+    CodergenHandler h{&backend};
     Context ctx;
     Graph g;
     Node n = make_codergen_node("fail_node", "Do work");

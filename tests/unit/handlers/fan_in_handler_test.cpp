@@ -139,9 +139,9 @@ SNITCH_TEST_CASE("[fan_in_handler] no parallel.results key in context returns FA
 
 SNITCH_TEST_CASE("[fan_in_handler] prompt and backend causes backend to be called and its id used -- 4.2-U-006")
 {
-    auto spy = std::make_shared<SpyBackend>();
-    spy->return_id = "b1";
-    FanInHandler h{spy};
+    SpyBackend spy;
+    spy.return_id = "b1";
+    FanInHandler h{&spy};
     Context ctx;
     nlohmann::json results = nlohmann::json::array();
     results.push_back(make_entry("b0", "success", 0.0));
@@ -155,7 +155,7 @@ SNITCH_TEST_CASE("[fan_in_handler] prompt and backend causes backend to be calle
     const Outcome out = h.execute(par, ctx, g, LogsRoot{"/tmp"});
 
     SNITCH_CHECK(out.status == StageStatus::success);
-    SNITCH_CHECK(spy->call_count == 1);
+    SNITCH_CHECK(spy.call_count == 1);
     SNITCH_REQUIRE(out.context_updates.contains("parallel.fan_in.best_id"));
     SNITCH_CHECK(out.context_updates["parallel.fan_in.best_id"] == "b1");
 }

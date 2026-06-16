@@ -152,10 +152,10 @@ SNITCH_TEST_CASE("[events] codergen node writes prompt.md response.md status.jso
     )");
 
     HandlerRegistry reg;
-    auto noop = std::make_shared<NoOpBackend>();
+    NoOpBackend noop;
     reg.register_handler(HandlerTypeName{"start"}, std::make_unique<StartHandler>());
     reg.register_handler(HandlerTypeName{"exit"}, std::make_unique<ExitHandler>());
-    reg.register_handler(HandlerTypeName{"codergen"}, std::make_unique<CodergenHandler>(noop));
+    reg.register_handler(HandlerTypeName{"codergen"}, std::make_unique<CodergenHandler>(&noop));
 
     TempLogsDir logs;
     Engine engine{std::move(reg)};

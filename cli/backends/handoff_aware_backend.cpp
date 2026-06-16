@@ -15,7 +15,7 @@
 
 namespace attractor {
 
-HandoffAwareBackend::HandoffAwareBackend(std::shared_ptr<CodergenBackend> inner,
+HandoffAwareBackend::HandoffAwareBackend(std::unique_ptr<CodergenBackend> inner,
                                          int max_handoffs)
     : m_inner{std::move(inner)}, m_max_handoffs{max_handoffs}
 {

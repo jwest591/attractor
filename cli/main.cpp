@@ -198,17 +198,17 @@ int main(int argc, char* argv[])
     }
 
     // Build backend
-    std::shared_ptr<CodergenBackend> backend_ptr;
+    std::unique_ptr<CodergenBackend> backend_ptr;
     if (backend == "claude-headless") {
-        backend_ptr = std::make_shared<HandoffAwareBackend>(
-            std::make_shared<ClaudeCodeHeadlessBackend>());
+        backend_ptr = std::make_unique<HandoffAwareBackend>(
+            std::make_unique<ClaudeCodeHeadlessBackend>());
     }
     else if (backend == "claude-tmux") {
-        backend_ptr = std::make_shared<HandoffAwareBackend>(
-            std::make_shared<ClaudeCodeTmuxBackend>());
+        backend_ptr = std::make_unique<HandoffAwareBackend>(
+            std::make_unique<ClaudeCodeTmuxBackend>());
     }
     else {
-        backend_ptr = std::make_shared<NoOpBackend>();
+        backend_ptr = std::make_unique<NoOpBackend>();
     }
 
     Engine engine{std::move(backend_ptr), [](const Event& ev) { render_event(ev); }};

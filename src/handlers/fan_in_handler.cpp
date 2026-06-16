@@ -41,8 +41,8 @@ struct Candidate {
 
 }  // namespace
 
-FanInHandler::FanInHandler(std::shared_ptr<CodergenBackend> backend)
-    : m_backend{std::move(backend)}
+FanInHandler::FanInHandler(CodergenBackend* backend)
+    : m_backend{backend}
 {}
 
 auto FanInHandler::execute(const Node& node, Context& ctx, const Graph& /*graph*/,

@@ -44,7 +44,7 @@ void write_status(const std::filesystem::path& stage_dir, const Outcome& outcome
 
 }  // namespace
 
-CodergenHandler::CodergenHandler(std::shared_ptr<CodergenBackend> backend) : m_backend{std::move(backend)} {}
+CodergenHandler::CodergenHandler(CodergenBackend* backend) : m_backend{backend} {}
 
 auto CodergenHandler::execute(const Node& node, Context& ctx, const Graph& graph, const LogsRoot& logs_root) const
     -> Outcome

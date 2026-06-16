@@ -74,18 +74,18 @@ SNITCH_TEST_CASE("[handoff_aware_backend] clean completion returns response unch
     const Node node = make_node("n001");
     TmpFile guard{handoff_path_for("n001")};
 
-    auto mock = std::make_shared<MockBackend>(
+    auto mock = std::make_unique<MockBackend>(
         [](const std::string& /*prompt*/) -> std::expected<LlmResponse, Outcome> {
             return LlmResponse{"ok"};
         });
-
-    HandoffAwareBackend backend{mock};
+    MockBackend* mock_ptr = mock.get();
+    HandoffAwareBackend backend{std::move(mock)};
     Context ctx{};
     auto result = backend.run(node, PromptText{"hello"}, ctx);
 
     SNITCH_REQUIRE(result.has_value());
     SNITCH_CHECK(type_safe::get(*result) == "ok");
-    SNITCH_CHECK(mock->received_prompts.size() == 1u);
+    SNITCH_CHECK(mock_ptr->received_prompts.size() == 1u);
 }
 
 SNITCH_TEST_CASE("[handoff_aware_backend] single handoff then success returns final response -- 5.5-U-002")
@@ -95,7 +95,7 @@ SNITCH_TEST_CASE("[handoff_aware_backend] single handoff then success returns fi
     TmpFile guard{hpath};
 
     int call = 0;
-    auto mock = std::make_shared<MockBackend>(
+    auto mock = std::make_unique<MockBackend>(
         [&](const std::string& /*prompt*/) -> std::expected<LlmResponse, Outcome> {
             // Real backends delete the stale handoff file before running
             { std::error_code ec; std::filesystem::remove(hpath, ec); }
@@ -108,15 +108,15 @@ SNITCH_TEST_CASE("[handoff_aware_backend] single handoff then success returns fi
             }
             return LlmResponse{"final"};
         });
-
-    HandoffAwareBackend backend{mock};
+    MockBackend* mock_ptr = mock.get();
+    HandoffAwareBackend backend{std::move(mock)};
     Context ctx{};
     auto result = backend.run(node, PromptText{"initial prompt"}, ctx);
 
     SNITCH_REQUIRE(result.has_value());
     SNITCH_CHECK(type_safe::get(*result) == "final");
-    SNITCH_REQUIRE(mock->received_prompts.size() == 2u);
-    SNITCH_CHECK(mock->received_prompts[1] == "handoff summary");
+    SNITCH_REQUIRE(mock_ptr->received_prompts.size() == 2u);
+    SNITCH_CHECK(mock_ptr->received_prompts[1] == "handoff summary");
 }
 
 SNITCH_TEST_CASE("[handoff_aware_backend] max handoffs exhausted returns Outcome::fail -- 5.5-U-003")
@@ -125,7 +125,7 @@ SNITCH_TEST_CASE("[handoff_aware_backend] max handoffs exhausted returns Outcome
     const std::filesystem::path hpath = handoff_path_for("n003");
     TmpFile guard{hpath};
 
-    auto mock = std::make_shared<MockBackend>(
+    auto mock = std::make_unique<MockBackend>(
         [&](const std::string& /*prompt*/) -> std::expected<LlmResponse, Outcome> {
             // Real backends delete the stale handoff file before running
             { std::error_code ec; std::filesystem::remove(hpath, ec); }
@@ -134,13 +134,13 @@ SNITCH_TEST_CASE("[handoff_aware_backend] max handoffs exhausted returns Outcome
             f << "handoff content";
             return LlmResponse{"wrote handoff"};
         });
-
-    HandoffAwareBackend backend{mock, /*max_handoffs=*/2};
+    MockBackend* mock_ptr = mock.get();
+    HandoffAwareBackend backend{std::move(mock), /*max_handoffs=*/2};
     Context ctx{};
     auto result = backend.run(node, PromptText{"initial"}, ctx);
 
     SNITCH_REQUIRE_FALSE(result.has_value());
-    SNITCH_CHECK(mock->received_prompts.size() == 3u);  // attempt 0, 1, 2
+    SNITCH_CHECK(mock_ptr->received_prompts.size() == 3u);  // attempt 0, 1, 2
     const auto& reason = type_safe::get(result.error().failure_reason);
     SNITCH_CHECK(reason.find("max handoffs (2)") != std::string::npos);
     SNITCH_CHECK(reason.find(hpath.string()) != std::string::npos);
@@ -151,17 +151,17 @@ SNITCH_TEST_CASE("[handoff_aware_backend] inner error without handoff file is pr
     const Node node = make_node("n004");
     TmpFile guard{handoff_path_for("n004")};
 
-    auto mock = std::make_shared<MockBackend>(
+    auto mock = std::make_unique<MockBackend>(
         [](const std::string& /*prompt*/) -> std::expected<LlmResponse, Outcome> {
             return std::unexpected(Outcome::fail(DiagnosticMessage{"backend exploded"}));
         });
-
-    HandoffAwareBackend backend{mock};
+    MockBackend* mock_ptr = mock.get();
+    HandoffAwareBackend backend{std::move(mock)};
     Context ctx{};
     auto result = backend.run(node, PromptText{"hello"}, ctx);
 
     SNITCH_REQUIRE_FALSE(result.has_value());
-    SNITCH_CHECK(mock->received_prompts.size() == 1u);
+    SNITCH_CHECK(mock_ptr->received_prompts.size() == 1u);
     const auto& reason = type_safe::get(result.error().failure_reason);
     SNITCH_CHECK(reason.find("backend exploded") != std::string::npos);
 }
@@ -172,7 +172,7 @@ SNITCH_TEST_CASE("[handoff_aware_backend] empty handoff file returns Outcome::fa
     const std::filesystem::path hpath = handoff_path_for("n005");
     TmpFile guard{hpath};
 
-    auto mock = std::make_shared<MockBackend>(
+    auto mock = std::make_unique<MockBackend>(
         [&](const std::string& /*prompt*/) -> std::expected<LlmResponse, Outcome> {
             // Real backends delete the stale handoff file before running
             { std::error_code ec; std::filesystem::remove(hpath, ec); }
@@ -180,8 +180,7 @@ SNITCH_TEST_CASE("[handoff_aware_backend] empty handoff file returns Outcome::fa
             std::ofstream f{hpath};  // empty file -- no content written
             return LlmResponse{"wrote empty handoff"};
         });
-
-    HandoffAwareBackend backend{mock};
+    HandoffAwareBackend backend{std::move(mock)};
     Context ctx{};
     auto result = backend.run(node, PromptText{"hello"}, ctx);
 

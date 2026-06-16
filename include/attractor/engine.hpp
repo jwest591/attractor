@@ -46,8 +46,8 @@ class Engine {
     explicit Engine(EventObserver on_event);
 
     // Uses all default handlers with the provided backend instead of NoOpBackend.
-    explicit Engine(std::shared_ptr<CodergenBackend> backend);
-    Engine(std::shared_ptr<CodergenBackend> backend, EventObserver on_event);
+    explicit Engine(std::unique_ptr<CodergenBackend> backend);
+    Engine(std::unique_ptr<CodergenBackend> backend, EventObserver on_event);
 
     Engine(const Engine&) = delete;
     Engine& operator=(const Engine&) = delete;
@@ -60,10 +60,11 @@ class Engine {
     [[nodiscard]] auto run(const Graph& graph, const RunConfig& config) const -> Outcome;
 
   private:
+    std::unique_ptr<CodergenBackend> m_backend;
     HandlerRegistry m_registry;
     EventObserver m_on_event;
 
-    void register_default_handlers(std::shared_ptr<CodergenBackend> backend);
+    void register_default_handlers(std::unique_ptr<CodergenBackend> backend);
 
     [[nodiscard]] auto run_from(const Graph& graph, const NodeId& start_id, const RunConfig& config) const -> Outcome;
 };
