@@ -7,6 +7,8 @@
 #include <snitch/snitch.hpp>
 #include <type_safe/strong_typedef.hpp>
 #include <cstdlib>
+#include <dirent.h>
+#include <fcntl.h>
 #include <filesystem>
 #include <fstream>
 #include <unistd.h>
@@ -226,6 +228,133 @@ SNITCH_TEST_CASE("[claude_headless] parse-stream interposed: usage file written 
     SNITCH_REQUIRE(result.has_value());
     SNITCH_CHECK(type_safe::get(*result) == "hello");
     SNITCH_CHECK(std::filesystem::exists(tmp_usage));
+}
+
+SNITCH_TEST_CASE("[claude_headless] fd-aliasing: pipe fd 1 renumbered before dup2 -- 7.3-U-001")
+{
+    auto tmp = std::filesystem::temp_directory_path() / "att_test_renumber_001.sh";
+    TmpFile guard{tmp};
+    TmpFile g_handoff{std::filesystem::current_path() / ".attractor" / "att-n1-handoff.md"};
+    {
+        std::ofstream f{tmp};
+        f << "#!/bin/sh\n"
+             "printf '%s\\n' "
+             "'{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"renumber ok\"}}' "
+             "'{\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"}}' "
+             "'{\"type\":\"result\",\"is_error\":false,\"result\":\"renumber ok\",\"stop_reason\":\"end_turn\"}'\n";
+    }
+    std::filesystem::permissions(tmp, std::filesystem::perms::owner_exec
+        | std::filesystem::perms::owner_read | std::filesystem::perms::owner_write);
+
+    int saved_stdout = dup(STDOUT_FILENO);
+    SNITCH_REQUIRE(saved_stdout >= 0);
+    close(STDOUT_FILENO);
+
+    ClaudeCodeHeadlessBackend backend{tmp.string()};
+    Node node;
+    node.id = NodeId{"n1"};
+    Context ctx;
+    auto result = backend.run(node, PromptText{"hello"}, ctx);
+
+    dup2(saved_stdout, STDOUT_FILENO);
+    close(saved_stdout);
+
+    SNITCH_REQUIRE(result.has_value());
+    SNITCH_CHECK(type_safe::get(*result) == "renumber ok");
+}
+
+SNITCH_TEST_CASE("[claude_headless] dup2 failure path: exit code 126 returns FAIL with stderr -- 7.3-U-002")
+{
+    auto tmp = std::filesystem::temp_directory_path() / "att_test_exit126_002.sh";
+    TmpFile guard{tmp};
+    {
+        std::ofstream f{tmp};
+        f << "#!/bin/sh\necho 'dup2 setup failed' >&2\nexit 126\n";
+    }
+    std::filesystem::permissions(tmp, std::filesystem::perms::owner_exec
+        | std::filesystem::perms::owner_read | std::filesystem::perms::owner_write);
+
+    ClaudeCodeHeadlessBackend backend{tmp.string()};
+    Node node;
+    node.id = NodeId{"n1"};
+    Context ctx;
+    auto result = backend.run(node, PromptText{"prompt"}, ctx);
+
+    SNITCH_REQUIRE_FALSE(result.has_value());
+    SNITCH_CHECK(type_safe::get(result.error().failure_reason).find("dup2 setup failed") != std::string::npos);
+}
+
+SNITCH_TEST_CASE("[claude_headless] fd sweep: child does not inherit non-CLOEXEC parent fd -- 7.3-U-003")
+{
+    int extra_fd = open("/dev/null", O_RDONLY);
+    SNITCH_REQUIRE(extra_fd >= 0);
+    // NOLINTNEXTLINE(concurrency-mt-unsafe)
+    setenv("ATTRACTOR_TEST_EXTRA_FD", std::to_string(extra_fd).c_str(), 1);
+    EnvGuard env_guard{"ATTRACTOR_TEST_EXTRA_FD"};
+
+    auto tmp = std::filesystem::temp_directory_path() / "att_test_fdsweep_003.sh";
+    TmpFile guard{tmp};
+    TmpFile g_handoff{std::filesystem::current_path() / ".attractor" / "att-n1-handoff.md"};
+    {
+        std::ofstream f{tmp};
+        f << "#!/bin/sh\n"
+             "fd=${ATTRACTOR_TEST_EXTRA_FD:-}\n"
+             "if [ -n \"$fd\" ] && [ -e \"/proc/self/fd/$fd\" ]; then r=inherited; else r=closed; fi\n"
+             "printf '{\"type\":\"result\",\"is_error\":false,\"result\":\"%s\",\"stop_reason\":\"end_turn\"}\\n' \"$r\"\n";
+    }
+    std::filesystem::permissions(tmp, std::filesystem::perms::owner_exec
+        | std::filesystem::perms::owner_read | std::filesystem::perms::owner_write);
+
+    ClaudeCodeHeadlessBackend backend{tmp.string()};
+    Node node;
+    node.id = NodeId{"n1"};
+    Context ctx;
+    auto result = backend.run(node, PromptText{"hello"}, ctx);
+
+    close(extra_fd);
+
+    SNITCH_REQUIRE(result.has_value());
+    SNITCH_CHECK(type_safe::get(*result) == "closed");
+}
+
+SNITCH_TEST_CASE("[claude_headless] RAII: UniqueFd closes all pipe fds after subprocess -- 7.3-U-004")
+{
+    auto count_fds = []() -> int {
+        DIR* d = opendir("/proc/self/fd");
+        if (d == nullptr) return -1;
+        int n = 0;
+        while (const auto* ent = readdir(d)) {
+            if (ent->d_name[0] != '.') ++n;
+        }
+        closedir(d);
+        return n;
+    };
+
+    auto tmp = std::filesystem::temp_directory_path() / "att_test_raii_004.sh";
+    TmpFile guard{tmp};
+    TmpFile g_handoff{std::filesystem::current_path() / ".attractor" / "att-n1-handoff.md"};
+    {
+        std::ofstream f{tmp};
+        f << "#!/bin/sh\n"
+             "printf '%s\\n' "
+             "'{\"type\":\"result\",\"is_error\":false,\"result\":\"ok\",\"stop_reason\":\"end_turn\"}'\n";
+    }
+    std::filesystem::permissions(tmp, std::filesystem::perms::owner_exec
+        | std::filesystem::perms::owner_read | std::filesystem::perms::owner_write);
+
+    int fds_before = count_fds();
+    SNITCH_REQUIRE(fds_before >= 0);
+
+    ClaudeCodeHeadlessBackend backend{tmp.string()};
+    Node node;
+    node.id = NodeId{"n1"};
+    Context ctx;
+    auto result = backend.run(node, PromptText{"hello"}, ctx);
+
+    int fds_after = count_fds();
+    SNITCH_REQUIRE(fds_after >= 0);
+    SNITCH_REQUIRE(result.has_value());
+    SNITCH_CHECK(fds_after == fds_before);
 }
 
 SNITCH_TEST_CASE("[claude_headless] parse-stream passthrough: multi-delta text assembled with usage fields present -- 5.6-U-002")

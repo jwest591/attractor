@@ -20,6 +20,7 @@
 
 #include <cstdlib>
 #include <dirent.h>
+#include <fcntl.h>
 #include <poll.h>
 #include <signal.h>
 #include <sys/types.h>
@@ -27,6 +28,23 @@
 #include <unistd.h>
 
 namespace {
+
+struct UniqueFd {
+    int fd{-1};
+    UniqueFd() = default;
+    explicit UniqueFd(int f) noexcept : fd{f} {}
+    ~UniqueFd() noexcept { if (fd >= 0) close(fd); }
+    UniqueFd(const UniqueFd&) = delete;
+    UniqueFd& operator=(const UniqueFd&) = delete;
+    UniqueFd(UniqueFd&& o) noexcept : fd{std::exchange(o.fd, -1)} {}
+    UniqueFd& operator=(UniqueFd&& o) noexcept
+    {
+        if (this != &o) { if (fd >= 0) close(fd); fd = std::exchange(o.fd, -1); }
+        return *this;
+    }
+    [[nodiscard]] int get() const noexcept { return fd; }
+    void reset() noexcept { if (fd >= 0) { close(fd); fd = -1; } }
+};
 
 // ---- JSON helpers (minimal, duplicated from claude_tmux_backend.cpp) --------
 
@@ -116,36 +134,55 @@ struct SubprocessResult {
                                   const std::string& handoff_path)
     -> SubprocessResult
 {
-    int stdin_fd[2]  = {-1, -1};
-    int stdout_fd[2] = {-1, -1};
-    int stderr_fd[2] = {-1, -1};
+    UniqueFd stdin_r, stdin_w;
+    UniqueFd stdout_r, stdout_w;
+    UniqueFd stderr_r, stderr_w;
 
-    // Fix: Check pipe() return values; close any that succeeded on partial failure
-    if (pipe(stdin_fd) < 0 || pipe(stdout_fd) < 0 || pipe(stderr_fd) < 0) {
-        for (int fd : {stdin_fd[0], stdin_fd[1], stdout_fd[0], stdout_fd[1], stderr_fd[0], stderr_fd[1]}) {
-            if (fd >= 0) close(fd);
-        }
-        SubprocessResult r;
-        r.exit_code = -1;
-        return r;
+    {
+        int fds[2];
+        if (pipe(fds) < 0) { SubprocessResult r; r.exit_code = -1; return r; }
+        stdin_r = UniqueFd{fds[0]}; stdin_w = UniqueFd{fds[1]};
+    }
+    {
+        int fds[2];
+        if (pipe(fds) < 0) { SubprocessResult r; r.exit_code = -1; return r; }
+        stdout_r = UniqueFd{fds[0]}; stdout_w = UniqueFd{fds[1]};
+    }
+    {
+        int fds[2];
+        if (pipe(fds) < 0) { SubprocessResult r; r.exit_code = -1; return r; }
+        stderr_r = UniqueFd{fds[0]}; stderr_w = UniqueFd{fds[1]};
     }
 
     pid_t pid = fork();
 
-    // Fix: fork() == -1 not handled
     if (pid < 0) {
-        for (int fd : {stdin_fd[0], stdin_fd[1], stdout_fd[0], stdout_fd[1], stderr_fd[0], stderr_fd[1]}) {
-            close(fd);
-        }
         SubprocessResult r;
         r.exit_code = -1;
-        return r;
+        return r;  // UniqueFds close automatically
     }
 
     if (pid == 0) {
-        dup2(stdin_fd[0], STDIN_FILENO);
-        dup2(stdout_fd[1], STDOUT_FILENO);
-        dup2(stderr_fd[1], STDERR_FILENO);
+        auto maybe_renumber = [](int fd) -> int {
+            if (fd >= 3) return fd;
+            int f = fcntl(fd, F_DUPFD_CLOEXEC, 3);
+            if (f < 0) { close(fd); _exit(126); }
+            close(fd);
+            return f;
+        };
+
+        int src_in  = maybe_renumber(stdin_r.fd);
+        int src_out = maybe_renumber(stdout_w.fd);
+        int src_err = maybe_renumber(stderr_w.fd);
+
+        if (dup2(src_in,  STDIN_FILENO)  < 0 ||
+            dup2(src_out, STDOUT_FILENO) < 0 ||
+            dup2(src_err, STDERR_FILENO) < 0) {
+            _exit(126);
+        }
+        close(src_in);
+        close(src_out);
+        close(src_err);
 
         // Fix: Close all inherited fds >= 3
         if (DIR* dirp = opendir("/proc/self/fd"); dirp != nullptr) {
@@ -158,11 +195,15 @@ struct SubprocessResult {
                 if (fd > 2 && fd != dir_fd) close(fd);
             }
             closedir(dirp);
+        } else {
+            const int max_fd = std::min(getdtablesize(), 65536);
+            for (int fd = 3; fd < max_fd; ++fd) close(fd);
         }
 
         // NOLINTNEXTLINE(concurrency-mt-unsafe) -- child process only
         setenv("CLAUDE_HANDOFF_FILE", handoff_path.c_str(), 1);
 
+        // DEFERRED(async-signal-safe): std::string heap alloc post-fork is async-signal-unsafe in a multi-threaded parent; move to pre-fork to fix
         const std::string scripts_dir{ATTRACTOR_CLI_SCRIPTS_DIR};
         const std::string settings_path = scripts_dir + "/att-headless-backend.settings.json";
         const std::string shell_cmd =
@@ -176,9 +217,9 @@ struct SubprocessResult {
     }
 
     // Parent: close child-side pipe ends
-    close(stdin_fd[0]);  stdin_fd[0] = -1;
-    close(stdout_fd[1]); stdout_fd[1] = -1;
-    close(stderr_fd[1]); stderr_fd[1] = -1;
+    stdin_r.reset();
+    stdout_w.reset();
+    stderr_w.reset();
 
     SubprocessResult result;
     std::array<char, 4096> buf{};
@@ -190,8 +231,7 @@ struct SubprocessResult {
     std::size_t write_remaining = prompt.size();
     bool stdin_writing = (write_remaining > 0);
     if (!stdin_writing) {
-        close(stdin_fd[1]);
-        stdin_fd[1] = -1;
+        stdin_w.reset();
     }
 
     auto deadline = timeout
@@ -201,19 +241,19 @@ struct SubprocessResult {
     while (stdout_open || stderr_open || stdin_writing) {
         // Once child has closed its output pipes it has exited; writing stdin is pointless
         if (!stdout_open && !stderr_open) {
-            if (stdin_fd[1] >= 0) { close(stdin_fd[1]); stdin_fd[1] = -1; }
+            stdin_w.reset();
             stdin_writing = false;
             break;
         }
 
         struct pollfd fds[3] = {};
         int nfds = 0;
-        fds[nfds++] = {stdout_fd[0], POLLIN, 0};
-        fds[nfds++] = {stderr_fd[0], POLLIN, 0};
+        fds[nfds++] = {stdout_r.fd, POLLIN, 0};
+        fds[nfds++] = {stderr_r.fd, POLLIN, 0};
         int stdin_slot = -1;
         if (stdin_writing) {
             stdin_slot = nfds;
-            fds[nfds++] = {stdin_fd[1], POLLOUT, 0};
+            fds[nfds++] = {stdin_w.fd, POLLOUT, 0};
         }
 
         int poll_ms = -1;
@@ -230,6 +270,7 @@ struct SubprocessResult {
         if (ret == 0) { result.timed_out = true; break; }
         if (ret < 0) {
             if (errno == EINTR) continue;
+            // DEFERRED(pidfd): PID reuse race -- pid may be recycled before kill() fires; fix requires Linux 5.3+ pidfd_open
             kill(pid, SIGKILL);
             waitpid(pid, nullptr, 0);
             break;
@@ -238,13 +279,13 @@ struct SubprocessResult {
         if ((fds[0].revents & POLLIN) != 0) {
             // Fix: Retry read on EINTR
             ssize_t n;
-            do { n = read(stdout_fd[0], buf.data(), buf.size()); } while (n < 0 && errno == EINTR);
+            do { n = read(stdout_r.fd, buf.data(), buf.size()); } while (n < 0 && errno == EINTR);
             if (n > 0) result.stdout_data.append(buf.data(), static_cast<std::size_t>(n));
             else stdout_open = false;
         } else if ((fds[0].revents & (POLLHUP | POLLERR)) != 0) {
             for (;;) {
                 ssize_t n;
-                do { n = read(stdout_fd[0], buf.data(), buf.size()); } while (n < 0 && errno == EINTR);
+                do { n = read(stdout_r.fd, buf.data(), buf.size()); } while (n < 0 && errno == EINTR);
                 if (n <= 0) break;
                 result.stdout_data.append(buf.data(), static_cast<std::size_t>(n));
             }
@@ -253,13 +294,13 @@ struct SubprocessResult {
 
         if ((fds[1].revents & POLLIN) != 0) {
             ssize_t n;
-            do { n = read(stderr_fd[0], buf.data(), buf.size()); } while (n < 0 && errno == EINTR);
+            do { n = read(stderr_r.fd, buf.data(), buf.size()); } while (n < 0 && errno == EINTR);
             if (n > 0) result.stderr_data.append(buf.data(), static_cast<std::size_t>(n));
             else stderr_open = false;
         } else if ((fds[1].revents & (POLLHUP | POLLERR)) != 0) {
             for (;;) {
                 ssize_t n;
-                do { n = read(stderr_fd[0], buf.data(), buf.size()); } while (n < 0 && errno == EINTR);
+                do { n = read(stderr_r.fd, buf.data(), buf.size()); } while (n < 0 && errno == EINTR);
                 if (n <= 0) break;
                 result.stderr_data.append(buf.data(), static_cast<std::size_t>(n));
             }
@@ -270,33 +311,28 @@ struct SubprocessResult {
             // Fix: Check POLLERR before POLLOUT -- both can be set simultaneously when the
             // child closes its read-end; taking POLLOUT branch calls write() on a broken pipe.
             if ((fds[stdin_slot].revents & POLLERR) != 0) {
-                close(stdin_fd[1]);
-                stdin_fd[1] = -1;
+                stdin_w.reset();
                 stdin_writing = false;
             } else if ((fds[stdin_slot].revents & POLLOUT) != 0) {
                 ssize_t n;
-                do { n = write(stdin_fd[1], write_ptr, write_remaining); } while (n < 0 && errno == EINTR);
+                do { n = write(stdin_w.fd, write_ptr, write_remaining); } while (n < 0 && errno == EINTR);
                 if (n > 0) {
                     write_ptr += n;
                     write_remaining -= static_cast<std::size_t>(n);
                 }
                 if (write_remaining == 0 || n < 0) {
-                    close(stdin_fd[1]);
-                    stdin_fd[1] = -1;
+                    stdin_w.reset();
                     stdin_writing = false;
                 }
             }
         }
     }
 
-    if (stdin_fd[1] >= 0) { close(stdin_fd[1]); }
-
+    // DEFERRED(pidfd): PID reuse race -- pid may be recycled before kill() fires; fix requires Linux 5.3+ pidfd_open
     if (result.timed_out) { kill(pid, SIGKILL); }
 
-    close(stdout_fd[0]);
-    close(stderr_fd[0]);
-
     int status = 0;
+    // DEFERRED(d-state): blocks forever if child enters D-state (uninterruptible I/O wait); fix requires WNOHANG retry loop with timeout
     // Fix: Retry waitpid on EINTR
     { int wp; do { wp = waitpid(pid, &status, 0); } while (wp < 0 && errno == EINTR); }
     result.exit_code = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
