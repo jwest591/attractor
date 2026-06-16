@@ -46,7 +46,8 @@ SNITCH_TEST_CASE("[claude_headless] stream-json end_turn assembled as LlmRespons
         f << "#!/bin/sh\n"
              "printf '%s\\n' "
              "'{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"hello world\"}}' "
-             "'{\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"}}'\n";
+             "'{\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"}}' "
+             "'{\"type\":\"result\",\"is_error\":false,\"result\":\"hello world\",\"stop_reason\":\"end_turn\"}'\n";
     }
     std::filesystem::permissions(tmp, std::filesystem::perms::owner_exec
         | std::filesystem::perms::owner_read | std::filesystem::perms::owner_write);
@@ -120,7 +121,8 @@ SNITCH_TEST_CASE("[claude_headless] stream-json text_delta events assembled into
              "printf '%s\\n' "
              "'{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"hello \"}}' "
              "'{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"world\"}}' "
-             "'{\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"}}'\n";
+             "'{\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"}}' "
+             "'{\"type\":\"result\",\"is_error\":false,\"result\":\"hello world\",\"stop_reason\":\"end_turn\"}'\n";
     }
     std::filesystem::permissions(tmp, std::filesystem::perms::owner_exec
         | std::filesystem::perms::owner_read | std::filesystem::perms::owner_write);
@@ -204,7 +206,8 @@ SNITCH_TEST_CASE("[claude_headless] parse-stream interposed: usage file written 
              "'{\"type\":\"message_start\",\"session_id\":\"test-session-001\","
              "\"usage\":{\"input_tokens\":1000,\"output_tokens\":200}}' "
              "'{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"hello\"}}' "
-             "'{\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"}}'\n";
+             "'{\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"}}' "
+             "'{\"type\":\"result\",\"is_error\":false,\"result\":\"hello\",\"stop_reason\":\"end_turn\"}'\n";
     }
     std::filesystem::permissions(tmp_sh, std::filesystem::perms::owner_exec
         | std::filesystem::perms::owner_read | std::filesystem::perms::owner_write);
@@ -240,7 +243,8 @@ SNITCH_TEST_CASE("[claude_headless] parse-stream passthrough: multi-delta text a
              "\"usage\":{\"input_tokens\":500,\"output_tokens\":100}}' "
              "'{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"part1 \"}}' "
              "'{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"part2\"}}' "
-             "'{\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"}}'\n";
+             "'{\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"}}' "
+             "'{\"type\":\"result\",\"is_error\":false,\"result\":\"part1 part2\",\"stop_reason\":\"end_turn\"}'\n";
     }
     std::filesystem::permissions(tmp_sh, std::filesystem::perms::owner_exec
         | std::filesystem::perms::owner_read | std::filesystem::perms::owner_write);
