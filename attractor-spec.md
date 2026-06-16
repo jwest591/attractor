@@ -1516,7 +1516,7 @@ digraph Pipeline {
 ```
 
 In this example:
-- `plan` gets `claude-sonnet-4-5` from the `*` rule (no class match for `.code`).
+- `plan` gets `claude-sonnet-4-5` from the `*` rule (no class match for `.planning`).
 - `implement` gets `claude-opus-4-6` from the `.code` rule.
 - `critical_review` gets `gpt-5.2` from the `#critical_review` rule (highest specificity), overriding the `.code` class match.
 
