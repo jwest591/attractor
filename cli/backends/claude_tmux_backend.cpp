@@ -83,13 +83,6 @@ std::string shell_escape(const std::string& s)
     return out;
 }
 
-/*
-std::string shell_escape_r(const std::string& s)
-{
-    return std::ranges::join_with_view(std::ranges::split_view(s, '\''), "'\\''") | std::ranges::to<std::string>();
-}
-*/
-
 std::string poll_transcript_path(const std::string& name, std::optional<std::chrono::steady_clock::time_point> deadline)
 {
     constexpr auto poll_interval = std::chrono::milliseconds{200};
