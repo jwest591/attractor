@@ -13,6 +13,7 @@ class ClaudeCodeTmuxBackend final : public CodergenBackend {
   public:
     ClaudeCodeTmuxBackend() = default;
     explicit ClaudeCodeTmuxBackend(std::string tmux_bin);
+    ~ClaudeCodeTmuxBackend();
 
     [[nodiscard]] auto run(const Node& node, const PromptText& prompt,
                            Context& ctx) const -> std::expected<LlmResponse, Outcome> override;

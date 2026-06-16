@@ -422,6 +422,13 @@ namespace attractor {
 
 ClaudeCodeTmuxBackend::ClaudeCodeTmuxBackend(std::string tmux_bin) : m_tmux_bin{std::move(tmux_bin)} {}
 
+ClaudeCodeTmuxBackend::~ClaudeCodeTmuxBackend()
+{
+    for (const auto& [name, ignored] : m_sessions) {
+        tmux_system(m_tmux_bin + " kill-session -t " + name + " 2>/dev/null");
+    }
+}
+
 auto ClaudeCodeTmuxBackend::run(const Node& node, const PromptText& prompt, Context& /*ctx*/) const
     -> std::expected<LlmResponse, Outcome>
 {
