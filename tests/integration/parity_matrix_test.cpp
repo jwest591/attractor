@@ -16,7 +16,7 @@
 using namespace attractor;
 using namespace attractor::test;
 
-// Full DoD §11.12 parity matrix (22 cases). Cases are added story by story.
+// Full DoD 11.12 parity matrix (22 cases). Cases are added story by story.
 // Remaining cases (to be added in future stories):
 //   11.12-001  start node emits START event
 //   11.12-002  exit node emits EXIT event with SUCCESS
@@ -43,7 +43,7 @@ using namespace attractor::test;
 
 SNITCH_TEST_CASE("[parity] Wait.human presents choices and routes on selection -- INT-PARITY")
 {
-    // DoD §11.12 case 11.12-012: handler executed directly (not through full engine)
+    // DoD 11.12 case 11.12-012: handler executed directly (not through full engine)
     TempLogsDir logs;
     QueueInterviewer qi;
     qi.push(Answer{.kind = AnswerKind::text, .text = "F"});

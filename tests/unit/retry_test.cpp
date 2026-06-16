@@ -41,7 +41,7 @@ class RetryNTimesHandler final : public Handler {
 
 }  // namespace
 
-// -- DoD 11.5-1: max_retries=2 → exactly 3 executions ------------------------
+// -- DoD 11.5-1: max_retries=2 -> exactly 3 executions ------------------------
 
 SNITCH_TEST_CASE("[retry] max_retries=2 persistent RETRY executes node exactly 3 times -- 2.5-U-007")
 {
@@ -78,7 +78,7 @@ SNITCH_TEST_CASE("[retry] max_retries=2 persistent RETRY executes node exactly 3
     SNITCH_CHECK(outcome.status == StageStatus::fail);
 }
 
-// -- DoD 11.5-2: max_retries=0 → 1 execution only ----------------------------
+// -- DoD 11.5-2: max_retries=0 -> 1 execution only ----------------------------
 
 SNITCH_TEST_CASE("[retry] max_retries=0 node returning RETRY executes only once -- 2.5-U-008")
 {
@@ -111,7 +111,7 @@ SNITCH_TEST_CASE("[retry] max_retries=0 node returning RETRY executes only once 
     SNITCH_CHECK(outcome.status == StageStatus::fail);
 }
 
-// -- DoD 11.5-3: no node max_retries, graph default_max_retries=0 → 1 exec ---
+// -- DoD 11.5-3: no node max_retries, graph default_max_retries=0 -> 1 exec ---
 
 SNITCH_TEST_CASE("[retry] no node max_retries with default_max_retries=0 executes only once -- 2.5-U-009")
 {
@@ -150,7 +150,7 @@ SNITCH_TEST_CASE("[retry] no node max_retries with default_max_retries=0 execute
 
 SNITCH_TEST_CASE("[retry] sleep_fn injected via RetryPolicy is called for every backoff delay -- 2.5-U-010")
 {
-    // max_retries=2: 2 retries → sleep_fn called exactly 2 times.
+    // max_retries=2: 2 retries -> sleep_fn called exactly 2 times.
     HandlerRegistry reg;
     reg.register_handler(HandlerTypeName{"start"}, std::make_unique<StartHandler>());
     reg.register_handler(HandlerTypeName{"exit"}, std::make_unique<ExitHandler>());
@@ -180,7 +180,7 @@ SNITCH_TEST_CASE("[retry] sleep_fn injected via RetryPolicy is called for every 
     SNITCH_CHECK(recorded_sleeps.size() == 2u);
 }
 
-// -- DoD 11.5-5: allow_partial=true + exhausted → PARTIAL_SUCCESS -------------
+// -- DoD 11.5-5: allow_partial=true + exhausted -> PARTIAL_SUCCESS -------------
 
 SNITCH_TEST_CASE("[retry] allow_partial=true exhausted retries returns PARTIAL_SUCCESS -- 2.5-U-011")
 {
@@ -209,7 +209,7 @@ SNITCH_TEST_CASE("[retry] allow_partial=true exhausted retries returns PARTIAL_S
     SNITCH_CHECK(outcome.status == StageStatus::partial_success);
 }
 
-// -- DoD 11.5-6: allow_partial=false + exhausted → FAIL ----------------------
+// -- DoD 11.5-6: allow_partial=false + exhausted -> FAIL ----------------------
 
 SNITCH_TEST_CASE("[retry] allow_partial=false exhausted retries returns FAIL -- 2.5-U-012")
 {
@@ -219,7 +219,7 @@ SNITCH_TEST_CASE("[retry] allow_partial=false exhausted retries returns FAIL -- 
     reg.register_handler(HandlerTypeName{"work"}, std::make_unique<RetryNTimesHandler>(999));
     reg.set_default_handler(std::make_unique<StartHandler>());
 
-    // allow_partial defaults to false; max_retries=1 → 1 retry → exhausted.
+    // allow_partial defaults to false; max_retries=1 -> 1 retry -> exhausted.
     auto graph = parse_ok(R"(
         digraph {
             start [shape=Mdiamond]
@@ -243,7 +243,7 @@ SNITCH_TEST_CASE("[retry] allow_partial=false exhausted retries returns FAIL -- 
 
 SNITCH_TEST_CASE("[retry] exponential_jitter_1s attempt-0 delay in [0.75s, 1.25s] -- 2.5-U-013")
 {
-    // RetryNTimesHandler(1) retries once → 1 sleep call at attempt index 0.
+    // RetryNTimesHandler(1) retries once -> 1 sleep call at attempt index 0.
     HandlerRegistry reg;
     reg.register_handler(HandlerTypeName{"start"}, std::make_unique<StartHandler>());
     reg.register_handler(HandlerTypeName{"exit"}, std::make_unique<ExitHandler>());
@@ -270,7 +270,7 @@ SNITCH_TEST_CASE("[retry] exponential_jitter_1s attempt-0 delay in [0.75s, 1.25s
         }
     });
 
-    // Formula: base = 1s * 2^0 = 1s, jitter +-25% → [0.75s, 1.25s].
+    // Formula: base = 1s * 2^0 = 1s, jitter +-25% -> [0.75s, 1.25s].
     SNITCH_REQUIRE(recorded_sleeps.size() == 1u);
     SNITCH_CHECK(recorded_sleeps[0].count() >= 0.75);
     SNITCH_CHECK(recorded_sleeps[0].count() <= 1.25);

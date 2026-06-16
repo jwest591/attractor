@@ -50,7 +50,7 @@ auto HandoffAwareBackend::run(const Node& node, const PromptText& prompt,
 
         if (!std::filesystem::exists(handoff_path)) return result;  // clean completion
 
-        // Handoff file present — context ceiling was reached
+        // Handoff file present -- context ceiling was reached
         if (attempt == m_max_handoffs) {
             return std::unexpected(Outcome::fail(DiagnosticMessage{
                 "handoff: max handoffs (" + std::to_string(m_max_handoffs)
@@ -73,7 +73,7 @@ auto HandoffAwareBackend::run(const Node& node, const PromptText& prompt,
         content.erase(0, first_nonws);
         content.erase(content.find_last_not_of(" \t\r\n") + 1);
 
-        // Leave the handoff file on disk — ClaudeCodeTmuxBackend checks for it at the
+        // Leave the handoff file on disk -- ClaudeCodeTmuxBackend checks for it at the
         // start of the next run() call to know it must /clear before re-prompting.
         // For headless, each run() spawns a fresh process so no explicit clear is needed.
         current_prompt = PromptText{content};

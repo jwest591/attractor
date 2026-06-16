@@ -7,7 +7,7 @@
 
 using namespace attractor;
 
-// ── helpers ────────────────────────────────────────────────────────────────────
+// -- helpers --------------------------------------------------------------------
 
 static Graph make_graph_with_goal(std::string_view goal_text, std::string_view prompt_text)
 {
@@ -32,7 +32,7 @@ static Graph make_valid_linear()
     return std::move(*result);
 }
 
-// ── AC1: variable expansion ────────────────────────────────────────────────────
+// -- AC1: variable expansion ----------------------------------------------------
 
 SNITCH_TEST_CASE("[transform] variable expansion replaces $goal in prompt")
 {
@@ -45,7 +45,7 @@ SNITCH_TEST_CASE("[transform] variable expansion replaces $goal in prompt")
     SNITCH_CHECK(type_safe::get(it->prompt) == "Plan how to: Write tests");
 }
 
-SNITCH_TEST_CASE("[transform] variable expansion — no $goal in prompt — unchanged")
+SNITCH_TEST_CASE("[transform] variable expansion -- no $goal in prompt -- unchanged")
 {
     auto g = make_graph_with_goal("Write tests", "Do something else");
     VariableExpansionTransform xform;
@@ -56,7 +56,7 @@ SNITCH_TEST_CASE("[transform] variable expansion — no $goal in prompt — unch
     SNITCH_CHECK(type_safe::get(it->prompt) == "Do something else");
 }
 
-SNITCH_TEST_CASE("[transform] variable expansion — multiple $goal occurrences — all replaced")
+SNITCH_TEST_CASE("[transform] variable expansion -- multiple $goal occurrences -- all replaced")
 {
     auto g = make_graph_with_goal("run tests", "First $goal, then $goal again");
     VariableExpansionTransform xform;
@@ -67,7 +67,7 @@ SNITCH_TEST_CASE("[transform] variable expansion — multiple $goal occurrences 
     SNITCH_CHECK(type_safe::get(it->prompt) == "First run tests, then run tests again");
 }
 
-SNITCH_TEST_CASE("[transform] variable expansion — empty goal — $goal replaced with empty string")
+SNITCH_TEST_CASE("[transform] variable expansion -- empty goal -- $goal replaced with empty string")
 {
     auto g = make_graph_with_goal("", "Do $goal now");
     VariableExpansionTransform xform;
@@ -78,7 +78,7 @@ SNITCH_TEST_CASE("[transform] variable expansion — empty goal — $goal replac
     SNITCH_CHECK(type_safe::get(it->prompt) == "Do  now");
 }
 
-// ── AC3: immutability ─────────────────────────────────────────────────────────
+// -- AC3: immutability ---------------------------------------------------------
 
 SNITCH_TEST_CASE("[transform] apply() does not mutate input graph")
 {
@@ -96,7 +96,7 @@ SNITCH_TEST_CASE("[transform] apply() does not mutate input graph")
     SNITCH_CHECK(type_safe::get(it->prompt) == original_prompt);
 }
 
-// ── AC2: custom transforms ────────────────────────────────────────────────────
+// -- AC2: custom transforms ----------------------------------------------------
 
 SNITCH_TEST_CASE("[transform] custom transform runs after built-ins")
 {
@@ -160,7 +160,7 @@ SNITCH_TEST_CASE("[transform] two custom transforms run in registration order")
     SNITCH_CHECK(type_safe::get(it->prompt) == "Do work_1_2");
 }
 
-// ── AC4: stylesheet transform ─────────────────────────────────────────────────
+// -- AC4: stylesheet transform -------------------------------------------------
 
 SNITCH_TEST_CASE("[transform] stylesheet universal rule sets llm_model on all nodes")
 {
@@ -225,7 +225,7 @@ SNITCH_TEST_CASE("[transform] explicit node llm_model not overwritten by stylesh
     SNITCH_CHECK(type_safe::get(it->llm_model) == "explicit-model");
 }
 
-SNITCH_TEST_CASE("[transform] apply_transforms with no stylesheet — llm fields unchanged")
+SNITCH_TEST_CASE("[transform] apply_transforms with no stylesheet -- llm fields unchanged")
 {
     auto g = make_valid_linear();
     auto out = apply_transforms(g);

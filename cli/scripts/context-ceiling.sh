@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# context-ceiling.sh — PreToolUse hook that denies tool calls once context
+# context-ceiling.sh -- PreToolUse hook that denies tool calls once context
 # usage crosses the critical threshold. Reads the shared usage file written
 # by ctx-usage.sh (via status-line.sh in interactive mode, or the headless
 # stream-json pipe).
@@ -55,7 +55,7 @@ if [ "$percent" -lt "$CRITICAL" ]; then
     exit 0
 fi
 
-# Deny — produce a message Claude will see verbatim. Keep it actionable:
+# Deny -- produce a message Claude will see verbatim. Keep it actionable:
 # tell Claude to wrap up and stop, since we can't force-stop from PreToolUse.
 handoff_note=""
 if [ -n "${CLAUDE_HANDOFF_FILE:-}" ]; then

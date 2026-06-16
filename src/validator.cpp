@@ -241,7 +241,7 @@ auto validate(const Graph& graph, const ValidationConfig& config,
 {
     std::vector<Diagnostic> diags;
 
-    // ── ERROR rules ───────────────────────────────────────────────────────────
+    // -- ERROR rules -----------------------------------------------------------
 
     bool structural_errors = false;
 
@@ -371,8 +371,8 @@ auto validate(const Graph& graph, const ValidationConfig& config,
         }
     }
 
-    // ── WARNING rules ─────────────────────────────────────────────────────────
-    // Skip when start/terminal structural errors are present — BFS and other
+    // -- WARNING rules ---------------------------------------------------------
+    // Skip when start/terminal structural errors are present -- BFS and other
     // rules require a well-formed graph topology to produce meaningful results.
 
     if (structural_errors) {
@@ -517,7 +517,7 @@ auto validate(const Graph& graph, const ValidationConfig& config,
         }
     }
 
-    // ── Extra / custom rules ──────────────────────────────────────────────────
+    // -- Extra / custom rules --------------------------------------------------
 
     for (const auto* rule : extra_rules) {
         if (rule == nullptr) {

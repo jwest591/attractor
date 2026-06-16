@@ -244,7 +244,7 @@ std::string extract_error_message(const std::string& line)
 }
 
 // ---------------------------------------------------------------------------
-// wait_for_end_turn — returns TurnResult
+// wait_for_end_turn -- returns TurnResult
 // ---------------------------------------------------------------------------
 
 TurnResult wait_for_end_turn(const std::string& transcript_path, long baseline_offset,
@@ -301,7 +301,7 @@ TurnResult wait_for_end_turn(const std::string& transcript_path, long baseline_o
 }
 
 // ---------------------------------------------------------------------------
-// /usage polling and reset-time parsing (Tasks 2.1 – 2.4)
+// /usage polling and reset-time parsing (Tasks 2.1 - 2.4)
 // ---------------------------------------------------------------------------
 
 std::optional<std::string> poll_usage_stdout(const std::string& transcript_path, long baseline_offset,
@@ -481,7 +481,7 @@ auto ClaudeCodeTmuxBackend::run(const Node& node, const PromptText& prompt, Cont
             std::lock_guard lock{m_mutex};
             m_sessions[session] = new_path;
         }
-        // Fall through — transcript_path acquisition below will use the updated cache
+        // Fall through -- transcript_path acquisition below will use the updated cache
     }
 
     std::string transcript_path;
@@ -497,8 +497,15 @@ auto ClaudeCodeTmuxBackend::run(const Node& node, const PromptText& prompt, Cont
         if (has_session(m_tmux_bin, session)) {
             path = poll_transcript_path(session, deadline);
             // Stale marker: the hook wrote a UUID from an earlier session that no longer exists.
-            // Kill and recreate so the SessionStart hook fires fresh and the marker is updated.
+            // Delete the marker before killing so create_session's poll_transcript_path waits
+            // for the new session's SessionStart hook rather than immediately returning the
+            // stale path.
             if (!path.empty() && !std::filesystem::exists(std::filesystem::path(path))) {
+                auto marker_result = attractor::compute_transcript_marker_path(session);
+                if (marker_result) {
+                    std::error_code ec;
+                    std::filesystem::remove(std::filesystem::path(*marker_result), ec);
+                }
                 tmux_system(m_tmux_bin + " kill-session -t " + session + " 2>/dev/null");
                 path = create_session(m_tmux_bin, session, settings_path, handoff_path, deadline);
             }

@@ -9,7 +9,7 @@
 
 namespace attractor {
 
-// ── Comment stripping ─────────────────────────────────────────────────────────
+// -- Comment stripping ---------------------------------------------------------
 
 static auto strip_comments(std::string_view source) -> std::expected<std::string, ParseError>
 {
@@ -100,7 +100,7 @@ static auto strip_comments(std::string_view source) -> std::expected<std::string
     return out;
 }
 
-// ── Lexer ─────────────────────────────────────────────────────────────────────
+// -- Lexer ---------------------------------------------------------------------
 
 enum class TokenKind {
     identifier,
@@ -357,7 +357,7 @@ struct Lexer {
             break;
         }
 
-        // Unknown — skip
+        // Unknown -- skip
         return next_token();
     }
 
@@ -375,7 +375,7 @@ struct Lexer {
     }
 };
 
-// ── Integer parsing helper ────────────────────────────────────────────────────
+// -- Integer parsing helper ----------------------------------------------------
 
 static auto parse_int_attr(std::string_view s) -> std::optional<int>
 {
@@ -390,7 +390,7 @@ static auto parse_int_attr(std::string_view s) -> std::optional<int>
     return val;
 }
 
-// ── Duration and FidelityMode helpers ────────────────────────────────────────
+// -- Duration and FidelityMode helpers ----------------------------------------
 
 static auto parse_duration(std::string_view s) -> std::optional<TimeoutDuration>
 {
@@ -521,7 +521,7 @@ static auto derive_css_class(std::string_view label) -> std::string
     return result;
 }
 
-// ── Parser context ────────────────────────────────────────────────────────────
+// -- Parser context ------------------------------------------------------------
 
 struct ParseContext {
     std::unordered_map<std::string, std::string> node_defaults;
@@ -530,7 +530,7 @@ struct ParseContext {
     Graph graph;
 };
 
-// ── Token stream helper ───────────────────────────────────────────────────────
+// -- Token stream helper -------------------------------------------------------
 
 struct TokenStream {
     const std::vector<Token>& tokens;
@@ -558,7 +558,7 @@ struct TokenStream {
     bool at_eof() const { return peek().kind == TokenKind::eof; }
 };
 
-// ── Attribute application ─────────────────────────────────────────────────────
+// -- Attribute application -----------------------------------------------------
 
 static auto apply_attrs_to_node(Node& node, const std::unordered_map<std::string, std::string>& attrs)
     -> std::optional<ParseError>
@@ -758,7 +758,7 @@ static auto apply_attrs_to_graph(Graph& graph, const std::unordered_map<std::str
     return std::nullopt;
 }
 
-// ── Forward declarations ──────────────────────────────────────────────────────
+// -- Forward declarations ------------------------------------------------------
 
 using AttrMap = std::unordered_map<std::string, std::string>;
 
@@ -766,7 +766,7 @@ static auto parse_attr_block(TokenStream& ts) -> std::expected<AttrMap, ParseErr
 static auto parse_statement_list(TokenStream& ts, ParseContext& ctx, bool is_subgraph,
                                  std::string* subgraph_label_out = nullptr) -> std::optional<ParseError>;
 
-// ── parse_attr_block ──────────────────────────────────────────────────────────
+// -- parse_attr_block ----------------------------------------------------------
 
 static auto parse_value_as_string(TokenStream& ts) -> std::optional<std::string>
 {
@@ -822,7 +822,7 @@ static auto parse_attr_block(TokenStream& ts) -> std::expected<AttrMap, ParseErr
     return attrs;
 }
 
-// ── ensure_node_exists ────────────────────────────────────────────────────────
+// -- ensure_node_exists --------------------------------------------------------
 
 static auto ensure_node_exists(ParseContext& ctx, const std::string& id) -> std::optional<ParseError>
 {
@@ -849,7 +849,7 @@ static auto ensure_node_exists(ParseContext& ctx, const std::string& id) -> std:
     return std::nullopt;
 }
 
-// ── Statement parsers ─────────────────────────────────────────────────────────
+// -- Statement parsers ---------------------------------------------------------
 
 static auto parse_node_stmt(TokenStream& ts, ParseContext& ctx, const Token& id_tok) -> std::optional<ParseError>
 {
@@ -1168,7 +1168,7 @@ static auto parse_statement_list(TokenStream& ts, ParseContext& ctx, bool is_sub
             continue;
         }
 
-        // bare_value, integer_lit, or float_lit in statement position → invalid node ID
+        // bare_value, integer_lit, or float_lit in statement position -> invalid node ID
         if (t.kind == TokenKind::bare_value || t.kind == TokenKind::integer_lit || t.kind == TokenKind::float_lit) {
             return ParseError{"invalid node ID: " + t.value, t.line, t.column};
         }
@@ -1179,7 +1179,7 @@ static auto parse_statement_list(TokenStream& ts, ParseContext& ctx, bool is_sub
     return std::nullopt;
 }
 
-// ── Public API: parse_graph ───────────────────────────────────────────────────
+// -- Public API: parse_graph ---------------------------------------------------
 
 auto parse_graph(std::string_view source) -> std::expected<Graph, ParseError>
 {

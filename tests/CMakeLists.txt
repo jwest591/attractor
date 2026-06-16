@@ -1,6 +1,6 @@
 find_package(snitch CONFIG REQUIRED)
 
-# ── Unit test executable ──────────────────────────────────────────────────────
+# -- Unit test executable ------------------------------------------------------
 add_executable(attractor_unit_tests
     support/main_stub.cpp
     unit/types_test.cpp
@@ -45,7 +45,7 @@ target_include_directories(attractor_unit_tests
         ${CMAKE_CURRENT_SOURCE_DIR}/support
 )
 
-# ── Integration test executable ───────────────────────────────────────────────
+# -- Integration test executable -----------------------------------------------
 add_executable(attractor_integration_tests
     support/main_stub.cpp
     integration/smoke_test.cpp
@@ -63,7 +63,7 @@ target_include_directories(attractor_integration_tests
         ${CMAKE_CURRENT_SOURCE_DIR}/support
 )
 
-# ── CLI backend tests ─────────────────────────────────────────────────────────
+# -- CLI backend tests ---------------------------------------------------------
 add_executable(attractor_cli_tests
     support/main_stub.cpp
     unit/backends/claude_headless_backend_test.cpp
@@ -97,7 +97,7 @@ target_compile_definitions(attractor_cli_tests
         $<$<BOOL:${ATTRACTOR_ENABLE_SLOW_TESTS}>:ATTRACTOR_ENABLE_SLOW_TESTS>
 )
 
-# ── CTest registration ─────────────────────────────────────────────────────────
+# -- CTest registration ---------------------------------------------------------
 include(CTest)
 
 add_test(

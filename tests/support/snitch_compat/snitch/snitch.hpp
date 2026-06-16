@@ -1,7 +1,7 @@
 #ifndef SNITCH_SNITCH_HPP
 #define SNITCH_SNITCH_HPP
 
-// Minimal build compat shim — used when vcpkg snitch unavailable.
+// Minimal build compat shim -- used when vcpkg snitch unavailable.
 // Replace with the real snitch::snitch vcpkg target when vcpkg is configured.
 
 #define SNITCH_CAT_(a, b) SNITCH_CAT_I_(a, b)

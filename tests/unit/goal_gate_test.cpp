@@ -103,7 +103,7 @@ SNITCH_TEST_CASE("[goal_gate] goal_gate=true FAIL routes to graph-level retry_ta
     SNITCH_CHECK(outcome.status == StageStatus::success);
 }
 
-// -- DoD 11.4-3: no retry_target anywhere → FAIL + reason --------------------
+// -- DoD 11.4-3: no retry_target anywhere -> FAIL + reason --------------------
 
 SNITCH_TEST_CASE("[goal_gate] goal_gate=true FAIL with no retry_target returns FAIL -- 2.5-U-003")
 {

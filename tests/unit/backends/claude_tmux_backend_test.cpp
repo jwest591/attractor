@@ -314,8 +314,8 @@ SNITCH_TEST_CASE("[claude_tmux] pre-existing handoff file triggers /clear then r
 {
     // Session "att-n1" already exists (has-session exits 0).
     // Handoff file is pre-created to trigger the detection block in run().
-    // Mock script: on send-keys /clear → record clear in STATE, write new JSONL and marker
-    //              on send-keys <prompt> → append end_turn to transcript from marker
+    // Mock script: on send-keys /clear -> record clear in STATE, write new JSONL and marker
+    //              on send-keys <prompt> -> append end_turn to transcript from marker
 
     auto script = std::filesystem::temp_directory_path() / "att_test_tmux_55_t001.sh";
     auto state  = std::filesystem::temp_directory_path() / "att_test_tmux_55_t001_state.txt";

@@ -76,7 +76,7 @@ void from_json(const nlohmann::json& j, Node& n)
     from_json(j.at("node_type"), n.node_type);
     from_json(j.at("prompt"), n.prompt);
 
-    // optional<MaxRetries> — constrained_type, no default ctor
+    // optional<MaxRetries> -- constrained_type, no default ctor
     if (j.contains("max_retries") && !j["max_retries"].is_null()) {
         n.max_retries = MaxRetries{j["max_retries"].get<int>()};
     }
@@ -87,14 +87,14 @@ void from_json(const nlohmann::json& j, Node& n)
 
     opt_fidelity_from_json(j, "fidelity", n.fidelity);
 
-    // optional<ThreadId> — strong_typedef, no default ctor
+    // optional<ThreadId> -- strong_typedef, no default ctor
     if (j.contains("thread_id") && !j["thread_id"].is_null()) {
         n.thread_id = ThreadId{j["thread_id"].get<std::string>()};
     }
 
     from_json(j.at("css_class"), n.css_class);
 
-    // optional<TimeoutDuration> — constrained_type, no default ctor
+    // optional<TimeoutDuration> -- constrained_type, no default ctor
     if (j.contains("timeout") && !j["timeout"].is_null()) {
         auto ms = std::chrono::milliseconds{j["timeout"].get<int64_t>()};
         if (ms.count() <= 0) {
@@ -106,7 +106,7 @@ void from_json(const nlohmann::json& j, Node& n)
     from_json(j.at("llm_model"), n.llm_model);
     from_json(j.at("llm_provider"), n.llm_provider);
 
-    // optional<ReasoningEffort> — enum, no default ctor issue but absent = nullopt
+    // optional<ReasoningEffort> -- enum, no default ctor issue but absent = nullopt
     if (j.contains("reasoning_effort") && !j["reasoning_effort"].is_null()) {
         ReasoningEffort re{};
         from_json(j["reasoning_effort"], re);

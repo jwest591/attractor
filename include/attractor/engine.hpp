@@ -13,7 +13,7 @@
 namespace attractor {
 
 enum class BackoffPreset {
-    none,                   // 0s delay — immediate retry
+    none,                   // 0s delay -- immediate retry
     fixed_1s,               // constant 1 000ms
     exponential_100ms,      // 100ms * 2^attempt, capped at 10s, no jitter
     exponential_1s,         // 1s * 2^attempt, capped at 60s, no jitter

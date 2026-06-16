@@ -221,7 +221,7 @@ struct SubprocessResult {
             auto now = std::chrono::steady_clock::now();
             if (now >= *deadline) { result.timed_out = true; break; }
             auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(*deadline - now);
-            // Fix: Clamp before narrowing cast — large timeout wraps to negative (infinite wait)
+            // Fix: Clamp before narrowing cast -- large timeout wraps to negative (infinite wait)
             poll_ms = static_cast<int>(std::min(ms.count(), static_cast<int64_t>(INT_MAX)));
         }
 
@@ -267,7 +267,7 @@ struct SubprocessResult {
         }
 
         if (stdin_slot >= 0) {
-            // Fix: Check POLLERR before POLLOUT — both can be set simultaneously when the
+            // Fix: Check POLLERR before POLLOUT -- both can be set simultaneously when the
             // child closes its read-end; taking POLLOUT branch calls write() on a broken pipe.
             if ((fds[stdin_slot].revents & POLLERR) != 0) {
                 close(stdin_fd[1]);

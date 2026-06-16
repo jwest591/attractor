@@ -5,7 +5,7 @@
 
 using namespace attractor;
 
-// ── AC1: Linear pipeline ──────────────────────────────────────────────────────
+// -- AC1: Linear pipeline ------------------------------------------------------
 
 SNITCH_TEST_CASE("[dot_parser] linear pipeline parses correctly")
 {
@@ -27,7 +27,7 @@ SNITCH_TEST_CASE("[dot_parser] linear pipeline parses correctly")
     SNITCH_CHECK(type_safe::get(g.label) == "My Pipeline");
 }
 
-// ── AC2: Chained edges ────────────────────────────────────────────────────────
+// -- AC2: Chained edges --------------------------------------------------------
 
 SNITCH_TEST_CASE("[dot_parser] chained edges produce individual edges")
 {
@@ -40,7 +40,7 @@ SNITCH_TEST_CASE("[dot_parser] chained edges produce individual edges")
     SNITCH_CHECK(type_safe::get(result->edges[1].to) == "C");
 }
 
-// ── AC3: Subgraph flattening and class derivation ─────────────────────────────
+// -- AC3: Subgraph flattening and class derivation -----------------------------
 
 SNITCH_TEST_CASE("[dot_parser] subgraph class derived from label")
 {
@@ -58,7 +58,7 @@ SNITCH_TEST_CASE("[dot_parser] subgraph class derived from label")
     SNITCH_CHECK(type_safe::get(result->nodes[0].css_class).find("loop-a") != std::string::npos);
 }
 
-// ── AC4: Comments stripped ────────────────────────────────────────────────────
+// -- AC4: Comments stripped ----------------------------------------------------
 
 SNITCH_TEST_CASE("[dot_parser] comments stripped")
 {
@@ -84,7 +84,7 @@ SNITCH_TEST_CASE("[dot_parser] block comment does not strip quoted string conten
     SNITCH_CHECK(type_safe::get(result->nodes[0].label) == "// not a comment");
 }
 
-// ── AC5: Rejected inputs ──────────────────────────────────────────────────────
+// -- AC5: Rejected inputs ------------------------------------------------------
 
 SNITCH_TEST_CASE("[dot_parser] strict digraph rejected")
 {
@@ -105,16 +105,16 @@ SNITCH_TEST_CASE("[dot_parser] HTML label rejected")
     SNITCH_REQUIRE(!result.has_value());
 }
 
-// ── AC6: Invalid node IDs ─────────────────────────────────────────────────────
+// -- AC6: Invalid node IDs -----------------------------------------------------
 
 SNITCH_TEST_CASE("[dot_parser] invalid node ID rejected")
 {
     // Digit-prefixed ID: 123node lexes as integer "123" then identifier "node"
-    // Parser sees integer token in statement position → unexpected → ParseError
+    // Parser sees integer token in statement position -> unexpected -> ParseError
     auto r1 = parse_graph("digraph g { 123node [label=\"x\"] }");
     SNITCH_REQUIRE(!r1.has_value());
 
-    // ID with dash: node-id lexes as bare_value → parser rejects with descriptive message
+    // ID with dash: node-id lexes as bare_value -> parser rejects with descriptive message
     auto r2 = parse_graph("digraph g { node-id [label=\"x\"] }");
     SNITCH_REQUIRE(!r2.has_value());
     SNITCH_CHECK(!r2.error().message.empty());
@@ -124,7 +124,7 @@ SNITCH_TEST_CASE("[dot_parser] invalid node ID rejected")
     SNITCH_REQUIRE(r3.has_value());
 }
 
-// ── AC7: Duration parsing ─────────────────────────────────────────────────────
+// -- AC7: Duration parsing -----------------------------------------------------
 
 SNITCH_TEST_CASE("[dot_parser] timeout duration parsing")
 {
@@ -168,7 +168,7 @@ SNITCH_TEST_CASE("[dot_parser] timeout duration parsing")
     SNITCH_CHECK(d->timeout->get_value() == milliseconds{7'200'000});
 }
 
-// ── AC8: Subgraph defaults inheritance ───────────────────────────────────────
+// -- AC8: Subgraph defaults inheritance ---------------------------------------
 
 SNITCH_TEST_CASE("[dot_parser] subgraph defaults inheritance")
 {
@@ -209,7 +209,7 @@ SNITCH_TEST_CASE("[dot_parser] subgraph defaults inheritance")
     SNITCH_CHECK(impl->timeout->get_value() == milliseconds{1'800'000});
 }
 
-// ── DoD §11.1: Additional coverage ───────────────────────────────────────────
+// -- DoD 11.1: Additional coverage -------------------------------------------
 
 SNITCH_TEST_CASE("[dot_parser] graph-level attributes")
 {
@@ -271,7 +271,7 @@ SNITCH_TEST_CASE("[dot_parser] node and edge defaults scoped correctly")
     SNITCH_REQUIRE(c != nullptr);
     SNITCH_CHECK(c->shape == NodeShape::box);
 
-    // D is after subgraph — defaults should revert to diamond
+    // D is after subgraph -- defaults should revert to diamond
     auto* d = find("D");
     SNITCH_REQUIRE(d != nullptr);
     SNITCH_CHECK(d->shape == NodeShape::diamond);

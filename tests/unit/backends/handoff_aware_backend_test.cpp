@@ -177,7 +177,7 @@ SNITCH_TEST_CASE("[handoff_aware_backend] empty handoff file returns Outcome::fa
             // Real backends delete the stale handoff file before running
             { std::error_code ec; std::filesystem::remove(hpath, ec); }
             std::filesystem::create_directories(hpath.parent_path());
-            std::ofstream f{hpath};  // empty file — no content written
+            std::ofstream f{hpath};  // empty file -- no content written
             return LlmResponse{"wrote empty handoff"};
         });
 

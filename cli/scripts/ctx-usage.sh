@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ctx-usage.sh — shared context-usage tracker.
+# ctx-usage.sh -- shared context-usage tracker.
 #
 # Single source of truth for the context-usage JSON file that other hooks
 # (status-line, context-ceiling, anything else that wants to gate behavior on
@@ -159,7 +159,7 @@ parse-stream)
 
 update)
     # Interactive: read statusline JSON on stdin. The statusline payload
-    # contains the *real* context_window from Claude — trust it over
+    # contains the *real* context_window from Claude -- trust it over
     # CLAUDE_CONTEXT_WINDOW.
     payload="$(cat)"
     printf '%s' "$payload"   # passthrough so caller can re-jq

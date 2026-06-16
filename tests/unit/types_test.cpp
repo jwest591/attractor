@@ -22,7 +22,7 @@ static_assert(!std::is_assignable_v<attractor::GoalText&, std::string>,
 static_assert(!std::is_assignable_v<attractor::LogsRoot&, std::string>,
               "LogsRoot must not be directly assignable from std::string");
 
-// AC1: string strong typedefs — construction, equality, ordering
+// AC1: string strong typedefs -- construction, equality, ordering
 
 SNITCH_TEST_CASE("[types] NodeId equality and ordering")
 {
@@ -51,7 +51,7 @@ SNITCH_TEST_CASE("[types] all 9 string strong typedefs construct and compare")
     SNITCH_CHECK(LogsRoot{"x"} == LogsRoot{"x"});
 }
 
-// AC2: constrained types — valid values construct without assertion
+// AC2: constrained types -- valid values construct without assertion
 
 SNITCH_TEST_CASE("[types] MaxRetries valid construction")
 {
