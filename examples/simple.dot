@@ -1,0 +1,66 @@
+
+digraph Simple {
+
+    // ── Graph-level attributes ─────────────────────────────────────────────
+
+    graph [
+        goal             = "Create a simple file via LLM",
+        label            = "Simple Pipeline",
+
+        // default_max_retries applies to every node that omits max_retries
+        default_max_retries = 1,
+
+        // default_fidelity: compact = structured bullet-point context summary
+        default_fidelity = "compact",
+
+        // model_stylesheet: CSS-like rules for LLM model/provider/effort.
+        //   *         → universal (lowest specificity)
+        //   .class    → class-name match (medium)
+        //   #node_id  → exact node ID (highest)
+        model_stylesheet = "
+            * { llm_model: claude-sonnet-4-6; llm_provider: anthropic; reasoning_effort: medium; }
+            .careful { llm_model: claude-opus-4-8; reasoning_effort: high; }
+            .fast    { llm_model: claude-haiku-4-5; reasoning_effort: low; }
+            #plan    { reasoning_effort: low; }
+        "
+    ]
+
+    // Node and edge default blocks — apply to all subsequent declarations
+    // in this scope; individual nodes/edges may override.
+    node [shape=box, timeout="30s"]
+    edge [weight=0]
+
+
+    // ── Entry and exit ─────────────────────────────────────────────────────
+
+    start [shape=Mdiamond, label="Start"]
+    done  [shape=Msquare,  label="Done"]
+
+
+    // ── Implementation ────────────────────────────────────────────
+
+    implement [
+        label = "Implementation",
+        prompt = "Create a text file in the current directory with the message \"Hello from claude\"",
+        goal_gate     = true,
+        max_retries   = 2,
+        allow_partial = true,
+        class = "fast"
+    ]
+
+    validate [
+        shape        = parallelogram,
+        label        = "Validate",
+        type         = "tool",
+        tool_command = "rg -l 'Hello from claude'",
+        timeout      = "10s"
+    ]
+
+    // ── Edges ──────────────────────────────────────────────────────────────
+
+    // Chained edge: A -> B -> C expands to A->B and B->C; attributes apply
+    // to every hop.  Here both edges are unconditional (weight=0, no label).
+    start -> implement -> validate
+    validate -> implement [condition="outcome=fail"]
+    validate -> done [condition="outcome=success"]
+}
