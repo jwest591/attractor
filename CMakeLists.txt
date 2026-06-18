@@ -15,25 +15,8 @@ include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 include(FetchContent)
 
-FetchContent_Declare(
-    type_safe
-    GIT_REPOSITORY https://github.com/jwest591/type_safe.git
-    GIT_TAG        main
-    GIT_SHALLOW    TRUE
-)
-FetchContent_MakeAvailable(type_safe)
 
-# Workaround: CMake 4.x module-dependency scanning does not propagate transitive
-# INTERFACE include dirs from vendored sub-targets (debug_assert lives inside
-# type_safe's source tree). Add the include globally for the scan phase, and
-# strip the dangling LINK_LIBRARIES entry on type_safe since debug_assert is
-# header-only and produces no archive (CMake 4 mistakenly emits -ldebug_assert).
-FetchContent_GetProperties(type_safe SOURCE_DIR _type_safe_src)
-include_directories(SYSTEM "${_type_safe_src}/external/debug_assert")
-set_target_properties(type_safe PROPERTIES
-    INTERFACE_LINK_LIBRARIES ""
-)
-
+add_subdirectory(type_safe)
 add_subdirectory(src)
 add_subdirectory(cli)
 

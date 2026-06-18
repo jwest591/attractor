@@ -413,10 +413,14 @@ std::optional<std::chrono::seconds> send_usage_and_wait(const std::string& tmux_
 
 namespace attractor {
 
-ClaudeCodeTmuxBackend::ClaudeCodeTmuxBackend(std::string tmux_bin) : m_tmux_bin{std::move(tmux_bin)} {}
+ClaudeCodeTmuxBackend::ClaudeCodeTmuxBackend(std::string tmux_bin) : m_tmux_bin{std::move(tmux_bin)}
+{
+    // create tmux session - single session remains active for attractor run
+}
 
 ClaudeCodeTmuxBackend::~ClaudeCodeTmuxBackend()
 {
+    // tmux session tear down
     for (const auto& [name, ignored] : m_sessions) {
         tmux_system(m_tmux_bin + " kill-session -t " + name + " 2>/dev/null");
     }
@@ -425,6 +429,8 @@ ClaudeCodeTmuxBackend::~ClaudeCodeTmuxBackend()
 auto ClaudeCodeTmuxBackend::run(const Node& node, const PromptText& prompt, Context& /*ctx*/) const
     -> std::expected<LlmResponse, Outcome>
 {
+    // create new window for duration of this run: tmux new-window -t <session> -m <window_name>
+    // invoke claude: tmux send-keys -t <session>:<window_name> <claude cmd> Enter
     const std::string session = derive_session_name(node);
     const std::string settings_path = std::string{ATTRACTOR_CLI_SCRIPTS_DIR} + "/att-tmux-backend.settings.json";
     auto handoff_path_result = compute_handoff_path(session);
