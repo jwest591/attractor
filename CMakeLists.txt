@@ -15,8 +15,29 @@ include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 include(FetchContent)
 
+FetchContent_Declare(
+    type_safe
+    GIT_REPOSITORY https://github.com/jwest591/type_safe.git
+    GIT_TAG        main
+    GIT_SHALLOW    TRUE
+)
+set(TYPE_SAFE_BUILD_TEST_EXAMPLE OFF CACHE BOOL "" FORCE)
+set(TYPE_SAFE_BUILD_DOC OFF CACHE BOOL "" FORCE)
 
-add_subdirectory(type_safe)
+# type_safe's external.cmake calls find_package(debug_assert) and then links to
+# the non-namespaced "debug_assert" target, but the system cmake config only
+# creates "debug_assert::debug_assert". Bridge the gap before MakeAvailable runs.
+find_package(debug_assert QUIET)
+if(debug_assert_FOUND AND TARGET debug_assert::debug_assert AND NOT TARGET debug_assert)
+    # type_safe links to the non-namespaced "debug_assert" but the system cmake
+    # config only creates "debug_assert::debug_assert". Create an IMPORTED shim
+    # (IMPORTED so it's excluded from export-set checks in type_safe's install rules).
+    add_library(debug_assert INTERFACE IMPORTED GLOBAL)
+    get_target_property(_da_includes debug_assert::debug_assert INTERFACE_INCLUDE_DIRECTORIES)
+    set_target_properties(debug_assert PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${_da_includes}")
+endif()
+
+FetchContent_MakeAvailable(type_safe)
 add_subdirectory(src)
 add_subdirectory(cli)
 
