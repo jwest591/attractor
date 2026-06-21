@@ -29,7 +29,8 @@ struct RetryPolicy {
 struct RunConfig {
     LogsRoot logs_root;
     RetryPolicy retry_policy{};
-    bool resume{false};  // If true, load checkpoint.json from logs_root to restore state
+    bool resume{false};      // If true, load checkpoint.json from logs_root to restore state
+    int max_loop_depth{1000}; // Cap on loop_restart recursion depth; exceeding it returns FAIL
 };
 
 class Engine {
@@ -66,7 +67,7 @@ class Engine {
 
     void register_default_handlers(std::unique_ptr<CodergenBackend> backend);
 
-    [[nodiscard]] auto run_from(const Graph& graph, const NodeId& start_id, const RunConfig& config) const -> Outcome;
+    [[nodiscard]] auto run_from(const Graph& graph, const NodeId& start_id, const RunConfig& config, int loop_depth = 0) const -> Outcome;
 };
 
 [[nodiscard]] auto resolve_fidelity(const Node& node, const Edge* incoming_edge,

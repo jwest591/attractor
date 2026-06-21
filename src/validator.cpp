@@ -232,8 +232,8 @@ static auto is_known_fidelity_mode(FidelityMode m) noexcept -> bool
     case FidelityMode::summary_low:    return true;
     case FidelityMode::summary_medium: return true;
     case FidelityMode::summary_high:   return true;
+    default:                           return false;
     }
-    return false;
 }
 
 auto validate(const Graph& graph, const ValidationConfig& config,

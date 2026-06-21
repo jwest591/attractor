@@ -231,8 +231,9 @@ std::chrono::duration<double> compute_backoff_delay(BackoffPreset preset, int at
         const double jitter = (attempt % 2 == 0) ? 0.75 : 1.25;
         return std::chrono::duration<double>(capped * jitter);
     }
+    default:
+        return {};
     }
-    return std::chrono::duration<double>(0);
 }
 
 void do_sleep(const RetryPolicy& policy, int attempt)
@@ -412,12 +413,18 @@ auto Engine::run(const Graph& graph, const RunConfig& config) const -> Outcome
     return run_from(graph, start->id, config);
 }
 
-auto Engine::run_from(const Graph& graph, const NodeId& start_id, const RunConfig& config) const -> Outcome
+auto Engine::run_from(const Graph& graph, const NodeId& start_id, const RunConfig& config, int loop_depth) const -> Outcome
 {
+    if (loop_depth > config.max_loop_depth) {
+        return Outcome::fail(DiagnosticMessage{"loop_restart depth limit exceeded"});
+    }
+
     std::map<NodeId, Outcome> node_outcomes;
     NodeId current_id = start_id;
     Context ctx;
     std::vector<NodeId> completed_nodes;
+    std::map<std::string, int> node_retries_map;
+    int terminal_retry_count = 0;
 
     // Resume: restore context and starting point from checkpoint.
     if (config.resume) {
@@ -430,6 +437,7 @@ auto Engine::run_from(const Graph& graph, const NodeId& start_id, const RunConfi
         }
         ctx.merge_updates(cp->context);
         completed_nodes = cp->completed_nodes;
+        node_retries_map = cp->node_retries;
         if (!cp->current_node.empty()) {
             current_id = cp->current_node;
         }
@@ -442,40 +450,61 @@ auto Engine::run_from(const Graph& graph, const NodeId& start_id, const RunConfi
         }
 
         if (is_terminal(*node)) {
-            NodeId gate_to_erase;
-            bool retry_requested = false;
-            for (const auto& [node_id, outcome] : node_outcomes) {
-                const Node* gn = find_node(graph, node_id);
-                if (gn != nullptr && static_cast<bool>(gn->goal_gate)) {
-                    if (outcome.status != StageStatus::success && outcome.status != StageStatus::partial_success) {
-                        const NodeId* rt = nullptr;
-                        if (!gn->retry_target.empty()) {
-                            rt = &gn->retry_target;
-                        }
-                        else if (!gn->fallback_retry_target.empty()) {
-                            rt = &gn->fallback_retry_target;
-                        }
-                        else if (!graph.retry_target.empty()) {
-                            rt = &graph.retry_target;
-                        }
-                        else if (!graph.fallback_retry_target.empty()) {
-                            rt = &graph.fallback_retry_target;
-                        }
+            // Collect all unsatisfied goal gates in a single pass.
+            // skipped counts as unsatisfied: engine retries or fails, never proceeds as satisfied.
+            struct GateInfo {
+                NodeId gate_id;
+                const NodeId* retry_target;
+            };
+            std::vector<GateInfo> unsatisfied;
 
-                        if (rt != nullptr) {
-                            current_id = *rt;
-                            gate_to_erase = node_id;
-                            retry_requested = true;
-                            break;
-                        }
-                        return Outcome::fail(DiagnosticMessage{"Goal gate unsatisfied: " + type_safe::get(node_id)});
+            for (const auto& [node_id, gate_outcome] : node_outcomes) {
+                const Node* gn = find_node(graph, node_id);
+                if (gn == nullptr || !static_cast<bool>(gn->goal_gate)) {
+                    continue;
+                }
+                if (gate_outcome.status == StageStatus::success ||
+                    gate_outcome.status == StageStatus::partial_success) {
+                    continue;
+                }
+                const NodeId* rt = nullptr;
+                if (!gn->retry_target.empty())                  { rt = &gn->retry_target; }
+                else if (!gn->fallback_retry_target.empty())    { rt = &gn->fallback_retry_target; }
+                else if (!graph.retry_target.empty())           { rt = &graph.retry_target; }
+                else if (!graph.fallback_retry_target.empty())  { rt = &graph.fallback_retry_target; }
+                unsatisfied.push_back({node_id, rt});
+            }
+
+            if (!unsatisfied.empty()) {
+                // Any gate with no retry_target fails the pipeline immediately.
+                for (const auto& gi : unsatisfied) {
+                    if (gi.retry_target == nullptr) {
+                        return Outcome::fail(
+                            DiagnosticMessage{"Goal gate unsatisfied: " + type_safe::get(gi.gate_id)});
                     }
                 }
-            }
-            if (retry_requested) {
-                node_outcomes.erase(gate_to_erase);
+                // Divergent retry targets are ambiguous — fail rather than silently pick one.
+                const NodeId* first_target = unsatisfied.front().retry_target;
+                for (const auto& gi : unsatisfied) {
+                    if (*gi.retry_target != *first_target) {
+                        return Outcome::fail(DiagnosticMessage{
+                            "Goal gates have conflicting retry targets"});
+                    }
+                }
+                // Iteration cap prevents unbounded retry cycles (matches loop_restart cap).
+                if (terminal_retry_count > config.max_loop_depth) {
+                    return Outcome::fail(DiagnosticMessage{"Goal gate retry limit exceeded"});
+                }
+                ++terminal_retry_count;
+                // Copy retry target before erasing gate outcomes.
+                const NodeId retry_from = *first_target;
+                for (const auto& gi : unsatisfied) {
+                    node_outcomes.erase(gi.gate_id);
+                }
+                current_id = retry_from;
                 continue;
             }
+
             for (const auto& [nid, nout] : node_outcomes) {
                 if (nout.status == StageStatus::partial_success) {
                     const Node* n = find_node(graph, nid);
@@ -516,6 +545,10 @@ auto Engine::run_from(const Graph& graph, const NodeId& start_id, const RunConfi
             ++attempt;
         } while (true);
 
+        if (attempt > 0) {
+            node_retries_map[type_safe::get(node->id)] = attempt;
+        }
+
         if (outcome.status == StageStatus::retry) {
             if (static_cast<bool>(node->allow_partial)) {
                 outcome = Outcome{.status = StageStatus::partial_success,
@@ -550,13 +583,24 @@ auto Engine::run_from(const Graph& graph, const NodeId& start_id, const RunConfi
             if (outcome.status == StageStatus::fail || outcome.status == StageStatus::retry) {
                 return outcome;
             }
+            // skipped with no outgoing edges: treat as partial_success if allow_partial, else FAIL.
+            // Implicit success for skipped would silently mask unintended termination.
+            if (outcome.status == StageStatus::skipped) {
+                if (static_cast<bool>(node->allow_partial)) {
+                    return Outcome{.status = StageStatus::partial_success,
+                                   .failure_reason =
+                                       DiagnosticMessage{"skipped node: " + type_safe::get(node->id)}};
+                }
+                return Outcome::fail(
+                    DiagnosticMessage{"skipped node with no outgoing edges: " + type_safe::get(node->id)});
+            }
             return Outcome{};
         }
 
         if (static_cast<bool>(next_edge->loop_restart)) {
             RunConfig fresh_config = config;
             fresh_config.resume = false;
-            return run_from(graph, next_edge->to, fresh_config);
+            return run_from(graph, next_edge->to, fresh_config, loop_depth + 1);
         }
 
         // Fail/retry outcomes do not follow unconditional edges, except when goal_gate is
@@ -575,6 +619,7 @@ auto Engine::run_from(const Graph& graph, const NodeId& start_id, const RunConfi
             cp.current_node = current_id;
             cp.completed_nodes = completed_nodes;
             cp.context = context_snapshot;
+            cp.node_retries = node_retries_map;
             (void)save_checkpoint(config.logs_root, cp);
         }
     }

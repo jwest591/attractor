@@ -10,6 +10,7 @@
 #include <attractor/handlers/exit_handler.hpp>
 #include <attractor/handlers/start_handler.hpp>
 #include <attractor/types.hpp>
+#include <expected>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -518,4 +519,117 @@ SNITCH_TEST_CASE("[engine] Engine(backend, observer) uses injected backend not N
 
     SNITCH_CHECK(outcome.status == StageStatus::success);
     SNITCH_CHECK(spy_ptr->called);
+}
+
+// -- AC #1: loop_restart depth guard (Story 7.4) ------------------------------
+
+SNITCH_TEST_CASE("[engine] loop_restart depth limit returns FAIL when exceeded -- 7.4-U-001")
+{
+    // loop_n has no explicit type; the default Engine uses StartHandler as fallback,
+    // which returns success. This lets the engine follow the loop_restart edge on
+    // every iteration until the depth guard fires.
+    auto graph = parse_ok(R"(
+        digraph {
+            start  [shape=Mdiamond]
+            loop_n [shape=box]
+            start  -> loop_n
+            loop_n -> loop_n [loop_restart=true]
+        }
+    )");
+    TempLogsDir logs;
+    Engine engine;
+
+    const auto outcome = engine.run(graph, RunConfig{.logs_root = logs.logs_root(), .max_loop_depth = 5});
+
+    SNITCH_CHECK(outcome.status == StageStatus::fail);
+    SNITCH_CHECK(type_safe::get(outcome.failure_reason).find("loop_restart depth limit") != std::string::npos);
+}
+
+// -- AC #2: multi-gate terminal pass (Story 7.4) ------------------------------
+
+SNITCH_TEST_CASE("[engine] multi-gate terminal: gate without retry_target fails pipeline immediately -- 7.4-U-002")
+{
+    // alpha_gate (alphabetically first) always fails but has a retry_target.
+    // beta_gate always fails and has NO retry_target.
+    // Old code would retry alpha_gate (break after first gate with retry_target),
+    // never evaluating beta_gate's missing retry_target on the first pass.
+    // New code processes all unsatisfied gates: finds beta_gate has no retry_target,
+    // fails immediately -- alpha_gate is called exactly once.
+    class AlwaysFailHandler final : public Handler {
+      public:
+        mutable int call_count{0};
+        [[nodiscard]] auto execute(const Node& /*node*/, Context& /*ctx*/, const Graph& /*graph*/,
+                                   const LogsRoot& /*logs_root*/) const -> Outcome override
+        {
+            ++call_count;
+            return Outcome::fail(DiagnosticMessage{"always fails"});
+        }
+    };
+
+    auto alpha_fail = std::make_unique<AlwaysFailHandler>();
+    const AlwaysFailHandler* raw_alpha_fail = alpha_fail.get();
+
+    HandlerRegistry reg;
+    reg.register_handler(HandlerTypeName{"start"}, std::make_unique<StartHandler>());
+    reg.register_handler(HandlerTypeName{"exit"}, std::make_unique<ExitHandler>());
+    reg.register_handler(HandlerTypeName{"alpha_gate"}, std::move(alpha_fail));
+    reg.register_handler(HandlerTypeName{"beta_gate"}, std::make_unique<AlwaysFailHandler>());
+    reg.set_default_handler(std::make_unique<StartHandler>());
+
+    auto graph = parse_ok(R"(
+        digraph {
+            start      [shape=Mdiamond]
+            alpha_gate [type="alpha_gate", shape=box, goal_gate=true, retry_target=start]
+            beta_gate  [type="beta_gate",  shape=box, goal_gate=true]
+            done       [shape=Msquare]
+            start -> alpha_gate -> beta_gate -> done
+        }
+    )");
+    TempLogsDir logs;
+    Engine engine{std::move(reg)};
+
+    const auto outcome = engine.run(graph, RunConfig{.logs_root = logs.logs_root()});
+
+    // Pipeline must fail because beta_gate has no retry_target.
+    SNITCH_CHECK(outcome.status == StageStatus::fail);
+    // With new multi-gate pass, all gates are evaluated before deciding to retry.
+    // beta_gate has no retry_target so pipeline fails on the first terminal pass:
+    // alpha_gate should be called exactly 1 time.
+    SNITCH_CHECK(raw_alpha_fail->call_count == 1);
+}
+
+// -- AC #4: constructor handler parity (Story 7.4) ----------------------------
+
+SNITCH_TEST_CASE("[engine] Engine(backend) constructor registers all default handlers -- 7.4-U-003")
+{
+    // Verifies that Engine(unique_ptr<CodergenBackend>) calls register_default_handlers
+    // by running a codergen node through the backend-injection constructor.
+    struct RecordingBackend final : public CodergenBackend {
+        mutable bool called{false};
+        [[nodiscard]] auto run(const Node& /*node*/, const PromptText& /*prompt*/,
+                               Context& /*ctx*/) const -> std::expected<LlmResponse, Outcome> override
+        {
+            called = true;
+            return LlmResponse{"ok"};
+        }
+    };
+
+    auto backend = std::make_unique<RecordingBackend>();
+    RecordingBackend* raw_backend = backend.get();
+    TempLogsDir logs;
+
+    auto graph = parse_ok(R"(
+        digraph {
+            start [shape=Mdiamond]
+            work  [shape=box, prompt="go"]
+            done  [shape=Msquare]
+            start -> work -> done
+        }
+    )");
+
+    Engine engine_with_backend{std::move(backend)};
+    const auto outcome = engine_with_backend.run(graph, RunConfig{.logs_root = logs.logs_root()});
+
+    SNITCH_CHECK(outcome.status == StageStatus::success);
+    SNITCH_CHECK(raw_backend->called);
 }
