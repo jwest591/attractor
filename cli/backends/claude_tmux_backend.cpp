@@ -412,26 +412,81 @@ std::optional<std::chrono::seconds> send_usage_and_wait(const std::string& tmux_
 }  // namespace
 
 namespace attractor {
+//
+// tmux window RAII wrapper
+struct TmuxWindow {
+    // Create new window for duration of this run: tmux new-window -t <session> -m <window_name>
+    TmuxWindow(std::string tmux_cmd, std::string session, std::string window)
+        : _tmux_cmd(std::move(tmux_cmd))
+        , _session(std::move(session))
+        , _window(std::move(window))
+    {
+        tmux_system(std::format("{} new-window -t {} -n {}", _tmux_cmd, _session, _window));
+    }
 
-ClaudeCodeTmuxBackend::ClaudeCodeTmuxBackend(std::string tmux_bin) : m_tmux_bin{std::move(tmux_bin)}
+    ~TmuxWindow() { tmux_system(std::format("{} kill-window -t {}:{}", _tmux_cmd, _session, _window)); }
+
+    // Invoke tmux send-keys on the controlled window with the specified cmd_string and send Enter
+    // pre: tmux session created
+    // pre: tmux window created
+    // post: cmd_string executed in the controlled tmux window
+    void send_cmd(const std::string& cmd_string)
+    {
+        tmux_system(std::format("{} send-keys -t {}:{} {} Enter", _tmux_cmd, _tmux_session, _tmux_window, cmd_string));
+    }
+
+    std::string _tmux_cmd;
+    std::string _session;
+    std::string _window;
+};
+
+ClaudeCodeTmuxBackend::ClaudeCodeTmuxBackend(std::string tmux_bin, std::string run_id)
+    : _tmux_bin(std::move(tmux_bin)
+    , _session_id(std::move(run_id))
 {
     // create tmux session - single session remains active for attractor run
+    tmux_system(std::format("{} new-session -d -m {}", _tmux_bin, _session_id));
 }
 
 ClaudeCodeTmuxBackend::~ClaudeCodeTmuxBackend()
 {
     // tmux session tear down
-    for (const auto& [name, ignored] : m_sessions) {
-        tmux_system(m_tmux_bin + " kill-session -t " + name + " 2>/dev/null");
-    }
+    tmux_system(std::format("{} kill-session -t {}", _tmux_bin, _session_id));
 }
 
 auto ClaudeCodeTmuxBackend::run(const Node& node, const PromptText& prompt, Context& /*ctx*/) const
     -> std::expected<LlmResponse, Outcome>
 {
-    // create new window for duration of this run: tmux new-window -t <session> -m <window_name>
-    // invoke claude: tmux send-keys -t <session>:<window_name> <claude cmd> Enter
-    const std::string session = derive_session_name(node);
+    // create new window for duration of this run
+    auto window = TmuxWindow(_tmux_cmd, _session_id, derive_session_name(node));
+
+    // Invoke claude via send-keys
+    ////
+    // Need to build up the claude command line and also deal with the handoff mechanism used to manage context
+
+    // handoff protocol
+    ////
+    // Context tracking is managed via hooks & scripts externally to this process.  PreToolUse hook detects a context
+    // limit breach, denies tool use and prompts the agent to create a handoff file at a specified location (unique for
+    // the session) and then end its turn.
+    //
+    // hooks
+    //  - PreToolUse - monitor context captured by statusLine hook; abort if threshold hit
+    //  - statusLine - capture context usage to file
+    //  - Stop - count turns; abort if threshold hit
+    //  - SessionStart - extract transcript path for session monitoring
+    //
+    // Workflow
+    //
+    // - start new claude with custom settings json (implements hooks described above) and execute the user prompt
+    // - SessionStart hook extracts transcript path and writes to known file location
+    // - monitor jsonl output (from transcript path) waiting for claude to finish work
+    //   - could be success (clean turn end), error, turns exceeded, context limit hit
+    //   - if context limit hit & handoff file exists:
+    //     - send "/clear" (starts new session) and re-prompt with handoff file contents (remove file from disk)
+    //     else:
+    //     - return result
+
     const std::string settings_path = std::string{ATTRACTOR_CLI_SCRIPTS_DIR} + "/att-tmux-backend.settings.json";
     auto handoff_path_result = compute_handoff_path(session);
     if (!handoff_path_result) {
@@ -465,7 +520,7 @@ auto ClaudeCodeTmuxBackend::run(const Node& node, const PromptText& prompt, Cont
             std::filesystem::remove(std::filesystem::path(*marker_result), ec);
         }
 
-        const std::string clear_cmd = m_tmux_bin + " send-keys -t " + session + " -- /clear Enter";
+        const std::string clear_cmd = _tmux_bin + " send-keys -t " + session + " -- /clear Enter";
         if (tmux_system(clear_cmd) != 0) {
             return std::unexpected(Outcome::fail(DiagnosticMessage{"tmux: /clear failed for " + session}));
         }
@@ -477,23 +532,23 @@ auto ClaudeCodeTmuxBackend::run(const Node& node, const PromptText& prompt, Cont
                 Outcome::fail(DiagnosticMessage{"tmux: timeout waiting for post-/clear session for " + session}));
         }
         {
-            std::lock_guard lock{m_mutex};
-            m_sessions[session] = new_path;
+            std::lock_guard lock{_mutex};
+            _sessions[session] = new_path;
         }
         // Fall through -- transcript_path acquisition below will use the updated cache
     }
 
     std::string transcript_path;
     {
-        std::lock_guard lock{m_mutex};
-        if (auto it = m_sessions.find(session); it != m_sessions.end()) {
+        std::lock_guard lock{_mutex};
+        if (auto it = _sessions.find(session); it != _sessions.end()) {
             transcript_path = it->second;
         }
     }
 
     if (transcript_path.empty()) {
         std::string path;
-        if (has_session(m_tmux_bin, session)) {
+        if (has_session(_tmux_bin, session)) {
             path = poll_transcript_path(session, deadline);
             // Stale marker: the hook wrote a UUID from an earlier session that no longer exists.
             // Delete the marker before killing so create_session's poll_transcript_path waits
@@ -505,19 +560,19 @@ auto ClaudeCodeTmuxBackend::run(const Node& node, const PromptText& prompt, Cont
                     std::error_code ec;
                     std::filesystem::remove(std::filesystem::path(*marker_result), ec);
                 }
-                tmux_system(m_tmux_bin + " kill-session -t " + session + " 2>/dev/null");
-                path = create_session(m_tmux_bin, session, settings_path, handoff_path, deadline);
+                tmux_system(_tmux_bin + " kill-session -t " + session + " 2>/dev/null");
+                path = create_session(_tmux_bin, session, settings_path, handoff_path, deadline);
             }
         }
         else {
-            path = create_session(m_tmux_bin, session, settings_path, handoff_path, deadline);
+            path = create_session(_tmux_bin, session, settings_path, handoff_path, deadline);
         }
-        std::lock_guard lock{m_mutex};
-        if (auto it = m_sessions.find(session); it != m_sessions.end()) {
+        std::lock_guard lock{_mutex};
+        if (auto it = _sessions.find(session); it != _sessions.end()) {
             transcript_path = it->second;
         }
         else if (!path.empty()) {
-            m_sessions[session] = path;
+            _sessions[session] = path;
             transcript_path = path;
         }
     }
@@ -537,8 +592,8 @@ auto ClaudeCodeTmuxBackend::run(const Node& node, const PromptText& prompt, Cont
         // Send text and Enter as separate send-keys calls: combining them in one
         // call causes Enter to be swallowed before Claude Code's input handler is ready.
         const std::string text_cmd =
-            m_tmux_bin + " send-keys -t " + session + " -l " + shell_escape(type_safe::get(prompt));
-        const std::string enter_cmd = m_tmux_bin + " send-keys -t " + session + " Enter";
+            _tmux_bin + " send-keys -t " + session + " -l " + shell_escape(type_safe::get(prompt));
+        const std::string enter_cmd = _tmux_bin + " send-keys -t " + session + " Enter";
         if (tmux_system(text_cmd) != 0 || tmux_system(enter_cmd) != 0) {
             return std::unexpected(Outcome::fail(DiagnosticMessage{"tmux: send-keys failed for " + session}));
         }
@@ -567,7 +622,7 @@ auto ClaudeCodeTmuxBackend::run(const Node& node, const PromptText& prompt, Cont
                 Outcome::fail(DiagnosticMessage{"tmux: API error [" + err.error_type + "]: " + err.message}));
         }
 
-        auto wait_duration = send_usage_and_wait(m_tmux_bin, session, transcript_path, deadline);
+        auto wait_duration = send_usage_and_wait(_tmux_bin, session, transcript_path, deadline);
         if (wait_duration) {
             last_rate_limit_reset = *wait_duration;
             const auto sleep_until = std::chrono::steady_clock::now() + *wait_duration + std::chrono::seconds{5};

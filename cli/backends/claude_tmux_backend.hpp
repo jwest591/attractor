@@ -12,16 +12,15 @@ namespace attractor {
 class ClaudeCodeTmuxBackend final : public CodergenBackend {
   public:
     ClaudeCodeTmuxBackend() = default;
-    explicit ClaudeCodeTmuxBackend(std::string tmux_bin);
+    explicit ClaudeCodeTmuxBackend(std::string tmux_bin, std::string run_id);
     ~ClaudeCodeTmuxBackend();
 
-    [[nodiscard]] auto run(const Node& node, const PromptText& prompt,
-                           Context& ctx) const -> std::expected<LlmResponse, Outcome> override;
+    [[nodiscard]] auto run(const Node& node, const PromptText& prompt, Context& ctx) const
+        -> std::expected<LlmResponse, Outcome> override;
 
   private:
-    std::string m_tmux_bin{"tmux"};
-    mutable std::mutex m_mutex;
-    mutable std::unordered_map<std::string, std::string> m_sessions;  // name -> transcript_path
+    std::string _tmux_bin{"tmux"};
+    std::string _session_id{"attractor_claude"};
 };
 
 }  // namespace attractor
