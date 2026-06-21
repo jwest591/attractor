@@ -1,63 +1,31 @@
 #include "backend_utils.hpp"
 
+#include <attractor/types.hpp>
 #include <snitch/snitch.hpp>
 
 #include <filesystem>
-#include <fstream>
 #include <string>
 
 using namespace attractor;
 
-SNITCH_TEST_CASE("[backend_utils] compute_transcript_marker_path returns path under .attractor/ not /tmp/ -- 5.7-U-001")
+SNITCH_TEST_CASE("[backend_utils] derive_node_log_dir returns logs_root/node_id-counter -- 7.19-U-BU-001")
 {
-    auto result = compute_transcript_marker_path("att-n1");
+    const std::filesystem::path logs_root{"/tmp/att-test-logs"};
+    const NodeId node_id{"my-node"};
+    const int counter = 3;
 
-    SNITCH_REQUIRE(result.has_value());
-    SNITCH_CHECK(result->find(".attractor") != std::string::npos);
-    SNITCH_CHECK(result->find("/tmp/") == std::string::npos);
+    const auto result = derive_node_log_dir(logs_root, node_id, counter);
+
+    SNITCH_CHECK(result == logs_root / "my-node-3");
 }
 
-SNITCH_TEST_CASE("[backend_utils] compute_transcript_marker_path returns cwd/.attractor/att-<name>-transcript.txt -- 5.7-U-002")
+SNITCH_TEST_CASE("[backend_utils] derive_node_log_dir counter 1 produces expected name -- 7.19-U-BU-002")
 {
-    const auto expected =
-        (std::filesystem::current_path() / ".attractor" / "att-att-n1-transcript.txt").string();
+    const std::filesystem::path logs_root{"/runs/abc"};
+    const NodeId node_id{"step-a"};
 
-    auto result = compute_transcript_marker_path("att-n1");
+    const auto result = derive_node_log_dir(logs_root, node_id, 1);
 
-    SNITCH_REQUIRE(result.has_value());
-    SNITCH_CHECK(*result == expected);
-}
-
-SNITCH_TEST_CASE("[backend_utils] compute_transcript_marker_path creates .attractor/ directory if absent -- 5.7-U-003")
-{
-    auto result = compute_transcript_marker_path("att-n1");
-
-    SNITCH_REQUIRE(result.has_value());
-    SNITCH_CHECK(std::filesystem::is_directory(std::filesystem::current_path() / ".attractor"));
-}
-
-SNITCH_TEST_CASE("[backend_utils] compute_transcript_marker_path returns unexpected when directory creation fails -- 5.7-U-004")
-{
-    const auto dir = std::filesystem::current_path() / ".attractor";
-    std::error_code ec;
-
-    // Block directory creation by placing a regular file at the .attractor path.
-    std::filesystem::remove_all(dir, ec);
-    { std::ofstream blocker{dir}; }
-
-    // RAII: restore .attractor/ as a directory after the test regardless of outcome.
-    // NOLINTNEXTLINE(cppcoreguidelines-special-member-functions)
-    struct RestoreDir {
-        std::filesystem::path p;
-        ~RestoreDir() noexcept {
-            std::error_code e;
-            std::filesystem::remove(p, e);
-            std::filesystem::create_directories(p, e);
-        }
-    } restore{dir};
-
-    auto result = compute_transcript_marker_path("att-n1");
-
-    SNITCH_REQUIRE_FALSE(result.has_value());
-    SNITCH_CHECK(!result.error().empty());
+    SNITCH_CHECK(result.filename().string() == "step-a-1");
+    SNITCH_CHECK(result.parent_path() == logs_root);
 }

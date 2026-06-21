@@ -82,6 +82,23 @@ SNITCH_TEST_CASE("[context] set returns error for infinite float (NFR2) -- 2.6-C
     SNITCH_CHECK(ctx.get(ContextKey{"bad"}).is_null());
 }
 
+SNITCH_TEST_CASE("[context] next_execution_counter pre-increments from zero -- 7.19-C-001")
+{
+    Context ctx;
+    SNITCH_CHECK(ctx.next_execution_counter() == 1);
+    SNITCH_CHECK(ctx.next_execution_counter() == 2);
+    SNITCH_CHECK(ctx.next_execution_counter() == 3);
+}
+
+SNITCH_TEST_CASE("[context] current_execution_counter reads without incrementing -- 7.19-C-002")
+{
+    Context ctx;
+    SNITCH_CHECK(ctx.current_execution_counter() == 0);
+    SNITCH_CHECK(ctx.next_execution_counter() == 1);
+    SNITCH_CHECK(ctx.current_execution_counter() == 1);
+    SNITCH_CHECK(ctx.current_execution_counter() == 1);
+}
+
 SNITCH_TEST_CASE("[context] concurrent set and get do not data-race -- 2.6-C-008")
 {
     // Two threads: one writes, one reads; no undefined behavior.

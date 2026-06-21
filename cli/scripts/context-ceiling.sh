@@ -1,16 +1,15 @@
 #!/usr/bin/env bash
 # context-ceiling.sh -- PreToolUse hook that denies tool calls once context
-# usage crosses the critical threshold. Reads the shared usage file written
-# by ctx-usage.sh (via status-line.sh in interactive mode, or the headless
-# stream-json pipe).
+# usage crosses the critical threshold. Used by ClaudeCodeHeadlessBackend.
+# Reads the shared usage file written by ctx-usage.sh (via the stream-json pipe).
 #
 # Behavior:
 #   - usage file missing OR percent < critical  -> allow (echo {})
-#   - percent >= critical                       -> deny with permissionDecision
+#   - percent >= critical                       -> deny with permissionDecision,
+#     and write handoff stub to $ATTRACTOR_NODE_LOG_DIR/handoff.md (if set)
+#     or to $CLAUDE_HANDOFF_FILE (fallback for backward compat)
 #
-# Bypass: set CLAUDE_BYPASS_CEILING=1 to skip the check (use this for the
-# headless "summarizer" you spawn at handoff time so it can still write the
-# handoff file).
+# Bypass: set CLAUDE_BYPASS_CEILING=1 to skip the check.
 #
 # Hook contract:
 #   stdin:  { "session_id": "...", "tool_name": "...", "tool_input": {...}, ... }
@@ -30,7 +29,6 @@ STATE_DIR="${CLAUDE_STATE_DIR:-$ROOT/.claude-session}"
 
 INPUT="$(cat)"
 sid=$(printf '%s' "$INPUT" | jq -r '.session_id // "unknown"' 2>/dev/null)
-tool=$(printf '%s' "$INPUT" | jq -r '.tool_name // "unknown"' 2>/dev/null)
 
 if [ -n "${CLAUDE_USAGE_FILE:-}" ]; then
     usage_file="$CLAUDE_USAGE_FILE"
@@ -55,12 +53,21 @@ if [ "$percent" -lt "$CRITICAL" ]; then
     exit 0
 fi
 
-# Deny -- produce a message Claude will see verbatim. Keep it actionable:
-# tell Claude to wrap up and stop, since we can't force-stop from PreToolUse.
-handoff_note=""
-if [ -n "${CLAUDE_HANDOFF_FILE:-}" ]; then
+# Write handoff stub atomically if a destination is configured
+if [ -n "${ATTRACTOR_NODE_LOG_DIR:-}" ]; then
+    handoff="$ATTRACTOR_NODE_LOG_DIR/handoff.md"
+    mkdir -p "$ATTRACTOR_NODE_LOG_DIR"
+    if [ ! -f "$handoff" ]; then
+        printf '' > "$ATTRACTOR_NODE_LOG_DIR/handoff.tmp"
+        mv "$ATTRACTOR_NODE_LOG_DIR/handoff.tmp" "$handoff"
+    fi
+    handoff_note=" Write your handoff summary to $handoff then end your turn."
+elif [ -n "${CLAUDE_HANDOFF_FILE:-}" ]; then
     handoff_note=" Write your handoff summary to $CLAUDE_HANDOFF_FILE then end your turn."
+else
+    handoff_note=""
 fi
+
 reason="Context ceiling reached (${percent}% >= ${CRITICAL}%). All further tool calls are denied for the rest of this session. Stop work now: produce a handoff summary describing (1) what was accomplished, (2) what remains, (3) the next concrete step, then end your turn.${handoff_note} Do not retry tool calls."
 
 jq -n --arg r "$reason" '{

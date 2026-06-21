@@ -16,26 +16,6 @@
             "type": "command",
             "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/att-session-start.sh'",
             "timeout": 5000
-          },
-          {
-            "type": "command",
-            "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/ctx-usage.sh init'",
-            "timeout": 5000
-          }
-        ]
-      },
-      {
-        "matcher": "clear",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/att-session-start.sh'",
-            "timeout": 5000
-          },
-          {
-            "type": "command",
-            "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/ctx-usage.sh init'",
-            "timeout": 5000
           }
         ]
       }
@@ -46,7 +26,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "sh -c 'CLAUDE_CONTEXT_CRITICAL=85 $CLAUDE_PROJECT_DIR/cli/scripts/context-ceiling.sh'",
+            "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/att-pretooluse.sh'",
             "timeout": 5000
           }
         ]

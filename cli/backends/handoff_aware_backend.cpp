@@ -16,8 +16,9 @@
 namespace attractor {
 
 HandoffAwareBackend::HandoffAwareBackend(std::unique_ptr<CodergenBackend> inner,
+                                         std::filesystem::path logs_root,
                                          int max_handoffs)
-    : m_inner{std::move(inner)}, m_max_handoffs{max_handoffs}
+    : m_inner{std::move(inner)}, m_logs_root{std::move(logs_root)}, m_max_handoffs{max_handoffs}
 {
     assert(max_handoffs >= 0);
 }
@@ -26,60 +27,52 @@ auto HandoffAwareBackend::run(const Node& node, const PromptText& prompt,
                                Context& ctx) const
     -> std::expected<LlmResponse, Outcome>
 {
-    auto path_result = compute_handoff_path(derive_session_name(node));
-    if (!path_result) {
-        return std::unexpected(Outcome::fail(DiagnosticMessage{
-            "handoff: cannot create .attractor directory: " + path_result.error()}));
-    }
-    const std::string& handoff_path = *path_result;
-
-    // Clear any stale handoff file from a prior incomplete run before we start
-    { std::error_code ec; std::filesystem::remove(std::filesystem::path(handoff_path), ec); }
-
     PromptText current_prompt = prompt;
 
     for (int attempt = 0; attempt <= m_max_handoffs; ++attempt) {
+        int counter = ctx.next_execution_counter();
+        auto node_log_dir = derive_node_log_dir(m_logs_root, node.id, counter);
+
         auto result = m_inner->run(node, current_prompt, ctx);
 
-        if (!result) {
-            // Inner error: clean up any handoff file the inner backend may have written
-            std::error_code ec;
-            std::filesystem::remove(std::filesystem::path(handoff_path), ec);
-            return result;
+        if (!result) return result;
+
+        const auto handoff_file = node_log_dir / "handoff.md";
+        std::error_code exists_ec;
+        const bool handoff_exists = std::filesystem::exists(handoff_file, exists_ec);
+        if (exists_ec) {
+            return std::unexpected(Outcome::fail(
+                DiagnosticMessage{"handoff: cannot check handoff file: " + exists_ec.message()}));
         }
+        if (!handoff_exists) return result;  // clean completion
 
-        if (!std::filesystem::exists(handoff_path)) return result;  // clean completion
-
-        // Handoff file present -- context ceiling was reached
         if (attempt == m_max_handoffs) {
             return std::unexpected(Outcome::fail(DiagnosticMessage{
-                "handoff: max handoffs (" + std::to_string(m_max_handoffs)
-                + ") exhausted; handoff file: " + handoff_path}));
+                "handoff: max handoffs (" + std::to_string(m_max_handoffs) + ") exhausted"}));
         }
 
-        std::ifstream f(handoff_path);
+        std::ifstream f(handoff_file);
         if (!f.is_open()) {
             return std::unexpected(Outcome::fail(
-                DiagnosticMessage{"handoff: handoff file disappeared: " + handoff_path}));
+                DiagnosticMessage{"handoff: handoff file disappeared: " + handoff_file.string()}));
         }
         std::string content{std::istreambuf_iterator<char>(f), {}};
         const auto first_nonws = content.find_first_not_of(" \t\r\n");
         if (first_nonws == std::string::npos) {
             std::error_code ec;
-            std::filesystem::remove(std::filesystem::path(handoff_path), ec);
+            std::filesystem::remove(handoff_file, ec);
             return std::unexpected(Outcome::fail(
-                DiagnosticMessage{"handoff: handoff file is empty: " + handoff_path}));
+                DiagnosticMessage{"handoff: handoff file is empty: " + handoff_file.string()}));
         }
         content.erase(0, first_nonws);
         content.erase(content.find_last_not_of(" \t\r\n") + 1);
 
-        // Leave the handoff file on disk -- ClaudeCodeTmuxBackend checks for it at the
-        // start of the next run() call to know it must /clear before re-prompting.
-        // For headless, each run() spawns a fresh process so no explicit clear is needed.
+        std::error_code ec;
+        std::filesystem::remove(handoff_file, ec);
+
         current_prompt = PromptText{content};
     }
 
-    // Unreachable: loop exits via return inside
     return std::unexpected(Outcome::fail(DiagnosticMessage{"handoff: internal loop error"}));
 }
 

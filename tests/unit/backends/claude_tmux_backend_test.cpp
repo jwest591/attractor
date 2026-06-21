@@ -16,11 +16,24 @@ using namespace attractor;
 
 namespace {
 
-// NOLINTNEXTLINE(cppcoreguidelines-special-member-functions) -- copy disabled; move not needed for RAII test helper
+// NOLINTNEXTLINE(cppcoreguidelines-special-member-functions)
+struct TmpDir {
+    explicit TmpDir(std::filesystem::path p) : path{std::move(p)} {
+        std::error_code ec;
+        std::filesystem::remove_all(path, ec);
+        std::filesystem::create_directories(path, ec);
+    }
+    TmpDir(const TmpDir&) = delete;
+    TmpDir& operator=(const TmpDir&) = delete;
+    ~TmpDir() noexcept { std::error_code ec; std::filesystem::remove_all(path, ec); }
+    std::filesystem::path path;
+};
+
+// NOLINTNEXTLINE(cppcoreguidelines-special-member-functions)
 struct TmpFile {
     explicit TmpFile(std::filesystem::path p) : path{std::move(p)} {
         std::error_code ec;
-        std::filesystem::remove(path, ec);  // remove stale file from a prior crashed run
+        std::filesystem::remove(path, ec);
     }
     TmpFile(const TmpFile&) = delete;
     TmpFile& operator=(const TmpFile&) = delete;
@@ -37,41 +50,57 @@ void write_script(const std::filesystem::path& p, const std::string& content)
         std::filesystem::perms::owner_write);
 }
 
-}  // namespace
-
-// Session name derived from NodeId{"n1"} with no thread_id: "att-n1"
-// Marker file:   .attractor/att-att-n1-transcript.txt
-// JSONL file:    /tmp/att-att-n1-test.jsonl  (written by mock new-session)
-
-SNITCH_TEST_CASE("[claude_tmux] first run creates session and returns LlmResponse -- 5.3-U-001")
-{
-    auto script = std::filesystem::temp_directory_path() / "att_test_tmux_001.sh";
-    TmpFile g_script{script};
-    TmpFile g_marker{std::filesystem::current_path() / ".attractor" / "att-att-n1-transcript.txt"};
-    TmpFile g_jsonl{std::filesystem::path{"/tmp/att-att-n1-test.jsonl"}};
-
-    write_script(script, R"(#!/bin/sh
+// Mock tmux handler that parses -e ATTRACTOR_NODE_LOG_DIR=<path> from new-window args.
+// Used by success/error tests; timeout tests omit transcript.txt or stop_reason.
+constexpr const char* k_mock_preamble = R"(#!/usr/bin/env bash
+set -u
 case "$1" in
-  has-session) exit 1 ;;
-  new-session)
-    NAME="$4"
-    JSONL="/tmp/att-${NAME}-test.jsonl"
-    touch "$JSONL"
-    printf '%s\n' "$JSONL" > ".attractor/att-${NAME}-transcript.txt"
-    exit 0 ;;
-  send-keys)
-    NAME="$3"
-    JSONL="/tmp/att-${NAME}-test.jsonl"
-    printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"mock response"}],"stop_reason":"end_turn"}}\n' >> "$JSONL"
-    exit 0 ;;
+  new-session) exit 0 ;;
+  kill-session) exit 0 ;;
+  kill-window)  exit 0 ;;
+  send-keys)    exit 0 ;;
+  new-window)
+    shift
+    NDL=""
+    while [ "$#" -gt 0 ]; do
+      if [ "$1" = "-e" ] && [ "$#" -gt 1 ]; then
+        shift
+        case "$1" in
+          ATTRACTOR_NODE_LOG_DIR=*) NDL="${1#ATTRACTOR_NODE_LOG_DIR=}" ;;
+        esac
+      fi
+      shift
+    done
+)";
+constexpr const char* k_mock_suffix = R"(    exit 0
+    ;;
 esac
 exit 1
-)");
+)";
 
-    ClaudeCodeTmuxBackend backend{script.string()};
-    Node node;
+}  // namespace
+
+SNITCH_TEST_CASE("[claude_tmux] single run returns LlmResponse on stop_reason -- 7.19-U-001")
+{
+    auto script = std::filesystem::temp_directory_path() / "att_tmux_7_19_001.sh";
+    TmpFile g_script{script};
+    TmpDir  logs_root{std::filesystem::temp_directory_path() / "att_logs_7_19_001"};
+
+    // new-window: create node_log_dir, write transcript.txt + JSONL with stop_reason
+    write_script(script,
+        std::string{k_mock_preamble} +
+        R"(    if [ -n "$NDL" ]; then
+      mkdir -p "$NDL"
+      printf '%s/transcript.jsonl\n' "$NDL" > "$NDL/transcript.txt"
+      printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"mock response"}],"stop_reason":"end_turn"}}\n' > "$NDL/transcript.jsonl"
+    fi
+)" + k_mock_suffix);
+
+    ClaudeCodeTmuxBackend backend{script.string(), logs_root.path};
+    Node node{};
     node.id = NodeId{"n1"};
     Context ctx;
+    SNITCH_CHECK(ctx.next_execution_counter() == 1);  // simulate HandoffAwareBackend increment
 
     auto result = backend.run(node, PromptText{"hello"}, ctx);
 
@@ -79,294 +108,88 @@ exit 1
     SNITCH_CHECK(type_safe::get(*result) == "mock response");
 }
 
-SNITCH_TEST_CASE("[claude_tmux] second run reuses cached session without new-session call -- 5.3-U-002")
+SNITCH_TEST_CASE("[claude_tmux] SessionStart timeout returns fail -- 7.19-U-002")
 {
-    auto script = std::filesystem::temp_directory_path() / "att_test_tmux_002.sh";
-    auto state  = std::filesystem::temp_directory_path() / "att_test_tmux_002_state.txt";
+    auto script = std::filesystem::temp_directory_path() / "att_tmux_7_19_002.sh";
     TmpFile g_script{script};
-    TmpFile g_state{state};
-    TmpFile g_marker{std::filesystem::current_path() / ".attractor" / "att-att-n1-transcript.txt"};
-    TmpFile g_jsonl{std::filesystem::path{"/tmp/att-att-n1-test.jsonl"}};
+    TmpDir  logs_root{std::filesystem::temp_directory_path() / "att_logs_7_19_002"};
 
-    // Embed state file path so mock can record new-session invocations
+    // new-window: create dir but do NOT write transcript.txt -> polling times out
     write_script(script,
-        "#!/bin/sh\n"
-        "STATE=\"" + state.string() + "\"\n"
-        "case \"$1\" in\n"
-        "  has-session) exit 1 ;;\n"
-        "  new-session)\n"
-        "    NAME=\"$4\"\n"
-        "    JSONL=\"/tmp/att-${NAME}-test.jsonl\"\n"
-        "    touch \"$JSONL\"\n"
-        "    printf '%s\\n' \"$JSONL\" > \".attractor/att-${NAME}-transcript.txt\"\n"
-        "    printf 'new-session\\n' >> \"$STATE\"\n"
-        "    exit 0 ;;\n"
-        "  send-keys)\n"
-        "    NAME=\"$3\"\n"
-        "    JSONL=\"/tmp/att-${NAME}-test.jsonl\"\n"
-        "    printf '{\"type\":\"assistant\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"mock response\"}],\"stop_reason\":\"end_turn\"}}\\n' >> \"$JSONL\"\n"
-        "    exit 0 ;;\n"
-        "esac\n"
-        "exit 1\n");
+        std::string{k_mock_preamble} +
+        R"(    if [ -n "$NDL" ]; then
+      mkdir -p "$NDL"
+    fi
+)" + k_mock_suffix);
 
-    ClaudeCodeTmuxBackend backend{script.string()};
-    Node node;
-    node.id = NodeId{"n1"};
+    ClaudeCodeTmuxBackend backend{script.string(), logs_root.path};
+    Node node{};
+    node.id = NodeId{"n2"};
+    node.timeout = TimeoutDuration{std::chrono::milliseconds{300}};
     Context ctx;
+    SNITCH_CHECK(ctx.next_execution_counter() == 1);
 
-    auto r1 = backend.run(node, PromptText{"first"}, ctx);
-    SNITCH_REQUIRE(r1.has_value());
-
-    auto r2 = backend.run(node, PromptText{"second"}, ctx);
-    SNITCH_REQUIRE(r2.has_value());
-
-    // new-session must have been called exactly once (second run is a cache hit)
-    std::ifstream sf{state.string()};
-    int new_session_calls = 0;
-    std::string line;
-    while (std::getline(sf, line)) { ++new_session_calls; }
-    SNITCH_CHECK(new_session_calls == 1);
-}
-
-SNITCH_TEST_CASE("[claude_tmux] session creation failure returns FAIL outcome -- 5.3-U-003")
-{
-    auto script = std::filesystem::temp_directory_path() / "att_test_tmux_003.sh";
-    TmpFile g_script{script};
-
-    write_script(script, R"(#!/bin/sh
-case "$1" in
-  has-session) exit 1 ;;
-  new-session)  exit 1 ;;
-esac
-exit 1
-)");
-
-    ClaudeCodeTmuxBackend backend{script.string()};
-    Node node;
-    node.id = NodeId{"n1"};
-    Context ctx;
-
-    auto result = backend.run(node, PromptText{"prompt"}, ctx);
+    auto result = backend.run(node, PromptText{"hello"}, ctx);
 
     SNITCH_REQUIRE_FALSE(result.has_value());
     const auto& reason = type_safe::get(result.error().failure_reason);
-    SNITCH_CHECK(reason.find("failed to obtain transcript") != std::string::npos);
-}
-
-SNITCH_TEST_CASE("[claude_tmux] timeout waiting for end_turn returns FAIL outcome -- 5.3-U-004")
-{
-    auto script = std::filesystem::temp_directory_path() / "att_test_tmux_004.sh";
-    TmpFile g_script{script};
-    TmpFile g_marker{std::filesystem::current_path() / ".attractor" / "att-att-n1-transcript.txt"};
-    TmpFile g_jsonl{std::filesystem::path{"/tmp/att-att-n1-test.jsonl"}};
-
-    // send-keys does NOT append an end_turn entry, forcing wait_for_end_turn to time out
-    write_script(script, R"(#!/bin/sh
-case "$1" in
-  has-session) exit 1 ;;
-  new-session)
-    NAME="$4"
-    JSONL="/tmp/att-${NAME}-test.jsonl"
-    touch "$JSONL"
-    printf '%s\n' "$JSONL" > ".attractor/att-${NAME}-transcript.txt"
-    exit 0 ;;
-  send-keys) exit 0 ;;
-esac
-exit 1
-)");
-
-    ClaudeCodeTmuxBackend backend{script.string()};
-    Node node;
-    node.id = NodeId{"n1"};
-    node.timeout = TimeoutDuration{std::chrono::milliseconds{300}};
-    Context ctx;
-
-    auto result = backend.run(node, PromptText{"prompt"}, ctx);
-
-    SNITCH_REQUIRE_FALSE(result.has_value());
-    SNITCH_CHECK(type_safe::get(result.error().failure_reason) == "timeout");
+    SNITCH_CHECK(reason.find("timeout") != std::string::npos);
     SNITCH_CHECK(result.error().status == StageStatus::fail);
 }
 
-SNITCH_TEST_CASE("[claude_tmux] max_tokens response returns FAIL with max_tokens diagnostic -- 5.4-U-001")
+SNITCH_TEST_CASE("[claude_tmux] JSONL error type returns fail -- 7.19-U-003")
 {
-    auto script = std::filesystem::temp_directory_path() / "att_test_tmux_54_001.sh";
+    auto script = std::filesystem::temp_directory_path() / "att_tmux_7_19_003.sh";
     TmpFile g_script{script};
-    TmpFile g_marker{std::filesystem::current_path() / ".attractor" / "att-att-n1-transcript.txt"};
-    TmpFile g_jsonl{std::filesystem::path{"/tmp/att-att-n1-test.jsonl"}};
-    TmpFile g_handoff{std::filesystem::current_path() / ".attractor" / "att-n1-handoff.md"};
+    TmpDir  logs_root{std::filesystem::temp_directory_path() / "att_logs_7_19_003"};
 
-    write_script(script, R"(#!/bin/sh
-case "$1" in
-  has-session) exit 1 ;;
-  new-session)
-    NAME="$4"
-    JSONL="/tmp/att-${NAME}-test.jsonl"
-    touch "$JSONL"
-    printf '%s\n' "$JSONL" > ".attractor/att-${NAME}-transcript.txt"
-    exit 0 ;;
-  send-keys)
-    NAME="$3"
-    JSONL="/tmp/att-${NAME}-test.jsonl"
-    printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"partial"}],"stop_reason":"max_tokens"}}\n' >> "$JSONL"
-    exit 0 ;;
-esac
-exit 1
-)");
-
-    ClaudeCodeTmuxBackend backend{script.string()};
-    Node node;
-    node.id = NodeId{"n1"};
-    node.timeout = TimeoutDuration{std::chrono::milliseconds{500}};
-    Context ctx;
-
-    auto result = backend.run(node, PromptText{"prompt"}, ctx);
-
-    SNITCH_REQUIRE_FALSE(result.has_value());
-    const auto& reason = type_safe::get(result.error().failure_reason);
-    SNITCH_CHECK(reason.find("max_tokens") != std::string::npos);
-}
-
-SNITCH_TEST_CASE("[claude_tmux] rate_limit_error exhausts retries and returns FAIL -- 5.4-U-002")
-{
-    // The mock writes a local_command event with a past date when /usage is sent so
-    // parse_reset_duration returns 0s; the node timeout is shorter than the 5s sleep
-    // buffer so no actual sleep occurs between retries.
-    auto script = std::filesystem::temp_directory_path() / "att_test_tmux_54_002.sh";
-    TmpFile g_script{script};
-    TmpFile g_marker{std::filesystem::current_path() / ".attractor" / "att-att-n1-transcript.txt"};
-    TmpFile g_jsonl{std::filesystem::path{"/tmp/att-att-n1-test.jsonl"}};
-    TmpFile g_handoff{std::filesystem::current_path() / ".attractor" / "att-n1-handoff.md"};
-
-    write_script(script, R"(#!/bin/sh
-case "$1" in
-  has-session) exit 1 ;;
-  new-session)
-    NAME="$4"
-    JSONL="/tmp/att-${NAME}-test.jsonl"
-    touch "$JSONL"
-    printf '%s\n' "$JSONL" > ".attractor/att-${NAME}-transcript.txt"
-    exit 0 ;;
-  send-keys)
-    NAME="$3"
-    JSONL="/tmp/att-${NAME}-test.jsonl"
-    if [ "$5" = "/usage" ]; then
-      printf '{"type":"system","subtype":"local_command","content":"<local-command-stdout>Current session: 99%% used - resets 2000-01-01 00:00:00 (UTC)</local-command-stdout>"}\n' >> "$JSONL"
-    else
-      printf '{"type":"error","error":{"type":"rate_limit_error","message":"Too Many Requests"}}\n' >> "$JSONL"
+    // new-window: write transcript.txt + JSONL with "type":"error"
+    write_script(script,
+        std::string{k_mock_preamble} +
+        R"(    if [ -n "$NDL" ]; then
+      mkdir -p "$NDL"
+      printf '%s/transcript.jsonl\n' "$NDL" > "$NDL/transcript.txt"
+      printf '{"type":"error","error":{"type":"api_error","message":"internal server error"}}\n' > "$NDL/transcript.jsonl"
     fi
-    exit 0 ;;
-esac
-exit 1
-)");
+)" + k_mock_suffix);
 
-    ClaudeCodeTmuxBackend backend{script.string()};
-    Node node;
-    node.id = NodeId{"n1"};
-    node.timeout = TimeoutDuration{std::chrono::milliseconds{2000}};
+    ClaudeCodeTmuxBackend backend{script.string(), logs_root.path};
+    Node node{};
+    node.id = NodeId{"n3"};
     Context ctx;
-
-    auto result = backend.run(node, PromptText{"prompt"}, ctx);
-
-    SNITCH_REQUIRE_FALSE(result.has_value());
-    const auto& reason = type_safe::get(result.error().failure_reason);
-    SNITCH_CHECK(reason.find("rate_limit_error") != std::string::npos);
-}
-
-SNITCH_TEST_CASE("[claude_tmux] end_turn with input_tokens does not corrupt happy path -- 5.4-U-003")
-{
-    auto script = std::filesystem::temp_directory_path() / "att_test_tmux_54_003.sh";
-    TmpFile g_script{script};
-    TmpFile g_marker{std::filesystem::current_path() / ".attractor" / "att-att-n1-transcript.txt"};
-    TmpFile g_jsonl{std::filesystem::path{"/tmp/att-att-n1-test.jsonl"}};
-    TmpFile g_handoff{std::filesystem::current_path() / ".attractor" / "att-n1-handoff.md"};
-
-    write_script(script, R"(#!/bin/sh
-case "$1" in
-  has-session) exit 1 ;;
-  new-session)
-    NAME="$4"
-    JSONL="/tmp/att-${NAME}-test.jsonl"
-    touch "$JSONL"
-    printf '%s\n' "$JSONL" > ".attractor/att-${NAME}-transcript.txt"
-    exit 0 ;;
-  send-keys)
-    NAME="$3"
-    JSONL="/tmp/att-${NAME}-test.jsonl"
-    printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"mock response"}],"stop_reason":"end_turn","usage":{"input_tokens":42}}}\n' >> "$JSONL"
-    exit 0 ;;
-esac
-exit 1
-)");
-
-    ClaudeCodeTmuxBackend backend{script.string()};
-    Node node;
-    node.id = NodeId{"n1"};
-    Context ctx;
+    SNITCH_CHECK(ctx.next_execution_counter() == 1);
 
     auto result = backend.run(node, PromptText{"hello"}, ctx);
 
-    SNITCH_REQUIRE(result.has_value());
-    SNITCH_CHECK(type_safe::get(*result) == "mock response");
+    SNITCH_REQUIRE_FALSE(result.has_value());
+    SNITCH_CHECK(result.error().status == StageStatus::fail);
 }
 
-SNITCH_TEST_CASE("[claude_tmux] pre-existing handoff file triggers /clear then returns response -- 5.5-U-T-001")
+SNITCH_TEST_CASE("[claude_tmux] node.timeout deadline returns fail -- 7.19-U-004")
 {
-    // Session "att-n1" already exists (has-session exits 0).
-    // Handoff file is pre-created to trigger the detection block in run().
-    // Mock script: on send-keys /clear -> record clear in STATE, write new JSONL and marker
-    //              on send-keys <prompt> -> append end_turn to transcript from marker
-
-    auto script = std::filesystem::temp_directory_path() / "att_test_tmux_55_t001.sh";
-    auto state  = std::filesystem::temp_directory_path() / "att_test_tmux_55_t001_state.txt";
+    auto script = std::filesystem::temp_directory_path() / "att_tmux_7_19_004.sh";
     TmpFile g_script{script};
-    TmpFile g_state{state};
-    TmpFile g_marker{std::filesystem::current_path() / ".attractor" / "att-att-n1-transcript.txt"};
-    TmpFile g_jsonl{std::filesystem::path{"/tmp/att-att-n1-55t001.jsonl"}};
-    TmpFile g_handoff{std::filesystem::current_path() / ".attractor" / "att-n1-handoff.md"};
+    TmpDir  logs_root{std::filesystem::temp_directory_path() / "att_logs_7_19_004"};
 
-    std::filesystem::create_directories(std::filesystem::current_path() / ".attractor");
-    { std::ofstream f{g_handoff.path}; f << "continue from handoff"; }
-
+    // new-window: write transcript.txt + JSONL but never include stop_reason
     write_script(script,
-        "#!/bin/sh\n"
-        "STATE=\"" + state.string() + "\"\n"
-        "JSONL2=\"/tmp/att-att-n1-55t001.jsonl\"\n"
-        "MARKER=\".attractor/att-att-n1-transcript.txt\"\n"
-        "case \"$1\" in\n"
-        "  has-session) exit 0 ;;\n"
-        "  send-keys)\n"
-        "    if [ \"$5\" = \"/clear\" ]; then\n"
-        "      printf 'clear_sent\\n' >> \"$STATE\"\n"
-        "      touch \"$JSONL2\"\n"
-        "      printf '%s\\n' \"$JSONL2\" > \"$MARKER\"\n"
-        "    else\n"
-        "      TRANSCRIPT=$(cat \"$MARKER\" 2>/dev/null)\n"
-        "      if [ -n \"$TRANSCRIPT\" ]; then\n"
-        "        printf '{\"type\":\"assistant\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"mock response\"}],\"stop_reason\":\"end_turn\",\"usage\":{\"input_tokens\":0}}}\\n' >> \"$TRANSCRIPT\"\n"
-        "      fi\n"
-        "    fi\n"
-        "    exit 0 ;;\n"
-        "  *) exit 0 ;;\n"
-        "esac\n");
+        std::string{k_mock_preamble} +
+        R"(    if [ -n "$NDL" ]; then
+      mkdir -p "$NDL"
+      printf '%s/transcript.jsonl\n' "$NDL" > "$NDL/transcript.txt"
+      printf '{"type":"system","subtype":"init","session_id":"abc"}\n' > "$NDL/transcript.jsonl"
+    fi
+)" + k_mock_suffix);
 
-    ClaudeCodeTmuxBackend backend{script.string()};
-    Node node;
-    node.id = NodeId{"n1"};
+    ClaudeCodeTmuxBackend backend{script.string(), logs_root.path};
+    Node node{};
+    node.id = NodeId{"n4"};
+    node.timeout = TimeoutDuration{std::chrono::milliseconds{300}};
     Context ctx;
+    SNITCH_CHECK(ctx.next_execution_counter() == 1);
 
-    auto result = backend.run(node, PromptText{"continue from handoff"}, ctx);
+    auto result = backend.run(node, PromptText{"hello"}, ctx);
 
-    SNITCH_REQUIRE(result.has_value());
-    SNITCH_CHECK(type_safe::get(*result) == "mock response");
-    SNITCH_CHECK_FALSE(std::filesystem::exists(g_handoff.path));
-
-    // Verify /clear was explicitly sent to the tmux session
-    std::ifstream sf{state};
-    const std::string state_contents{std::istreambuf_iterator<char>(sf), {}};
-    SNITCH_CHECK(state_contents.find("clear_sent") != std::string::npos);
-
-    // m_sessions updated to new transcript path is verified indirectly: if the wrong
-    // path were used, send-keys for the actual prompt would append to the missing JSONL
-    // and result.has_value() above would fail.
+    SNITCH_REQUIRE_FALSE(result.has_value());
+    SNITCH_CHECK(result.error().status == StageStatus::fail);
 }

@@ -131,7 +131,7 @@ struct SubprocessResult {
 
 [[nodiscard]] auto run_subprocess(const std::string& exe, const std::string& prompt,
                                   std::optional<std::chrono::milliseconds> timeout,
-                                  const std::string& handoff_path)
+                                  const std::string& node_log_dir_str)
     -> SubprocessResult
 {
     UniqueFd stdin_r, stdin_w;
@@ -201,7 +201,7 @@ struct SubprocessResult {
         }
 
         // NOLINTNEXTLINE(concurrency-mt-unsafe) -- child process only
-        setenv("CLAUDE_HANDOFF_FILE", handoff_path.c_str(), 1);
+        setenv("ATTRACTOR_NODE_LOG_DIR", node_log_dir_str.c_str(), 1);
 
         // DEFERRED(async-signal-safe): std::string heap alloc post-fork is async-signal-unsafe in a multi-threaded parent; move to pre-fork to fix
         const std::string scripts_dir{ATTRACTOR_CLI_SCRIPTS_DIR};
@@ -348,8 +348,13 @@ ClaudeCodeHeadlessBackend::ClaudeCodeHeadlessBackend(std::string claude_exe)
     : m_claude_exe{std::move(claude_exe)}
 {}
 
+ClaudeCodeHeadlessBackend::ClaudeCodeHeadlessBackend(std::filesystem::path logs_root,
+                                                     std::string claude_exe)
+    : m_claude_exe{std::move(claude_exe)}, m_logs_root{std::move(logs_root)}
+{}
+
 auto ClaudeCodeHeadlessBackend::run(const Node& node, const PromptText& prompt,
-                                     Context& /*ctx*/) const
+                                     Context& ctx) const
     -> std::expected<LlmResponse, Outcome>
 {
     std::optional<std::chrono::milliseconds> timeout_ms;
@@ -359,19 +364,22 @@ auto ClaudeCodeHeadlessBackend::run(const Node& node, const PromptText& prompt,
         deadline = std::chrono::steady_clock::now() + *timeout_ms;
     }
 
-    const std::string session_name = derive_session_name(node);
-    auto handoff_path_result = compute_handoff_path(session_name);
-    if (!handoff_path_result) {
-        return std::unexpected(Outcome::fail(DiagnosticMessage{
-            "headless: cannot create .attractor directory: " + handoff_path_result.error()}));
+    const auto node_log_dir = derive_node_log_dir(m_logs_root, node.id,
+                                                   ctx.current_execution_counter());
+    {
+        std::error_code ec;
+        std::filesystem::create_directories(node_log_dir, ec);
+        if (ec) {
+            return std::unexpected(Outcome::fail(
+                DiagnosticMessage{"headless: cannot create node_log_dir: " + ec.message()}));
+        }
     }
-    const std::string& handoff_path = *handoff_path_result;
-    { std::error_code ec; std::filesystem::remove(std::filesystem::path(handoff_path), ec); }
+    const std::string node_log_dir_str = node_log_dir.string();
 
     constexpr int k_max_retries = 3;
     for (int attempt = 0; attempt <= k_max_retries; ++attempt) {
         auto result = run_subprocess(m_claude_exe, type_safe::get(prompt),
-                                     timeout_ms, handoff_path);
+                                     timeout_ms, node_log_dir_str);
 
         if (result.timed_out) {
             return std::unexpected(Outcome::fail(DiagnosticMessage{"timeout"}));

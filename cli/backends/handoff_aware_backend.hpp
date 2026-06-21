@@ -3,6 +3,7 @@
 
 #include <attractor/handler.hpp>
 #include <expected>
+#include <filesystem>
 #include <memory>
 
 namespace attractor {
@@ -12,6 +13,7 @@ class HandoffAwareBackend final : public CodergenBackend {
     static constexpr int k_default_max_handoffs = 3;
 
     explicit HandoffAwareBackend(std::unique_ptr<CodergenBackend> inner,
+                                 std::filesystem::path logs_root,
                                  int max_handoffs = k_default_max_handoffs);
 
     [[nodiscard]] auto run(const Node& node, const PromptText& prompt,
@@ -19,6 +21,7 @@ class HandoffAwareBackend final : public CodergenBackend {
 
   private:
     std::unique_ptr<CodergenBackend> m_inner;
+    std::filesystem::path m_logs_root;
     int m_max_handoffs;
 };
 

@@ -1,18 +1,23 @@
 #!/usr/bin/env bash
-# att-status-line.sh -- statusLine command for ClaudeCodeTmuxBackend.
-# Updates the shared ctx-usage file and outputs a one-line status.
+# statusLine hook for ClaudeCodeTmuxBackend.
+# Writes compact context-usage JSON to $ATTRACTOR_NODE_LOG_DIR/ctx-usage.json (atomic).
+# Always prints a one-line status string to stdout for the status bar.
 set -u
 
-HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INPUT="$(cat)"
 
-# Update the shared usage file (discards the echoed JSON).
-printf '%s' "$INPUT" | "$HOOK_DIR/ctx-usage.sh" update >/dev/null
+pct=$(printf '%s' "$INPUT" | jq -r '.context_window.percent // 0' 2>/dev/null || echo 0)
+total=$(printf '%s' "$INPUT" | jq -r '.context_window.current_usage.input_tokens // 0' 2>/dev/null || echo 0)
+window=$(printf '%s' "$INPUT" | jq -r '.context_window.context_window_size // 0' 2>/dev/null || echo 0)
 
-# Extract percent for the visible status line.
-sid=$(printf '%s' "$INPUT" | jq -r '.session_id // "unknown"')
-usage_file="${CLAUDE_STATE_DIR:-${CLAUDE_PROJECT_DIR:-$PWD}/.claude-session}/ctx-usage-${sid}.json"
-pct=0
-[ -f "$usage_file" ] && pct=$(jq -r '.percent // 0' "$usage_file" 2>/dev/null || echo 0)
+pct=${pct:-0}
+[ "$pct" = "null" ] && pct=0
+
+if [ -n "${ATTRACTOR_NODE_LOG_DIR:-}" ]; then
+    tmp="$ATTRACTOR_NODE_LOG_DIR/ctx-usage.json.tmp"
+    dest="$ATTRACTOR_NODE_LOG_DIR/ctx-usage.json"
+    printf '{"percent":%s,"total_tokens":%s,"context_window":%s}\n' "$pct" "$total" "$window" > "$tmp"
+    mv "$tmp" "$dest"
+fi
 
 printf "attractor | ctx: %d%%\n" "$pct"

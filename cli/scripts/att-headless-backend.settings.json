@@ -2,16 +2,11 @@
   "_comment": "Settings for ClaudeCodeHeadlessBackend. Do NOT add a $schema field (breaks hook registration on v2.1.114+).",
   "skipDangerousModePermissionPrompt": true,
   "hooks": {
-    "SessionStart": [
+    "statusLine": [
       {
-        "matcher": "startup",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/ctx-usage.sh init'",
-            "timeout": 5000
-          }
-        ]
+        "type": "command",
+        "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/att-status-line.sh'",
+        "timeout": 5000
       }
     ],
     "PreToolUse": [
@@ -20,7 +15,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "sh -c 'CLAUDE_CONTEXT_CRITICAL=85 $CLAUDE_PROJECT_DIR/cli/scripts/context-ceiling.sh'",
+            "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/att-pretooluse.sh'",
             "timeout": 5000
           }
         ]

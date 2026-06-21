@@ -201,11 +201,13 @@ int main(int argc, char* argv[])
     std::unique_ptr<CodergenBackend> backend_ptr;
     if (backend == "claude-headless") {
         backend_ptr = std::make_unique<HandoffAwareBackend>(
-            std::make_unique<ClaudeCodeHeadlessBackend>());
+            std::make_unique<ClaudeCodeHeadlessBackend>(std::filesystem::path{logs_root_str}),
+            std::filesystem::path{logs_root_str});
     }
     else if (backend == "claude-tmux") {
         backend_ptr = std::make_unique<HandoffAwareBackend>(
-            std::make_unique<ClaudeCodeTmuxBackend>());
+            std::make_unique<ClaudeCodeTmuxBackend>("tmux", std::filesystem::path{logs_root_str}),
+            std::filesystem::path{logs_root_str});
     }
     else {
         backend_ptr = std::make_unique<NoOpBackend>();
