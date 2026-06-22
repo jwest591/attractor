@@ -7,6 +7,7 @@
 #include <attractor/types.hpp>
 #include <nlohmann/json.hpp>
 #include <algorithm>
+#include <cctype>
 #include <string>
 #include <vector>
 
@@ -16,16 +17,18 @@ namespace {
 
 auto parse_accelerator_key(const std::string& label) -> std::string
 {
-    if (label.size() >= 3 && label[0] == '[' && label[2] == ']') {
+    if (label.size() >= 3 && label[0] == '[' && label[2] == ']'
+            && std::isprint(static_cast<unsigned char>(label[1])))
         return std::string(1, label[1]);
-    }
-    if (label.size() >= 2 && label[1] == ')') {
+    if (label.size() >= 2 && label[1] == ')'
+            && std::isprint(static_cast<unsigned char>(label[0])))
         return std::string(1, label[0]);
-    }
-    if (label.size() >= 3 && label[1] == ' ' && label[2] == '-') {
+    if (label.size() >= 3 && label[1] == ' ' && label[2] == '-'
+            && std::isprint(static_cast<unsigned char>(label[0])))
         return std::string(1, label[0]);
-    }
-    return label.empty() ? "" : std::string(1, label[0]);
+    if (!label.empty() && std::isprint(static_cast<unsigned char>(label[0])))
+        return std::string(1, label[0]);
+    return "";
 }
 
 }  // namespace
@@ -83,6 +86,9 @@ auto WaitForHumanHandler::execute(const Node& node, Context& /*ctx*/, const Grap
         return Outcome::fail(DiagnosticMessage{"human skipped interaction"});
     }
 
+    if (answer.kind == AnswerKind::yes) { answer.text = "Y"; }
+    else if (answer.kind == AnswerKind::no) { answer.text = "N"; }
+
     std::string answer_upper = answer.text;
     std::transform(answer_upper.begin(), answer_upper.end(), answer_upper.begin(),
                    [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
@@ -92,7 +98,7 @@ auto WaitForHumanHandler::execute(const Node& node, Context& /*ctx*/, const Grap
         std::string key_upper = options[i].key;
         std::transform(key_upper.begin(), key_upper.end(), key_upper.begin(),
                        [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
-        if (key_upper == answer_upper) {
+        if (!key_upper.empty() && key_upper == answer_upper) {
             matched = outgoing[i];
             break;
         }

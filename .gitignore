@@ -1,6 +1,7 @@
 build/
 vcpkg_installed/
 .cache/
+.attractor/
 *.swp
 *.swo
 .DS_Store

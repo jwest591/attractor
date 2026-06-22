@@ -340,7 +340,7 @@ void to_json(nlohmann::json& j, AnswerKind v)
             return;
         }
     }
-    j = nullptr;
+    j = "unknown";
 }
 
 void from_json(const nlohmann::json& j, AnswerKind& v)

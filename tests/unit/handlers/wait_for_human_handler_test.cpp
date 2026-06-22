@@ -219,3 +219,71 @@ SNITCH_TEST_CASE("[wait_for_human_handler] unrecognised key selects first choice
     SNITCH_CHECK(outcome.status == StageStatus::success);
     SNITCH_CHECK(outcome.preferred_label == EdgeLabel{"[A] Approve"});
 }
+
+SNITCH_TEST_CASE("[wait_for_human_handler] AnswerKind::yes routes to Y-keyed edge -- 7.5-U-006")
+{
+    TempLogsDir logs;
+    QueueInterviewer qi;
+    qi.push(Answer{.kind = AnswerKind::yes});
+    WaitForHumanHandler h{qi};
+    Context ctx;
+    auto g    = make_single_edge_graph("gate", "yes", "[Y] Yes");
+    auto gate = make_gate_node("gate");
+
+    auto outcome = h.execute(gate, ctx, g, logs.logs_root());
+
+    SNITCH_CHECK(outcome.status == StageStatus::success);
+    SNITCH_CHECK(outcome.preferred_label == EdgeLabel{"[Y] Yes"});
+}
+
+SNITCH_TEST_CASE("[wait_for_human_handler] AnswerKind::no routes to N-keyed edge -- 7.5-U-007")
+{
+    TempLogsDir logs;
+    QueueInterviewer qi;
+    qi.push(Answer{.kind = AnswerKind::no});
+    WaitForHumanHandler h{qi};
+    Context ctx;
+    Graph g;
+    Edge e1;
+    e1.from  = NodeId{"gate"};
+    e1.to    = NodeId{"no_branch"};
+    e1.label = EdgeLabel{"[N] No"};
+    Edge e2;
+    e2.from  = NodeId{"gate"};
+    e2.to    = NodeId{"yes_branch"};
+    e2.label = EdgeLabel{"[Y] Yes"};
+    g.edges.push_back(e1);
+    g.edges.push_back(e2);
+    auto gate = make_gate_node("gate");
+
+    auto outcome = h.execute(gate, ctx, g, logs.logs_root());
+
+    SNITCH_CHECK(outcome.status == StageStatus::success);
+    SNITCH_CHECK(outcome.preferred_label == EdgeLabel{"[N] No"});
+}
+
+SNITCH_TEST_CASE("[wait_for_human_handler] non-printable accelerator in [X] pattern not matched -- 7.5-U-008")
+{
+    TempLogsDir logs;
+    QueueInterviewer qi;
+    qi.push(Answer{.kind = AnswerKind::text, .text = "\x01"});
+    WaitForHumanHandler h{qi};
+    Context ctx;
+    Graph g;
+    Edge e1;
+    e1.from  = NodeId{"gate"};
+    e1.to    = NodeId{"approve"};
+    e1.label = EdgeLabel{"[A] Approve"};
+    Edge e2;
+    e2.from  = NodeId{"gate"};
+    e2.to    = NodeId{"bad"};
+    e2.label = EdgeLabel{"[\x01] bad"};
+    g.edges.push_back(e1);
+    g.edges.push_back(e2);
+    auto gate = make_gate_node("gate");
+
+    auto outcome = h.execute(gate, ctx, g, logs.logs_root());
+
+    SNITCH_CHECK(outcome.status == StageStatus::success);
+    SNITCH_CHECK(outcome.preferred_label == EdgeLabel{"[A] Approve"});
+}

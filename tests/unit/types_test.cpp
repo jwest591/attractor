@@ -358,3 +358,11 @@ SNITCH_TEST_CASE("[types] TimeoutDuration from_json zero value throws")
     TimeoutDuration v{milliseconds{1}};
     SNITCH_CHECK_THROWS_AS(from_json(j, v), nlohmann::json::exception);
 }
+
+SNITCH_TEST_CASE("[types] AnswerKind to_json unknown enumerator emits unknown -- 7.5-U-009")
+{
+    using namespace attractor;
+    nlohmann::json j;
+    to_json(j, static_cast<AnswerKind>(999));
+    SNITCH_CHECK(j == "unknown");
+}

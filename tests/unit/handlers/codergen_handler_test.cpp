@@ -262,3 +262,20 @@ SNITCH_TEST_CASE("[codergen_handler] node.id with path separator returns Outcome
     SNITCH_CHECK(outcome.status == StageStatus::fail);
     SNITCH_CHECK(!type_safe::get(outcome.failure_reason).empty());
 }
+
+SNITCH_TEST_CASE("[codergen_handler] empty prompt and empty label returns Outcome::fail -- 7.7-U-006")
+{
+    ScopedTempDir tmp;
+    CodergenHandler h{nullptr};
+    Context ctx;
+    Graph g;
+    Node n;
+    n.id    = NodeId{"empty_node"};
+    n.shape = NodeShape::box;
+    LogsRoot lr{tmp.path.string()};
+
+    auto outcome = h.execute(n, ctx, g, lr);
+
+    SNITCH_CHECK(outcome.status == StageStatus::fail);
+    SNITCH_CHECK(!type_safe::get(outcome.failure_reason).empty());
+}

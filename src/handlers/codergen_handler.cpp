@@ -61,6 +61,11 @@ auto CodergenHandler::execute(const Node& node, Context& ctx, const Graph& graph
 
     prompt_str = expand_goal(std::move(prompt_str), graph.goal);
 
+    if (prompt_str.empty()) {
+        return Outcome::fail(DiagnosticMessage{
+            "codergen node '" + id_str + "' has no prompt and no label"});
+    }
+
     const auto stage_dir = std::filesystem::path(type_safe::get(logs_root)) / id_str;
     std::error_code ec;
     std::filesystem::create_directories(stage_dir, ec);

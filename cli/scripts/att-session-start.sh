@@ -28,3 +28,23 @@ mkdir -p "$ATTRACTOR_NODE_LOG_DIR" || exit 1
 # Write atomically: crash between create and write would leave an empty file that blocks re-runs
 printf '%s\n' "$transcript_path" > "${target}.tmp"
 mv "${target}.tmp" "$target"
+
+
+read -r -d '' REMINDER <<EOF || true
+<system-reminder>
+This session is not monitored by the user and they cannot respond to questions.
+Complete your task without attempting to interact with the user.
+
+Context ceiling is also enforced by a separate PreToolUse hook. If you cross
+the hard critical threshold (default 90%), all tool calls will be denied — at
+that point write a handoff summary following the hook prompt instructions and stop, 
+do not retry.
+</system-reminder>
+EOF
+
+jq -n --arg ctx "$REMINDER" '{
+  hookSpecificOutput: {
+    hookEventName: "SessionStart",
+    additionalContext: $ctx
+  }
+}'

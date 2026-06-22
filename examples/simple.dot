@@ -48,6 +48,12 @@ digraph Simple {
         class = "fast"
     ]
 
+    approval [
+        shape = hexagon,
+        label = "human confirm file exists",
+        type = "wait.human"
+    ]
+
     validate [
         shape        = parallelogram,
         label        = "Validate",
@@ -60,7 +66,9 @@ digraph Simple {
 
     // Chained edge: A -> B -> C expands to A->B and B->C; attributes apply
     // to every hop.  Here both edges are unconditional (weight=0, no label).
-    start -> implement -> validate
+    start -> implement -> approval 
+    approval -> validate [label = "[Y] yes"]
+    approval -> implement [label = "[N] no"]
     validate -> implement [condition="outcome=fail"]
     validate -> done [condition="outcome=success"]
 }

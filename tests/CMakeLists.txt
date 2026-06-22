@@ -74,6 +74,7 @@ add_executable(attractor_cli_tests
     ../cli/backends/handoff_aware_backend.cpp
     unit/backends/backend_utils_transcript_test.cpp
     unit/backends/att_session_start_test.cpp
+    unit/backends/cli_main_test.cpp
 )
 
 target_link_libraries(attractor_cli_tests

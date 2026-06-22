@@ -50,7 +50,7 @@ fi
 
 # If handoff.md already exists: halt the session
 if [ -f "$handoff" ]; then
-    printf '{"continue":false}\n'
+    printf '{"continue":false, "stopReason":"Attempting to continue tool use after writing handoff file"}\n'
     exit 0
 fi
 
@@ -59,7 +59,7 @@ fi
 printf '' > "$NDL/handoff.tmp"
 mv "$NDL/handoff.tmp" "$handoff"
 
-reason="Context ceiling (${pct}%). Write your handoff summary to $handoff then end your turn."
+reason="Context ceiling reached (${pct}% >= ${CRITICAL}%). Stop work now: write your handoff summary to $handoff describing (1) what was accomplished, (2) what remains, (3) the next concrete step, then end your turn.  With the exception of Write/Edit to $handoff all further tool calls are denied for the rest of this session. Do not retry tool calls."
 jq -n --arg r "$reason" '{
   hookSpecificOutput: {
     hookEventName: "PreToolUse",

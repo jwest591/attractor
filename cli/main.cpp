@@ -7,92 +7,18 @@
 #include "backends/claude_headless_backend.hpp"
 #include "backends/claude_tmux_backend.hpp"
 #include "backends/handoff_aware_backend.hpp"
-
-#include <unistd.h>
+#include "cli_utils.hpp"
 
 #include <CLI/CLI.hpp>
 
-#include <chrono>
-#include <ctime>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
-#include <nlohmann/json.hpp>
 #include <sstream>
 #include <string>
 #include <type_safe/strong_typedef.hpp>
-#include <variant>
 
 using namespace attractor;
-
-namespace {
-
-void render_event(const Event& event)
-{
-    std::visit(
-        [](auto&& ev) {
-            using T = std::decay_t<decltype(ev)>;
-            if constexpr (std::is_same_v<T, StageStarted>) {
-                std::cout << "[stage " << (ev.index + 1) << "] started: "
-                          << type_safe::get(ev.id) << "\n";
-            }
-            else if constexpr (std::is_same_v<T, StageCompleted>) {
-                std::cout << "[stage " << (ev.index + 1) << "] completed: "
-                          << type_safe::get(ev.id) << "\n";
-            }
-            else {
-                static_assert(std::is_same_v<T, void>,
-                    "render_event: unhandled Event variant -- update this visitor");
-            }
-        },
-        event);
-}
-
-[[nodiscard]] std::string generate_run_id()
-{
-    const auto now = std::chrono::system_clock::now();
-    const auto tt  = std::chrono::system_clock::to_time_t(now);
-    char buf[32]{};
-    // NOLINTNEXTLINE(concurrency-mt-unsafe)
-    auto* const tm_ptr = std::gmtime(&tt);
-    if (tm_ptr != nullptr) {
-        std::strftime(buf, sizeof(buf), "%Y%m%dT%H%M%SZ", tm_ptr);
-    }
-    return std::string{buf} + "-" + std::to_string(static_cast<unsigned>(::getpid()));
-}
-
-bool write_manifest(const std::string& logs_root_str, const std::string& run_id, const Graph& graph)
-{
-    namespace fs = std::filesystem;
-    const fs::path dir{logs_root_str};
-    std::error_code ec;
-    fs::create_directories(dir, ec);
-    if (ec) {
-        return false;
-    }
-    std::ofstream f{dir / "manifest.json"};
-    if (!f) {
-        return false;
-    }
-    nlohmann::json j;
-    j["run_id"]     = run_id;
-    j["graph_id"]   = type_safe::get(graph.digraph_id);
-    j["node_count"] = static_cast<int>(graph.nodes.size());
-    j["edge_count"] = static_cast<int>(graph.edges.size());
-    const auto now  = std::chrono::system_clock::now();
-    const auto tt   = std::chrono::system_clock::to_time_t(now);
-    char buf[32]{};
-    // NOLINTNEXTLINE(concurrency-mt-unsafe)
-    auto* const tm_ptr = std::gmtime(&tt);
-    if (tm_ptr != nullptr) {
-        std::strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", tm_ptr);
-    }
-    j["run_started"] = buf;
-    f << j.dump(2) << "\n";
-    return true;
-}
-
-}  // namespace
 
 int main(int argc, char* argv[])
 {
@@ -112,7 +38,7 @@ int main(int argc, char* argv[])
     bool resume_run{false};
     run->add_flag("--resume", resume_run, "Resume from checkpoint.json in logs-root");
 
-    std::string logs_root_str{"./logs"};
+    std::string logs_root_str{".attractor"};
     run->add_option("--logs-root", logs_root_str, "Base directory for run artifacts");
 
     CLI11_PARSE(app, argc, argv);
@@ -155,9 +81,13 @@ int main(int argc, char* argv[])
         std::cerr << "error: cannot open file: " << dot_file << "\n";
         return 1;
     }
-    std::ostringstream buf;
-    buf << file_stream.rdbuf();
-    const std::string source = buf.str();
+    std::ostringstream oss;
+    oss << file_stream.rdbuf();
+    if (file_stream.bad()) {
+        std::cerr << "error: I/O error while reading: " << dot_file << "\n";
+        return 1;
+    }
+    const std::string source = oss.str();
 
     // Parse
     auto parse_result = parse_graph(source);
@@ -217,12 +147,22 @@ int main(int argc, char* argv[])
     const RunConfig config{.logs_root = LogsRoot{logs_root_str}, .resume = resume_run};
     const auto outcome = engine.run(graph, config);
 
-    if (outcome.status != StageStatus::success) {
-        const auto reason = type_safe::get(outcome.failure_reason);
-        if (!reason.empty()) {
-            std::cerr << "pipeline failed: " << reason << "\n";
+    // Exit code mapping: 0 = success, 2 = partial_success, 1 = all other failures
+    switch (outcome.status) {
+        case StageStatus::success:
+            return 0;
+        case StageStatus::partial_success:
+            // 2 = pipeline completed with partial results (some branches skipped/degraded)
+            return 2;
+        case StageStatus::fail:
+        case StageStatus::retry:
+        case StageStatus::skipped: {
+            const auto reason = type_safe::get(outcome.failure_reason);
+            if (!reason.empty()) {
+                std::cerr << "pipeline failed: " << reason << "\n";
+            }
+            return 1;
         }
-        return 1;
     }
-    return 0;
+    return 1;
 }

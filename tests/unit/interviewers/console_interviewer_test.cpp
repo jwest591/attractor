@@ -137,3 +137,63 @@ SNITCH_TEST_CASE("[console_interviewer] FREEFORM EOF returns skipped -- 3.3-U-01
     const Answer answer = ci.ask(q);
     SNITCH_CHECK(answer.kind == AnswerKind::skipped);
 }
+
+SNITCH_TEST_CASE("[console_interviewer] MULTIPLE_CHOICE empty options returns skipped -- 7.5-U-001")
+{
+    std::istringstream in{""};
+    std::ostringstream out;
+    ConsoleInterviewer ci{in, out};
+    const Question q{.text = "Choose", .type = QuestionType::multiple_choice, .options = {}};
+    const Answer answer = ci.ask(q);
+    SNITCH_CHECK(answer.kind == AnswerKind::skipped);
+    SNITCH_CHECK(out.str().empty());
+}
+
+SNITCH_TEST_CASE("[console_interviewer] MULTIPLE_CHOICE default_answer used on empty input -- 7.5-U-002")
+{
+    std::istringstream in{"\n"};
+    std::ostringstream out;
+    ConsoleInterviewer ci{in, out};
+    const Question q{
+        .text = "Choose action",
+        .type = QuestionType::multiple_choice,
+        .options = {Option{.key = "A", .label = "[A] Approve"}, Option{.key = "F", .label = "[F] Fix"}},
+        .default_answer = "F",
+    };
+    const Answer answer = ci.ask(q);
+    SNITCH_CHECK(answer.kind == AnswerKind::text);
+    SNITCH_CHECK(answer.text == "F");
+    SNITCH_REQUIRE(answer.selected_option.has_value());
+    SNITCH_CHECK(answer.selected_option->key == "F");
+}
+
+SNITCH_TEST_CASE("[console_interviewer] YES_NO default_answer Y on empty input returns yes -- 7.5-U-003")
+{
+    std::istringstream in{"\n"};
+    std::ostringstream out;
+    ConsoleInterviewer ci{in, out};
+    const Question q{.text = "Proceed?", .type = QuestionType::yes_no, .default_answer = "Y"};
+    const Answer answer = ci.ask(q);
+    SNITCH_CHECK(answer.kind == AnswerKind::yes);
+}
+
+SNITCH_TEST_CASE("[console_interviewer] YES_NO default_answer N on empty input returns no -- 7.5-U-004")
+{
+    std::istringstream in{"\n"};
+    std::ostringstream out;
+    ConsoleInterviewer ci{in, out};
+    const Question q{.text = "Proceed?", .type = QuestionType::yes_no, .default_answer = "N"};
+    const Answer answer = ci.ask(q);
+    SNITCH_CHECK(answer.kind == AnswerKind::no);
+}
+
+SNITCH_TEST_CASE("[console_interviewer] FREEFORM default_answer used on empty input -- 7.5-U-005")
+{
+    std::istringstream in{"\n"};
+    std::ostringstream out;
+    ConsoleInterviewer ci{in, out};
+    const Question q{.text = "Describe it", .type = QuestionType::freeform, .default_answer = "hello"};
+    const Answer answer = ci.ask(q);
+    SNITCH_CHECK(answer.kind == AnswerKind::text);
+    SNITCH_CHECK(answer.text == "hello");
+}
