@@ -171,3 +171,51 @@ SNITCH_TEST_CASE("[handoff_aware] max_handoffs=1 exhausted returns fail -- 7.19-
     const auto& reason = type_safe::get(result.error().failure_reason);
     SNITCH_CHECK(reason.find("max handoff") != std::string::npos);
 }
+
+SNITCH_TEST_CASE("[handoff_aware] max_handoffs=0 inner called once; handoff triggers immediate fail -- 7.8-U-001")
+{
+    TmpDir logs_root{std::filesystem::temp_directory_path() / "att_hab_7_8_001"};
+    const Node node = make_node("n001");
+
+    auto mock = std::make_unique<MockBackend>(
+        [&logs_root](const Node& n, const PromptText&, Context& ctx)
+            -> std::expected<LlmResponse, Outcome> {
+            int counter = ctx.current_execution_counter();
+            auto nld = logs_root.path /
+                (type_safe::get(n.id) + "-" + std::to_string(counter));
+            std::filesystem::create_directories(nld);
+            std::ofstream{nld / "handoff.md"} << "handoff content";
+            return LlmResponse{"wrote handoff"};
+        });
+    MockBackend* mock_ptr = mock.get();
+
+    HandoffAwareBackend backend{std::move(mock), logs_root.path, /*max_handoffs=*/0};
+    Context ctx;
+    auto result = backend.run(node, PromptText{"initial"}, ctx);
+
+    SNITCH_REQUIRE_FALSE(result.has_value());
+    SNITCH_CHECK(mock_ptr->received_prompts.size() == 1u);
+    const auto& reason = type_safe::get(result.error().failure_reason);
+    SNITCH_CHECK(reason.find("max handoff") != std::string::npos);
+}
+
+SNITCH_TEST_CASE("[handoff_aware] max_handoffs=0 no handoff file returns success -- 7.8-U-002")
+{
+    TmpDir logs_root{std::filesystem::temp_directory_path() / "att_hab_7_8_002"};
+    const Node node = make_node("n002");
+
+    auto mock = std::make_unique<MockBackend>(
+        [](const Node&, const PromptText&, Context&)
+            -> std::expected<LlmResponse, Outcome> {
+            return LlmResponse{"clean result"};
+        });
+    MockBackend* mock_ptr = mock.get();
+
+    HandoffAwareBackend backend{std::move(mock), logs_root.path, /*max_handoffs=*/0};
+    Context ctx;
+    auto result = backend.run(node, PromptText{"initial"}, ctx);
+
+    SNITCH_REQUIRE(result.has_value());
+    SNITCH_CHECK(type_safe::get(*result) == "clean result");
+    SNITCH_CHECK(mock_ptr->received_prompts.size() == 1u);
+}

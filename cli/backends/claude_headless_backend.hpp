@@ -10,7 +10,7 @@ namespace attractor {
 
 class ClaudeCodeHeadlessBackend final : public CodergenBackend {
   public:
-    ClaudeCodeHeadlessBackend() = default;
+    ClaudeCodeHeadlessBackend();
     explicit ClaudeCodeHeadlessBackend(std::string claude_exe);
     explicit ClaudeCodeHeadlessBackend(std::filesystem::path logs_root,
                                        std::string claude_exe = "claude");
@@ -21,6 +21,7 @@ class ClaudeCodeHeadlessBackend final : public CodergenBackend {
   private:
     std::string m_claude_exe{"claude"};
     std::filesystem::path m_logs_root{};
+    std::string m_scripts_dir;
 };
 
 }  // namespace attractor

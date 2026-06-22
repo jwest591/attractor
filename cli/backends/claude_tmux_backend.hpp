@@ -25,6 +25,7 @@ class ClaudeCodeTmuxBackend final : public CodergenBackend {
     std::string m_tmux_bin{"tmux"};
     std::string m_session_id{};
     std::filesystem::path m_logs_root{};
+    std::string m_scripts_dir;
     int m_context_critical_pct{85};
 };
 

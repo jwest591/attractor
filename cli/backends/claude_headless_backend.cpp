@@ -14,6 +14,7 @@
 #include <climits>
 #include <filesystem>
 #include <optional>
+#include <random>
 #include <sstream>
 #include <string>
 #include <thread>
@@ -131,7 +132,8 @@ struct SubprocessResult {
 
 [[nodiscard]] auto run_subprocess(const std::string& exe, const std::string& prompt,
                                   std::optional<std::chrono::milliseconds> timeout,
-                                  const std::string& node_log_dir_str)
+                                  const std::string& node_log_dir_str,
+                                  const std::string& scripts_dir)
     -> SubprocessResult
 {
     UniqueFd stdin_r, stdin_w;
@@ -203,8 +205,6 @@ struct SubprocessResult {
         // NOLINTNEXTLINE(concurrency-mt-unsafe) -- child process only
         setenv("ATTRACTOR_NODE_LOG_DIR", node_log_dir_str.c_str(), 1);
 
-        // DEFERRED(async-signal-safe): std::string heap alloc post-fork is async-signal-unsafe in a multi-threaded parent; move to pre-fork to fix
-        const std::string scripts_dir{ATTRACTOR_CLI_SCRIPTS_DIR};
         const std::string settings_path = scripts_dir + "/att-headless-backend.settings.json";
         const std::string shell_cmd =
             "set -o pipefail; '" + exe + "'"
@@ -344,13 +344,18 @@ struct SubprocessResult {
 
 namespace attractor {
 
+ClaudeCodeHeadlessBackend::ClaudeCodeHeadlessBackend()
+    : m_scripts_dir{resolve_scripts_dir()}
+{}
+
 ClaudeCodeHeadlessBackend::ClaudeCodeHeadlessBackend(std::string claude_exe)
-    : m_claude_exe{std::move(claude_exe)}
+    : m_claude_exe{std::move(claude_exe)}, m_scripts_dir{resolve_scripts_dir()}
 {}
 
 ClaudeCodeHeadlessBackend::ClaudeCodeHeadlessBackend(std::filesystem::path logs_root,
                                                      std::string claude_exe)
     : m_claude_exe{std::move(claude_exe)}, m_logs_root{std::move(logs_root)}
+    , m_scripts_dir{resolve_scripts_dir()}
 {}
 
 auto ClaudeCodeHeadlessBackend::run(const Node& node, const PromptText& prompt,
@@ -379,7 +384,7 @@ auto ClaudeCodeHeadlessBackend::run(const Node& node, const PromptText& prompt,
     constexpr int k_max_retries = 3;
     for (int attempt = 0; attempt <= k_max_retries; ++attempt) {
         auto result = run_subprocess(m_claude_exe, type_safe::get(prompt),
-                                     timeout_ms, node_log_dir_str);
+                                     timeout_ms, node_log_dir_str, m_scripts_dir);
 
         if (result.timed_out) {
             return std::unexpected(Outcome::fail(DiagnosticMessage{"timeout"}));
@@ -411,7 +416,10 @@ auto ClaudeCodeHeadlessBackend::run(const Node& node, const PromptText& prompt,
                     : "headless: API error [" + parsed.error_type + "]: " + parsed.error_message;
                 return std::unexpected(Outcome::fail(DiagnosticMessage{std::move(msg)}));
             }
-            const auto wake = std::chrono::steady_clock::now() + std::chrono::seconds{10};
+            std::mt19937 rng{std::random_device{}()};
+            std::uniform_int_distribution<int> jitter_ms{0, 2000};
+            const auto delay = std::chrono::seconds{10} + std::chrono::milliseconds{jitter_ms(rng)};
+            const auto wake = std::chrono::steady_clock::now() + delay;
             if (!deadline || wake < *deadline) {
                 std::this_thread::sleep_until(wake);
             }

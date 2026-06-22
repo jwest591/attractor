@@ -165,6 +165,7 @@ ClaudeCodeTmuxBackend::ClaudeCodeTmuxBackend(std::string tmux_bin, std::filesyst
     : m_tmux_bin{std::move(tmux_bin)}
     , m_session_id{logs_root.filename().string()}
     , m_logs_root{std::move(logs_root)}
+    , m_scripts_dir{resolve_scripts_dir()}
 {
     assert(!m_session_id.empty() && "logs_root must not be empty or end with a path separator");
     // Session name is derived from logs_root.filename() (the run_id)
@@ -201,7 +202,7 @@ auto ClaudeCodeTmuxBackend::run(const Node& node, const PromptText& prompt, Cont
     // RAII: destructor kills window on all exit paths
     TmuxWindow window{m_tmux_bin, m_session_id, window_name, node_log_dir.string(), m_context_critical_pct};
 
-    const std::string settings_path = std::string{ATTRACTOR_CLI_SCRIPTS_DIR} + "/att-tmux-backend.settings.json";
+    const std::string settings_path = m_scripts_dir + "/att-tmux-backend.settings.json";
     const std::string claude_cmd = "claude " + shell_escape(type_safe::get(prompt)) + " --settings " +
                                    shell_escape(settings_path) + " --dangerously-skip-permissions";
 

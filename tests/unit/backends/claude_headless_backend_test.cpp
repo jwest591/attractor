@@ -7,6 +7,8 @@
 #include <snitch/snitch.hpp>
 #include <type_safe/strong_typedef.hpp>
 #include <cstdlib>
+#include <optional>
+#include <string>
 #include <dirent.h>
 #include <fcntl.h>
 #include <filesystem>
@@ -26,15 +28,28 @@ struct TmpFile {
     std::filesystem::path path;
 };
 
-// RAII guard that unsets an environment variable on scope exit.
+// RAII guard that restores the prior value of an environment variable on scope exit.
 // NOLINTNEXTLINE(cppcoreguidelines-special-member-functions) -- move intentionally omitted; guard is always local
 struct EnvGuard {
-    explicit EnvGuard(const char* name) : m_name{name} {}
+    explicit EnvGuard(const char* name) : m_name{name}
+    {
+        if (const char* v = std::getenv(name)) {
+            m_prior = v;
+        }
+    }
     EnvGuard(const EnvGuard&) = delete;
     EnvGuard& operator=(const EnvGuard&) = delete;
     // NOLINTNEXTLINE(concurrency-mt-unsafe) -- test binary is single-threaded; env mutation is test-local
-    ~EnvGuard() noexcept { unsetenv(m_name); }
+    ~EnvGuard() noexcept
+    {
+        if (m_prior) {
+            setenv(m_name, m_prior->c_str(), 1);  // NOLINT(concurrency-mt-unsafe)
+        } else {
+            unsetenv(m_name);  // NOLINT(concurrency-mt-unsafe)
+        }
+    }
     const char* m_name;
+    std::optional<std::string> m_prior;
 };
 }  // namespace
 
@@ -392,4 +407,22 @@ SNITCH_TEST_CASE("[claude_headless] parse-stream passthrough: multi-delta text a
     SNITCH_REQUIRE(result.has_value());
     SNITCH_CHECK(type_safe::get(*result) == "part1 part2");
     SNITCH_CHECK(std::filesystem::exists(tmp_usage));
+}
+
+SNITCH_TEST_CASE("[claude_headless] EnvGuard restores prior env-var value on destruction -- 7.8-U-003")
+{
+    const char* const k_var = "ATTRACTOR_TEST_ENVGUARD_7_8";
+    // NOLINTNEXTLINE(concurrency-mt-unsafe)
+    setenv(k_var, "prior_value", 1);
+    {
+        EnvGuard guard{k_var};
+        // NOLINTNEXTLINE(concurrency-mt-unsafe)
+        setenv(k_var, "test_value", 1);
+    }
+    // NOLINTNEXTLINE(concurrency-mt-unsafe)
+    const char* const after = std::getenv(k_var);
+    SNITCH_REQUIRE(after != nullptr);
+    SNITCH_CHECK(std::string{after} == "prior_value");
+    // NOLINTNEXTLINE(concurrency-mt-unsafe)
+    unsetenv(k_var);
 }

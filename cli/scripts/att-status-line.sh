@@ -6,12 +6,26 @@ set -u
 
 INPUT="$(cat)"
 
-pct=$(printf '%s' "$INPUT" | jq -r '.context_window.percent // 0' 2>/dev/null || echo 0)
-total=$(printf '%s' "$INPUT" | jq -r '.context_window.current_usage.input_tokens // 0' 2>/dev/null || echo 0)
-window=$(printf '%s' "$INPUT" | jq -r '.context_window.context_window_size // 0' 2>/dev/null || echo 0)
-
-pct=${pct:-0}
-[ "$pct" = "null" ] && pct=0
+pct_raw=$(printf '%s' "$INPUT" | jq -r '.context_window.percent // 0' 2>/dev/null)
+if [ $? -ne 0 ] || [ -z "$pct_raw" ] || [ "$pct_raw" = "null" ]; then
+    pct=0
+    pct_display="??"
+else
+    pct="$pct_raw"
+    pct_display="$pct_raw"
+fi
+total_raw=$(printf '%s' "$INPUT" | jq -r '.context_window.current_usage.input_tokens // 0' 2>/dev/null)
+if [ $? -ne 0 ] || [ -z "$total_raw" ] || [ "$total_raw" = "null" ]; then
+    total=0
+else
+    total="$total_raw"
+fi
+window_raw=$(printf '%s' "$INPUT" | jq -r '.context_window.context_window_size // 0' 2>/dev/null)
+if [ $? -ne 0 ] || [ -z "$window_raw" ] || [ "$window_raw" = "null" ]; then
+    window=0
+else
+    window="$window_raw"
+fi
 
 if [ -n "${ATTRACTOR_NODE_LOG_DIR:-}" ]; then
     tmp="$ATTRACTOR_NODE_LOG_DIR/ctx-usage.json.tmp"
@@ -20,4 +34,4 @@ if [ -n "${ATTRACTOR_NODE_LOG_DIR:-}" ]; then
     mv "$tmp" "$dest"
 fi
 
-printf "attractor | ctx: %d%%\n" "$pct"
+printf "attractor | ctx: %s%%\n" "$pct_display"
