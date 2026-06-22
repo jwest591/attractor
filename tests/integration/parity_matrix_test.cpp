@@ -158,6 +158,8 @@ SNITCH_TEST_CASE("[parity] Stylesheet applies model override to nodes by shape -
     )");
     SNITCH_REQUIRE(result.has_value());
     const auto out = apply_transforms(*result);
+    SNITCH_REQUIRE(!out.nodes.empty());
+    SNITCH_CHECK(out.nodes.size() == result->nodes.size());
     for (const auto& n : out.nodes) {
         if (n.shape == NodeShape::box) {
             SNITCH_CHECK(type_safe::get(n.llm_model) == "box-model");

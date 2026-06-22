@@ -342,3 +342,188 @@ SNITCH_TEST_CASE("[transform] stylesheet ID selector wins over class shape and u
         SNITCH_CHECK(type_safe::get(n.llm_model) == "universal");
     }
 }
+
+SNITCH_TEST_CASE("[transform] stylesheet css_class multi-value whitespace trimmed -- 7.6-U-001")
+{
+    auto result = parse_graph(R"(
+        digraph g {
+            graph [model_stylesheet=".foo { llm_model: trimmed-model; }"]
+            start [shape=Mdiamond]
+            work  [shape=box, class=" foo , bar "]
+            done  [shape=Msquare]
+            start -> work -> done
+        }
+    )");
+    SNITCH_REQUIRE(result.has_value());
+    StylesheetTransform xform;
+    auto out = xform.apply(*result);
+    auto it = std::find_if(out.nodes.begin(), out.nodes.end(),
+        [](const Node& n) { return type_safe::get(n.id) == "work"; });
+    SNITCH_REQUIRE(it != out.nodes.end());
+    SNITCH_CHECK(type_safe::get(it->llm_model) == "trimmed-model");
+}
+
+SNITCH_TEST_CASE("[transform] stylesheet unknown property key silently ignored -- 7.6-U-002")
+{
+    auto result = parse_graph(R"(
+        digraph g {
+            graph [model_stylesheet="* { unknown_prop: skip_me; llm_model: valid-model; }"]
+            start [shape=Mdiamond]
+            work  [shape=box]
+            done  [shape=Msquare]
+            start -> work -> done
+        }
+    )");
+    SNITCH_REQUIRE(result.has_value());
+    StylesheetTransform xform;
+    auto out = xform.apply(*result);
+    for (const auto& n : out.nodes) {
+        SNITCH_CHECK(type_safe::get(n.llm_model) == "valid-model");
+    }
+}
+
+SNITCH_TEST_CASE("[transform] stylesheet unknown reasoning_effort value silently ignored -- 7.6-U-003")
+{
+    auto result = parse_graph(R"(
+        digraph g {
+            graph [model_stylesheet="* { reasoning_effort: bogus; }"]
+            start [shape=Mdiamond]
+            work  [shape=box]
+            done  [shape=Msquare]
+            start -> work -> done
+        }
+    )");
+    SNITCH_REQUIRE(result.has_value());
+    StylesheetTransform xform;
+    auto out = xform.apply(*result);
+    for (const auto& n : out.nodes) {
+        SNITCH_CHECK(!n.reasoning_effort.has_value());
+    }
+}
+
+SNITCH_TEST_CASE("[transform] stylesheet equal-specificity cross-property both apply -- 7.6-U-004")
+{
+    auto result = parse_graph(R"(
+        digraph g {
+            graph [model_stylesheet="* { llm_model: m1; } * { llm_provider: p1; }"]
+            start [shape=Mdiamond]
+            work  [shape=box]
+            done  [shape=Msquare]
+            start -> work -> done
+        }
+    )");
+    SNITCH_REQUIRE(result.has_value());
+    StylesheetTransform xform;
+    auto out = xform.apply(*result);
+    for (const auto& n : out.nodes) {
+        SNITCH_CHECK(type_safe::get(n.llm_model) == "m1");
+        SNITCH_CHECK(type_safe::get(n.llm_provider) == "p1");
+    }
+}
+
+SNITCH_TEST_CASE("[transform] stylesheet Mdiamond shape selector matches start node -- 7.6-U-005")
+{
+    auto result = parse_graph(R"(
+        digraph g {
+            graph [model_stylesheet="Mdiamond { llm_model: diamond-model; }"]
+            start [shape=Mdiamond]
+            work  [shape=box]
+            done  [shape=Msquare]
+            start -> work -> done
+        }
+    )");
+    SNITCH_REQUIRE(result.has_value());
+    StylesheetTransform xform;
+    auto out = xform.apply(*result);
+    auto start_it = std::find_if(out.nodes.begin(), out.nodes.end(),
+        [](const Node& n) { return type_safe::get(n.id) == "start"; });
+    SNITCH_REQUIRE(start_it != out.nodes.end());
+    SNITCH_CHECK(type_safe::get(start_it->llm_model) == "diamond-model");
+    auto work_it = std::find_if(out.nodes.begin(), out.nodes.end(),
+        [](const Node& n) { return type_safe::get(n.id) == "work"; });
+    SNITCH_REQUIRE(work_it != out.nodes.end());
+    SNITCH_CHECK(type_safe::get(work_it->llm_model).empty());
+}
+
+SNITCH_TEST_CASE("[transform] stylesheet Msquare shape selector matches done node -- 7.6-U-006")
+{
+    auto result = parse_graph(R"(
+        digraph g {
+            graph [model_stylesheet="Msquare { llm_model: square-model; }"]
+            start [shape=Mdiamond]
+            work  [shape=box]
+            done  [shape=Msquare]
+            start -> work -> done
+        }
+    )");
+    SNITCH_REQUIRE(result.has_value());
+    StylesheetTransform xform;
+    auto out = xform.apply(*result);
+    auto done_it = std::find_if(out.nodes.begin(), out.nodes.end(),
+        [](const Node& n) { return type_safe::get(n.id) == "done"; });
+    SNITCH_REQUIRE(done_it != out.nodes.end());
+    SNITCH_CHECK(type_safe::get(done_it->llm_model) == "square-model");
+    auto work_it = std::find_if(out.nodes.begin(), out.nodes.end(),
+        [](const Node& n) { return type_safe::get(n.id) == "work"; });
+    SNITCH_REQUIRE(work_it != out.nodes.end());
+    SNITCH_CHECK(type_safe::get(work_it->llm_model).empty());
+}
+
+SNITCH_TEST_CASE("[transform] stylesheet llm_provider universal rule applies to all nodes -- 7.6-U-007")
+{
+    auto result = parse_graph(R"(
+        digraph g {
+            graph [model_stylesheet="* { llm_provider: anthropic; }"]
+            start [shape=Mdiamond]
+            work  [shape=box]
+            done  [shape=Msquare]
+            start -> work -> done
+        }
+    )");
+    SNITCH_REQUIRE(result.has_value());
+    StylesheetTransform xform;
+    auto out = xform.apply(*result);
+    for (const auto& n : out.nodes) {
+        SNITCH_CHECK(type_safe::get(n.llm_provider) == "anthropic");
+    }
+}
+
+SNITCH_TEST_CASE("[transform] stylesheet explicit llm_provider not overwritten by class selector -- 7.6-U-008")
+{
+    auto result = parse_graph(R"(
+        digraph g {
+            graph [model_stylesheet=".fast { llm_provider: class-provider; }"]
+            start [shape=Mdiamond]
+            work  [shape=box, class="fast", llm_provider="explicit-provider"]
+            done  [shape=Msquare]
+            start -> work -> done
+        }
+    )");
+    SNITCH_REQUIRE(result.has_value());
+    StylesheetTransform xform;
+    auto out = xform.apply(*result);
+    auto it = std::find_if(out.nodes.begin(), out.nodes.end(),
+        [](const Node& n) { return type_safe::get(n.id) == "work"; });
+    SNITCH_REQUIRE(it != out.nodes.end());
+    SNITCH_CHECK(type_safe::get(it->llm_provider) == "explicit-provider");
+}
+
+SNITCH_TEST_CASE("[transform] stylesheet explicit llm_provider not overwritten by ID selector -- 7.6-U-009")
+{
+    auto result = parse_graph(R"(
+        digraph g {
+            graph [model_stylesheet="#work { llm_provider: id-provider; }"]
+            start [shape=Mdiamond]
+            work  [shape=box, llm_provider="explicit-provider"]
+            done  [shape=Msquare]
+            start -> work -> done
+        }
+    )");
+    SNITCH_REQUIRE(result.has_value());
+    StylesheetTransform xform;
+    auto out = xform.apply(*result);
+    auto it = std::find_if(out.nodes.begin(), out.nodes.end(),
+        [](const Node& n) { return type_safe::get(n.id) == "work"; });
+    SNITCH_REQUIRE(it != out.nodes.end());
+    SNITCH_CHECK(type_safe::get(it->llm_provider) == "explicit-provider");
+}
