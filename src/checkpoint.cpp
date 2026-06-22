@@ -9,6 +9,7 @@
 #include <nlohmann/json.hpp>
 #include <string>
 #include <type_safe/strong_typedef.hpp>
+#include <unistd.h>
 
 namespace attractor {
 
@@ -43,7 +44,7 @@ auto save_checkpoint(const LogsRoot& logs_root, const CheckpointData& data)
         j["logs"] = data.logs;
 
         const auto final_path = dir / "checkpoint.json";
-        const auto temp_path = dir / "checkpoint.json.tmp";
+        const auto temp_path = dir / ("checkpoint.json.tmp." + std::to_string(getpid()));
 
         {
             std::ofstream out{temp_path};

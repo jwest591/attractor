@@ -6,6 +6,7 @@
 #include <fstream>
 #include <nlohmann/json.hpp>
 #include <string>
+#include <unistd.h>
 
 using namespace attractor;
 using namespace attractor::test;
@@ -64,8 +65,9 @@ SNITCH_TEST_CASE("[checkpoint] no .tmp file after successful save -- 2.6-P-003")
 
     SNITCH_REQUIRE(save_checkpoint(logs.logs_root(), data).has_value());
 
-    const auto tmp_path = logs.path() / "checkpoint.json.tmp";
-    SNITCH_CHECK(!std::filesystem::exists(tmp_path));
+    SNITCH_CHECK(!std::filesystem::exists(logs.path() / "checkpoint.json.tmp"));
+    SNITCH_CHECK(!std::filesystem::exists(
+        logs.path() / ("checkpoint.json.tmp." + std::to_string(getpid()))));
 }
 
 SNITCH_TEST_CASE("[checkpoint] load returns error for missing file -- 2.6-P-004")
@@ -87,4 +89,18 @@ SNITCH_TEST_CASE("[checkpoint] load returns error for malformed JSON -- 2.6-P-00
 
     auto result = load_checkpoint(logs.logs_root());
     SNITCH_CHECK(!result.has_value());
+}
+
+SNITCH_TEST_CASE("[checkpoint] save_checkpoint uses pid-unique temp filename -- 7.9-CP-001")
+{
+    TempLogsDir logs;
+
+    CheckpointData data;
+    data.current_node = NodeId{"nodeA"};
+
+    SNITCH_REQUIRE(save_checkpoint(logs.logs_root(), data).has_value());
+
+    SNITCH_CHECK(!std::filesystem::exists(logs.path() / "checkpoint.json.tmp"));
+    SNITCH_CHECK(!std::filesystem::exists(
+        logs.path() / ("checkpoint.json.tmp." + std::to_string(getpid()))));
 }

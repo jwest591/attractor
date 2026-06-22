@@ -4,6 +4,7 @@
 #include <expected>
 #include <filesystem>
 #include <fstream>
+#include <iostream>
 #include <mutex>
 #include <nlohmann/json.hpp>
 #include <shared_mutex>
@@ -18,6 +19,18 @@ ArtifactStore::ArtifactStore(LogsRoot logs_root) : m_logs_root{std::move(logs_ro
 auto ArtifactStore::store(const ArtifactId& id, std::string name, nlohmann::json data)
     -> std::expected<ArtifactInfo, std::string>
 {
+    {
+        const std::string& raw_id = type_safe::get(id);
+        if (raw_id.empty()) {
+            return std::unexpected{"ArtifactStore::store: ArtifactId must not be empty"};
+        }
+        if (raw_id.find('/') != std::string::npos || raw_id.find('\\') != std::string::npos
+            || raw_id.find("..") != std::string::npos) {
+            return std::unexpected{
+                "ArtifactStore::store: ArtifactId contains invalid characters: " + raw_id};
+        }
+    }
+
     try {
         const std::string serialized = data.dump();
         const std::size_t size = serialized.size();
@@ -39,10 +52,14 @@ auto ArtifactStore::store(const ArtifactId& id, std::string name, nlohmann::json
             {
                 std::ofstream out{file};
                 if (!out) {
+                    std::error_code ec;
+                    std::filesystem::remove(file, ec);
                     return std::unexpected{"ArtifactStore::store: cannot open " + file.string()};
                 }
                 out << serialized;
                 if (!out.flush()) {
+                    std::error_code ec;
+                    std::filesystem::remove(file, ec);
                     return std::unexpected{"ArtifactStore::store: write failed for " + file.string()};
                 }
             }
@@ -52,8 +69,23 @@ auto ArtifactStore::store(const ArtifactId& id, std::string name, nlohmann::json
             entry.inline_data = std::move(data);
         }
 
-        std::unique_lock lock{m_mutex};
-        m_entries[id] = std::move(entry);
+        std::filesystem::path old_file_to_delete;
+        {
+            std::unique_lock lock{m_mutex};
+            auto it = m_entries.find(id);
+            if (it != m_entries.end() && it->second.info.is_file_backed && !entry.info.is_file_backed) {
+                old_file_to_delete = it->second.file_path;
+            }
+            m_entries[id] = std::move(entry);
+        }
+        if (!old_file_to_delete.empty()) {
+            std::error_code ec;
+            std::filesystem::remove(old_file_to_delete, ec);
+            if (ec) {
+                std::cerr << "ArtifactStore::store: failed to delete old backing file "
+                          << old_file_to_delete << ": " << ec.message() << '\n';
+            }
+        }
         return info;
     }
     catch (const std::exception& e) {
@@ -111,14 +143,47 @@ auto ArtifactStore::list() const -> std::vector<ArtifactInfo>
 
 void ArtifactStore::remove(const ArtifactId& id)
 {
-    std::unique_lock lock{m_mutex};
-    m_entries.erase(id);
+    std::filesystem::path file_to_delete;
+    {
+        std::unique_lock lock{m_mutex};
+        auto it = m_entries.find(id);
+        if (it != m_entries.end()) {
+            if (it->second.info.is_file_backed) {
+                file_to_delete = it->second.file_path;
+            }
+            m_entries.erase(it);
+        }
+    }
+    if (!file_to_delete.empty()) {
+        std::error_code ec;
+        std::filesystem::remove(file_to_delete, ec);
+        if (ec) {
+            std::cerr << "ArtifactStore::remove: failed to delete " << file_to_delete
+                      << ": " << ec.message() << '\n';
+        }
+    }
 }
 
 void ArtifactStore::clear()
 {
-    std::unique_lock lock{m_mutex};
-    m_entries.clear();
+    std::vector<std::filesystem::path> files_to_delete;
+    {
+        std::unique_lock lock{m_mutex};
+        for (const auto& [unused_key, entry] : m_entries) {
+            if (entry.info.is_file_backed) {
+                files_to_delete.push_back(entry.file_path);
+            }
+        }
+        m_entries.clear();
+    }
+    for (const auto& file : files_to_delete) {
+        std::error_code ec;
+        std::filesystem::remove(file, ec);
+        if (ec) {
+            std::cerr << "ArtifactStore::clear: failed to delete " << file
+                      << ": " << ec.message() << '\n';
+        }
+    }
 }
 
 }  // namespace attractor
