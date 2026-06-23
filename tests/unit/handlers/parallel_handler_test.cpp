@@ -10,6 +10,7 @@
 #include <atomic>
 #include <cassert>
 #include <chrono>
+#include <limits>
 #include <thread>
 
 using namespace attractor;
@@ -48,6 +49,7 @@ Graph make_parallel_graph(JoinPolicy join_policy = JoinPolicy::wait_all, int max
 
 Graph make_parallel_graph_n(int n, JoinPolicy join_policy = JoinPolicy::wait_all, int max_parallel = 4)
 {
+    SNITCH_REQUIRE(n > 0);
     Graph g;
     Node par;
     par.id = NodeId{"par"};
@@ -88,7 +90,7 @@ SNITCH_TEST_CASE("[parallel_handler] wait_all both branches succeed returns SUCC
     const Graph g = make_parallel_graph();
     const Node& par = find_par_node(g);
 
-    const Outcome out = h.execute(par, ctx, g, LogsRoot{"/tmp"});
+    const Outcome out = h.execute(par, ctx, g, RunConfig{.logs_root = LogsRoot{"/tmp"}});
 
     SNITCH_CHECK(out.status == StageStatus::success);
     SNITCH_REQUIRE(out.context_updates.contains("parallel.results"));
@@ -110,7 +112,7 @@ SNITCH_TEST_CASE("[parallel_handler] wait_all one branch fails returns PARTIAL_S
     const Graph g = make_parallel_graph();
     const Node& par = find_par_node(g);
 
-    const Outcome out = h.execute(par, ctx, g, LogsRoot{"/tmp"});
+    const Outcome out = h.execute(par, ctx, g, RunConfig{.logs_root = LogsRoot{"/tmp"}});
 
     SNITCH_CHECK(out.status == StageStatus::partial_success);
     SNITCH_REQUIRE(out.context_updates.contains("parallel.results"));
@@ -131,7 +133,7 @@ SNITCH_TEST_CASE("[parallel_handler] first_success one branch succeeds returns S
     const Graph g = make_parallel_graph(JoinPolicy::first_success);
     const Node& par = find_par_node(g);
 
-    const Outcome out = h.execute(par, ctx, g, LogsRoot{"/tmp"});
+    const Outcome out = h.execute(par, ctx, g, RunConfig{.logs_root = LogsRoot{"/tmp"}});
 
     SNITCH_CHECK(out.status == StageStatus::success);
 }
@@ -146,7 +148,7 @@ SNITCH_TEST_CASE("[parallel_handler] first_success all branches fail returns FAI
     const Graph g = make_parallel_graph(JoinPolicy::first_success);
     const Node& par = find_par_node(g);
 
-    const Outcome out = h.execute(par, ctx, g, LogsRoot{"/tmp"});
+    const Outcome out = h.execute(par, ctx, g, RunConfig{.logs_root = LogsRoot{"/tmp"}});
 
     SNITCH_CHECK(out.status == StageStatus::fail);
 }
@@ -162,7 +164,7 @@ SNITCH_TEST_CASE("[parallel_handler] parent context unchanged after fan-out -- 4
     const Graph g = make_parallel_graph();
     const Node& par = find_par_node(g);
 
-    (void)h.execute(par, ctx, g, LogsRoot{"/tmp"});
+    (void)h.execute(par, ctx, g, RunConfig{.logs_root = LogsRoot{"/tmp"}});
 
     SNITCH_CHECK(ctx.get(ContextKey{"parent.key"}) == nlohmann::json{"original"});
 }
@@ -184,7 +186,7 @@ SNITCH_TEST_CASE("[parallel_handler] max_parallel limits concurrent branch count
     const Graph g = make_parallel_graph_n(4, JoinPolicy::wait_all, 2);
     const Node& par = find_par_node(g);
 
-    (void)h.execute(par, ctx, g, LogsRoot{"/tmp"});
+    (void)h.execute(par, ctx, g, RunConfig{.logs_root = LogsRoot{"/tmp"}});
 
     SNITCH_CHECK(peak.load() <= 2);
 }
@@ -203,7 +205,7 @@ SNITCH_TEST_CASE("[parallel_handler] no outgoing branches returns FAIL -- 4.1-U-
     par.max_parallel = MaxParallel{4};
     g.nodes.push_back(par);
 
-    const Outcome out = h.execute(par, ctx, g, LogsRoot{"/tmp"});
+    const Outcome out = h.execute(par, ctx, g, RunConfig{.logs_root = LogsRoot{"/tmp"}});
 
     SNITCH_CHECK(out.status == StageStatus::fail);
     SNITCH_CHECK(!type_safe::get(out.failure_reason).empty());
@@ -220,7 +222,7 @@ SNITCH_TEST_CASE("[parallel_handler] callable through Handler interface -- 4.1-U
     const Graph g = make_parallel_graph();
     const Node& par = find_par_node(g);
 
-    const Outcome out = iface.execute(par, ctx, g, LogsRoot{"/tmp"});
+    const Outcome out = iface.execute(par, ctx, g, RunConfig{.logs_root = LogsRoot{"/tmp"}});
 
     SNITCH_CHECK(out.status == StageStatus::success);
 }
@@ -235,7 +237,7 @@ SNITCH_TEST_CASE("[parallel_handler] results entries contain id and score fields
     const Graph g = make_parallel_graph();
     const Node& par = find_par_node(g);
 
-    const Outcome out = h.execute(par, ctx, g, LogsRoot{"/tmp"});
+    const Outcome out = h.execute(par, ctx, g, RunConfig{.logs_root = LogsRoot{"/tmp"}});
 
     SNITCH_REQUIRE(out.context_updates.contains("parallel.results"));
     const auto& results = out.context_updates["parallel.results"];
@@ -245,4 +247,85 @@ SNITCH_TEST_CASE("[parallel_handler] results entries contain id and score fields
         SNITCH_CHECK(entry.contains("score"));
         SNITCH_CHECK(entry["score"].is_number());
     }
+}
+
+SNITCH_TEST_CASE("[parallel_handler] first_success cancels unstarted branches -- 7.10-U-001")
+{
+    std::atomic<int> run_count{0};
+    ParallelHandler::RunFn fn = [&run_count](const Graph&, const NodeId&, const RunConfig&) -> Outcome {
+        ++run_count;
+        return Outcome{.status = StageStatus::success};
+    };
+    ParallelHandler h{fn};
+    Context ctx;
+    const Graph g = make_parallel_graph_n(2, JoinPolicy::first_success, 1);
+    const Node& par = find_par_node(g);
+
+    const Outcome out = h.execute(par, ctx, g, RunConfig{.logs_root = LogsRoot{"/tmp"}});
+
+    SNITCH_CHECK(out.status == StageStatus::success);
+    SNITCH_CHECK(run_count.load() == 1);
+}
+
+SNITCH_TEST_CASE("[parallel_handler] retry_policy propagated to branch RunFn config -- 7.10-U-002")
+{
+    RunConfig captured;
+    ParallelHandler::RunFn fn = [&captured](const Graph&, const NodeId&, const RunConfig& rc) -> Outcome {
+        captured = rc;
+        return Outcome{.status = StageStatus::success};
+    };
+    ParallelHandler h{fn};
+    Context ctx;
+    const Graph g = make_parallel_graph_n(1, JoinPolicy::wait_all, 1);
+    const Node& par = find_par_node(g);
+    const RunConfig parent_config{
+        .logs_root    = LogsRoot{"/tmp"},
+        .retry_policy = RetryPolicy{.preset = BackoffPreset::fixed_1s, .sleep_fn = {}}
+    };
+
+    (void)h.execute(par, ctx, g, parent_config);
+
+    SNITCH_CHECK(captured.retry_policy.preset == BackoffPreset::fixed_1s);
+}
+
+SNITCH_TEST_CASE("[parallel_handler] non-finite score in context_updates returns FAIL -- 7.10-U-003")
+{
+    ParallelHandler::RunFn fn = [](const Graph&, const NodeId&, const RunConfig&) -> Outcome {
+        Outcome o{.status = StageStatus::success};
+        o.context_updates["parallel.score"] = std::numeric_limits<double>::quiet_NaN();
+        return o;
+    };
+    ParallelHandler h{fn};
+    Context ctx;
+    const Graph g = make_parallel_graph();
+    const Node& par = find_par_node(g);
+
+    const Outcome out = h.execute(par, ctx, g, RunConfig{.logs_root = LogsRoot{"/tmp"}});
+
+    SNITCH_CHECK(out.status == StageStatus::fail);
+    SNITCH_CHECK(!type_safe::get(out.failure_reason).empty());
+}
+
+SNITCH_TEST_CASE("[parallel_handler] first_success succeeds when in-flight branch has NaN score -- 7.10-U-005")
+{
+    // Both branches run simultaneously (max_parallel=2). b1 returns NaN score.
+    // With first_success_found=true after b0 wins, the NaN from b1 must not kill the outcome.
+    std::atomic<int> started{0};
+    ParallelHandler::RunFn fn = [&started](const Graph&, const NodeId& id, const RunConfig&) -> Outcome {
+        ++started;
+        while (started.load(std::memory_order_acquire) < 2)
+            std::this_thread::yield();
+        Outcome o{.status = StageStatus::success};
+        if (type_safe::get(id) == "b1")
+            o.context_updates["parallel.score"] = std::numeric_limits<double>::quiet_NaN();
+        return o;
+    };
+    ParallelHandler h{fn};
+    Context ctx;
+    const Graph g = make_parallel_graph_n(2, JoinPolicy::first_success, 2);
+    const Node& par = find_par_node(g);
+
+    const Outcome out = h.execute(par, ctx, g, RunConfig{.logs_root = LogsRoot{"/tmp"}});
+
+    SNITCH_CHECK(out.status == StageStatus::success);
 }

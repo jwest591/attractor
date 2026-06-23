@@ -11,7 +11,7 @@ class WaitForHumanHandler final : public Handler {
     explicit WaitForHumanHandler(Interviewer& interviewer);
 
     [[nodiscard]] auto execute(const Node& node, Context& ctx, const Graph& graph,
-                               const LogsRoot& logs_root) const -> Outcome override;
+                               const RunConfig& run_config) const -> Outcome override;
 
   private:
     Interviewer* m_interviewer;  // non-owning; caller manages lifetime

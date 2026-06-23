@@ -25,9 +25,9 @@ SNITCH_TEST_CASE("[exit_handler] execute returns Outcome{SUCCESS} -- 2.2-U-002")
     ExitHandler h;
     Context ctx;
     Graph g;
-    LogsRoot lr{"./logs"};
+    RunConfig rc{.logs_root = LogsRoot{"./logs"}};
 
-    auto outcome = h.execute(make_exit_node(), ctx, g, lr);
+    auto outcome = h.execute(make_exit_node(), ctx, g, rc);
 
     SNITCH_CHECK(outcome.status == StageStatus::success);
     SNITCH_CHECK(outcome.context_updates.is_object());
@@ -42,9 +42,9 @@ SNITCH_TEST_CASE("[exit_handler] execute via base pointer returns SUCCESS")
     const Handler* h = &impl;
     Context ctx;
     Graph g;
-    LogsRoot lr{"./logs"};
+    RunConfig rc{.logs_root = LogsRoot{"./logs"}};
 
-    auto outcome = h->execute(make_exit_node(), ctx, g, lr);
+    auto outcome = h->execute(make_exit_node(), ctx, g, rc);
 
     SNITCH_CHECK(outcome.status == StageStatus::success);
 }

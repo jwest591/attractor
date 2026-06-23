@@ -44,7 +44,7 @@ std::string run_popen(std::string_view cmd)
 ToolHandler::ToolHandler(CommandRunner runner) : m_runner{std::move(runner)} {}
 
 auto ToolHandler::execute(const Node& node, Context& /*ctx*/, const Graph& /*graph*/,
-                          const LogsRoot& /*logs_root*/) const -> Outcome
+                          const RunConfig& /*run_config*/) const -> Outcome
 {
     const std::string cmd = type_safe::get(node.tool_command);
 

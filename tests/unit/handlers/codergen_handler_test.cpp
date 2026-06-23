@@ -111,9 +111,9 @@ SNITCH_TEST_CASE("[codergen_handler] execute with NoOpBackend returns SUCCESS --
     Context ctx;
     Graph g;
     Node n = make_codergen_node("plan", "Analyze this");
-    LogsRoot lr{tmp.path.string()};
+    RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
 
-    auto outcome = h.execute(n, ctx, g, lr);
+    auto outcome = h.execute(n, ctx, g, rc);
 
     SNITCH_CHECK(outcome.status == StageStatus::success);
 }
@@ -126,9 +126,9 @@ SNITCH_TEST_CASE("[codergen_handler] execute expands $goal in prompt")
     Context ctx;
     Graph g = make_graph_with_goal("Write tests");
     Node n = make_codergen_node("plan", "Plan how to: $goal");
-    LogsRoot lr{tmp.path.string()};
+    RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
 
-    (void)h.execute(n, ctx, g, lr);
+    (void)h.execute(n, ctx, g, rc);
 
     const auto prompt_file = tmp.path / "plan" / "prompt.md";
     SNITCH_REQUIRE(std::filesystem::exists(prompt_file));
@@ -143,9 +143,9 @@ SNITCH_TEST_CASE("[codergen_handler] execute writes prompt.md to stage directory
     Context ctx;
     Graph g;
     Node n = make_codergen_node("my_stage", "Analyze requirements");
-    LogsRoot lr{tmp.path.string()};
+    RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
 
-    (void)h.execute(n, ctx, g, lr);
+    (void)h.execute(n, ctx, g, rc);
 
     SNITCH_CHECK(std::filesystem::exists(tmp.path / "my_stage" / "prompt.md"));
 }
@@ -158,9 +158,9 @@ SNITCH_TEST_CASE("[codergen_handler] execute sets last_response in context_updat
     Context ctx;
     Graph g;
     Node n = make_codergen_node("work", "Do something");
-    LogsRoot lr{tmp.path.string()};
+    RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
 
-    auto outcome = h.execute(n, ctx, g, lr);
+    auto outcome = h.execute(n, ctx, g, rc);
 
     SNITCH_REQUIRE(outcome.context_updates.contains("last_response"));
     SNITCH_CHECK(!outcome.context_updates["last_response"].get<std::string>().empty());
@@ -173,9 +173,9 @@ SNITCH_TEST_CASE("[codergen_handler] execute sets last_stage in context_updates"
     Context ctx;
     Graph g;
     Node n = make_codergen_node("my_work", "Do work");
-    LogsRoot lr{tmp.path.string()};
+    RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
 
-    auto outcome = h.execute(n, ctx, g, lr);
+    auto outcome = h.execute(n, ctx, g, rc);
 
     SNITCH_REQUIRE(outcome.context_updates.contains("last_stage"));
     SNITCH_CHECK(outcome.context_updates["last_stage"].get<std::string>() == "my_work");
@@ -188,9 +188,9 @@ SNITCH_TEST_CASE("[codergen_handler] null backend uses simulation mode")
     Context ctx;
     Graph g;
     Node n = make_codergen_node("sim_node", "Do work");
-    LogsRoot lr{tmp.path.string()};
+    RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
 
-    auto outcome = h.execute(n, ctx, g, lr);
+    auto outcome = h.execute(n, ctx, g, rc);
 
     SNITCH_CHECK(outcome.status == StageStatus::success);
     SNITCH_REQUIRE(outcome.context_updates.contains("last_response"));
@@ -208,9 +208,9 @@ SNITCH_TEST_CASE("[codergen_handler] empty prompt falls back to node label")
     n.shape = NodeShape::box;
     n.label = NodeLabel{"My fallback label"};
     // n.prompt is empty (default PromptText{})
-    LogsRoot lr{tmp.path.string()};
+    RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
 
-    (void)h.execute(n, ctx, g, lr);
+    (void)h.execute(n, ctx, g, rc);
 
     const auto prompt_file = tmp.path / "labeled_node" / "prompt.md";
     SNITCH_REQUIRE(std::filesystem::exists(prompt_file));
@@ -224,9 +224,9 @@ SNITCH_TEST_CASE("[codergen_handler] multiple $goal occurrences all expanded")
     Context ctx;
     Graph g = make_graph_with_goal("build app");
     Node n = make_codergen_node("node1", "First: $goal. Second: $goal.");
-    LogsRoot lr{tmp.path.string()};
+    RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
 
-    (void)h.execute(n, ctx, g, lr);
+    (void)h.execute(n, ctx, g, rc);
 
     const auto content = read_file(tmp.path / "node1" / "prompt.md");
     SNITCH_CHECK(content == "First: build app. Second: build app.");
@@ -240,9 +240,9 @@ SNITCH_TEST_CASE("[codergen_handler] backend failure propagates as Outcome::fail
     Context ctx;
     Graph g;
     Node n = make_codergen_node("fail_node", "Do work");
-    LogsRoot lr{tmp.path.string()};
+    RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
 
-    auto outcome = h.execute(n, ctx, g, lr);
+    auto outcome = h.execute(n, ctx, g, rc);
 
     SNITCH_CHECK(outcome.status == StageStatus::fail);
     SNITCH_CHECK(!type_safe::get(outcome.failure_reason).empty());
@@ -255,9 +255,9 @@ SNITCH_TEST_CASE("[codergen_handler] node.id with path separator returns Outcome
     Context ctx;
     Graph g;
     Node n = make_codergen_node("../escape", "prompt");
-    LogsRoot lr{tmp.path.string()};
+    RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
 
-    auto outcome = h.execute(n, ctx, g, lr);
+    auto outcome = h.execute(n, ctx, g, rc);
 
     SNITCH_CHECK(outcome.status == StageStatus::fail);
     SNITCH_CHECK(!type_safe::get(outcome.failure_reason).empty());
@@ -272,9 +272,9 @@ SNITCH_TEST_CASE("[codergen_handler] empty prompt and empty label returns Outcom
     Node n;
     n.id    = NodeId{"empty_node"};
     n.shape = NodeShape::box;
-    LogsRoot lr{tmp.path.string()};
+    RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
 
-    auto outcome = h.execute(n, ctx, g, lr);
+    auto outcome = h.execute(n, ctx, g, rc);
 
     SNITCH_CHECK(outcome.status == StageStatus::fail);
     SNITCH_CHECK(!type_safe::get(outcome.failure_reason).empty());

@@ -64,7 +64,7 @@ SNITCH_TEST_CASE("[parity] Wait.human presents choices and routes on selection -
     g.edges.push_back(e1);
     g.edges.push_back(e2);
 
-    auto outcome = h.execute(gate, ctx, g, logs.logs_root());
+    auto outcome = h.execute(gate, ctx, g, RunConfig{.logs_root = logs.logs_root()});
 
     SNITCH_CHECK(outcome.status == StageStatus::success);
     SNITCH_CHECK(outcome.preferred_label == EdgeLabel{"[F] Fix"});
@@ -114,7 +114,7 @@ SNITCH_TEST_CASE("[parity] Parallel fan-out spawns branches with isolated contex
     }
     SNITCH_REQUIRE(par_ptr != nullptr);
 
-    const Outcome out = h.execute(*par_ptr, ctx, g, logs.logs_root());
+    const Outcome out = h.execute(*par_ptr, ctx, g, RunConfig{.logs_root = logs.logs_root()});
 
     SNITCH_CHECK(out.status == StageStatus::success);
     SNITCH_REQUIRE(out.context_updates.contains("parallel.results"));
@@ -136,7 +136,7 @@ SNITCH_TEST_CASE("[parity] Parallel fan-in consolidates results by outcome rank 
     Node fan_in_node;
     fan_in_node.id = NodeId{"fan_in"};
 
-    const Outcome out = h.execute(fan_in_node, ctx, g, LogsRoot{"/tmp"});
+    const Outcome out = h.execute(fan_in_node, ctx, g, RunConfig{.logs_root = LogsRoot{"/tmp"}});
 
     SNITCH_CHECK(out.status == StageStatus::success);
     SNITCH_REQUIRE(out.context_updates.contains("parallel.fan_in.best_id"));

@@ -1,6 +1,7 @@
 #include "attractor_test_support.hpp"
 
 #include <attractor/context.hpp>
+#include <attractor/run_config.hpp>
 #include <attractor/graph.hpp>
 #include <attractor/handler.hpp>
 #include <attractor/handlers/fan_in_handler.hpp>
@@ -59,7 +60,7 @@ SNITCH_TEST_CASE("[fan_in_handler] one SUCCESS and one FAIL returns SUCCESS with
     Node par;
     par.id = NodeId{"fan_in"};
 
-    const Outcome out = h.execute(par, ctx, g, LogsRoot{"/tmp"});
+    const Outcome out = h.execute(par, ctx, g, RunConfig{.logs_root = LogsRoot{"/tmp"}});
 
     SNITCH_CHECK(out.status == StageStatus::success);
     SNITCH_REQUIRE(out.context_updates.contains("parallel.fan_in.best_id"));
@@ -80,7 +81,7 @@ SNITCH_TEST_CASE("[fan_in_handler] two SUCCESS with different scores selects hig
     Node par;
     par.id = NodeId{"fan_in"};
 
-    const Outcome out = h.execute(par, ctx, g, LogsRoot{"/tmp"});
+    const Outcome out = h.execute(par, ctx, g, RunConfig{.logs_root = LogsRoot{"/tmp"}});
 
     SNITCH_CHECK(out.status == StageStatus::success);
     SNITCH_REQUIRE(out.context_updates.contains("parallel.fan_in.best_id"));
@@ -99,7 +100,7 @@ SNITCH_TEST_CASE("[fan_in_handler] two SUCCESS equal score tiebreaks on id ascen
     Node par;
     par.id = NodeId{"fan_in"};
 
-    const Outcome out = h.execute(par, ctx, g, LogsRoot{"/tmp"});
+    const Outcome out = h.execute(par, ctx, g, RunConfig{.logs_root = LogsRoot{"/tmp"}});
 
     SNITCH_CHECK(out.status == StageStatus::success);
     SNITCH_REQUIRE(out.context_updates.contains("parallel.fan_in.best_id"));
@@ -118,7 +119,7 @@ SNITCH_TEST_CASE("[fan_in_handler] all candidates FAIL returns FAIL -- 4.2-U-004
     Node par;
     par.id = NodeId{"fan_in"};
 
-    const Outcome out = h.execute(par, ctx, g, LogsRoot{"/tmp"});
+    const Outcome out = h.execute(par, ctx, g, RunConfig{.logs_root = LogsRoot{"/tmp"}});
 
     SNITCH_CHECK(out.status == StageStatus::fail);
 }
@@ -131,7 +132,7 @@ SNITCH_TEST_CASE("[fan_in_handler] no parallel.results key in context returns FA
     Node par;
     par.id = NodeId{"fan_in"};
 
-    const Outcome out = h.execute(par, ctx, g, LogsRoot{"/tmp"});
+    const Outcome out = h.execute(par, ctx, g, RunConfig{.logs_root = LogsRoot{"/tmp"}});
 
     SNITCH_CHECK(out.status == StageStatus::fail);
     SNITCH_CHECK(!type_safe::get(out.failure_reason).empty());
@@ -152,7 +153,7 @@ SNITCH_TEST_CASE("[fan_in_handler] prompt and backend causes backend to be calle
     par.id    = NodeId{"fan_in"};
     par.prompt = PromptText{"select the best candidate"};
 
-    const Outcome out = h.execute(par, ctx, g, LogsRoot{"/tmp"});
+    const Outcome out = h.execute(par, ctx, g, RunConfig{.logs_root = LogsRoot{"/tmp"}});
 
     SNITCH_CHECK(out.status == StageStatus::success);
     SNITCH_CHECK(spy.call_count == 1);
@@ -172,7 +173,7 @@ SNITCH_TEST_CASE("[fan_in_handler] partial_success vs success selects success by
     Node par;
     par.id = NodeId{"fan_in"};
 
-    const Outcome out = h.execute(par, ctx, g, LogsRoot{"/tmp"});
+    const Outcome out = h.execute(par, ctx, g, RunConfig{.logs_root = LogsRoot{"/tmp"}});
 
     SNITCH_CHECK(out.status == StageStatus::success);
     SNITCH_REQUIRE(out.context_updates.contains("parallel.fan_in.best_id"));
@@ -191,9 +192,53 @@ SNITCH_TEST_CASE("[fan_in_handler] callable through Handler interface -- 4.2-U-0
     Node par;
     par.id = NodeId{"fan_in"};
 
-    const Outcome out = iface.execute(par, ctx, g, LogsRoot{"/tmp"});
+    const Outcome out = iface.execute(par, ctx, g, RunConfig{.logs_root = LogsRoot{"/tmp"}});
 
     SNITCH_CHECK(out.status == StageStatus::success);
     SNITCH_REQUIRE(out.context_updates.contains("parallel.fan_in.best_id"));
     SNITCH_CHECK(out.context_updates["parallel.fan_in.best_id"] == "b0");
+}
+
+SNITCH_TEST_CASE("[fan_in_handler] missing score in results entry appends diagnostic note -- 7.10-U-004")
+{
+    FanInHandler h{nullptr};
+    Context ctx;
+    nlohmann::json results = nlohmann::json::array();
+    results.push_back(nlohmann::json{
+        {"id",             "b0"},
+        {"status",         "success"},
+        {"failure_reason", ""},
+        {"notes",          ""}
+    });
+    set_results(ctx, results);
+    Graph g;
+    Node par;
+    par.id = NodeId{"fan_in"};
+
+    const Outcome out = h.execute(par, ctx, g, RunConfig{.logs_root = LogsRoot{"/tmp"}});
+
+    SNITCH_CHECK(out.status == StageStatus::success);
+    SNITCH_CHECK(type_safe::get(out.notes).find("score") != std::string::npos);
+}
+
+SNITCH_TEST_CASE("[fan_in_handler] all-fail with missing score surfaces diagnostics in notes -- 7.10-U-006")
+{
+    FanInHandler h{nullptr};
+    Context ctx;
+    nlohmann::json results = nlohmann::json::array();
+    results.push_back(nlohmann::json{
+        {"id",             "b0"},
+        {"status",         "fail"},
+        {"failure_reason", "branch failed"},
+        {"notes",          ""}
+    });
+    set_results(ctx, results);
+    Graph g;
+    Node par;
+    par.id = NodeId{"fan_in"};
+
+    const Outcome out = h.execute(par, ctx, g, RunConfig{.logs_root = LogsRoot{"/tmp"}});
+
+    SNITCH_CHECK(out.status == StageStatus::fail);
+    SNITCH_CHECK(type_safe::get(out.notes).find("score") != std::string::npos);
 }

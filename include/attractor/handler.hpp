@@ -2,6 +2,7 @@
 #define ATTRACTOR_HANDLER_HPP
 
 #include <attractor/graph.hpp>
+#include <attractor/run_config.hpp>
 #include <attractor/types.hpp>
 #include <expected>
 #include <nlohmann/json.hpp>
@@ -45,7 +46,7 @@ class Handler {
   public:
     virtual ~Handler() = default;
     [[nodiscard]] virtual auto execute(const Node& node, Context& ctx, const Graph& graph,
-                                       const LogsRoot& logs_root) const -> Outcome = 0;
+                                       const RunConfig& run_config) const -> Outcome = 0;
 };
 
 }  // namespace attractor

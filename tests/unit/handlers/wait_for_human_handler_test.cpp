@@ -61,7 +61,7 @@ SNITCH_TEST_CASE("[wait_for_human_handler] QueueInterviewer routes to approve br
     auto g    = make_approve_fix_graph();
     auto gate = make_gate_node("gate");
 
-    auto outcome = h.execute(gate, ctx, g, logs.logs_root());
+    auto outcome = h.execute(gate, ctx, g, RunConfig{.logs_root = logs.logs_root()});
 
     SNITCH_CHECK(outcome.status == StageStatus::success);
     SNITCH_CHECK(outcome.preferred_label == EdgeLabel{"[A] Approve"});
@@ -79,7 +79,7 @@ SNITCH_TEST_CASE("[wait_for_human_handler] bracket format [Y] Yes extracts key Y
     auto g    = make_single_edge_graph("gate", "yes", "[Y] Yes");
     auto gate = make_gate_node("gate");
 
-    auto outcome = h.execute(gate, ctx, g, logs.logs_root());
+    auto outcome = h.execute(gate, ctx, g, RunConfig{.logs_root = logs.logs_root()});
 
     SNITCH_CHECK(outcome.status == StageStatus::success);
     SNITCH_CHECK(outcome.preferred_label == EdgeLabel{"[Y] Yes"});
@@ -97,7 +97,7 @@ SNITCH_TEST_CASE("[wait_for_human_handler] paren format Y) Yes extracts key Y --
     auto g    = make_single_edge_graph("gate", "yes", "Y) Yes");
     auto gate = make_gate_node("gate");
 
-    auto outcome = h.execute(gate, ctx, g, logs.logs_root());
+    auto outcome = h.execute(gate, ctx, g, RunConfig{.logs_root = logs.logs_root()});
 
     SNITCH_CHECK(outcome.status == StageStatus::success);
     SNITCH_CHECK(outcome.preferred_label == EdgeLabel{"Y) Yes"});
@@ -115,7 +115,7 @@ SNITCH_TEST_CASE("[wait_for_human_handler] dash format Y - Yes extracts key Y --
     auto g    = make_single_edge_graph("gate", "yes", "Y - Yes");
     auto gate = make_gate_node("gate");
 
-    auto outcome = h.execute(gate, ctx, g, logs.logs_root());
+    auto outcome = h.execute(gate, ctx, g, RunConfig{.logs_root = logs.logs_root()});
 
     SNITCH_CHECK(outcome.status == StageStatus::success);
     SNITCH_CHECK(outcome.preferred_label == EdgeLabel{"Y - Yes"});
@@ -133,7 +133,7 @@ SNITCH_TEST_CASE("[wait_for_human_handler] no-format label falls back to first c
     auto g    = make_single_edge_graph("gate", "yes", "Yes");
     auto gate = make_gate_node("gate");
 
-    auto outcome = h.execute(gate, ctx, g, logs.logs_root());
+    auto outcome = h.execute(gate, ctx, g, RunConfig{.logs_root = logs.logs_root()});
 
     SNITCH_CHECK(outcome.status == StageStatus::success);
     SNITCH_CHECK(outcome.preferred_label == EdgeLabel{"Yes"});
@@ -152,7 +152,7 @@ SNITCH_TEST_CASE("[wait_for_human_handler] timeout with human.default_choice rou
     auto gate = make_gate_node("gate");
     gate.human_default_choice = NodeId{"approve"};
 
-    auto outcome = h.execute(gate, ctx, g, logs.logs_root());
+    auto outcome = h.execute(gate, ctx, g, RunConfig{.logs_root = logs.logs_root()});
 
     SNITCH_CHECK(outcome.status == StageStatus::success);
     SNITCH_CHECK(outcome.preferred_label == EdgeLabel{"[A] Approve"});
@@ -168,7 +168,7 @@ SNITCH_TEST_CASE("[wait_for_human_handler] timeout with no default choice return
     auto g    = make_approve_fix_graph();
     auto gate = make_gate_node("gate");
 
-    auto outcome = h.execute(gate, ctx, g, logs.logs_root());
+    auto outcome = h.execute(gate, ctx, g, RunConfig{.logs_root = logs.logs_root()});
 
     SNITCH_CHECK(outcome.status == StageStatus::retry);
 }
@@ -182,7 +182,7 @@ SNITCH_TEST_CASE("[wait_for_human_handler] no outgoing edges returns FAIL -- 3.2
     Graph g;
     auto gate = make_gate_node("gate");
 
-    auto outcome = h.execute(gate, ctx, g, logs.logs_root());
+    auto outcome = h.execute(gate, ctx, g, RunConfig{.logs_root = logs.logs_root()});
 
     SNITCH_CHECK(outcome.status == StageStatus::fail);
     SNITCH_CHECK(type_safe::get(outcome.failure_reason).find("No outgoing edges") != std::string::npos);
@@ -198,7 +198,7 @@ SNITCH_TEST_CASE("[wait_for_human_handler] skipped answer returns FAIL -- 3.2-U-
     auto g    = make_approve_fix_graph();
     auto gate = make_gate_node("gate");
 
-    auto outcome = h.execute(gate, ctx, g, logs.logs_root());
+    auto outcome = h.execute(gate, ctx, g, RunConfig{.logs_root = logs.logs_root()});
 
     SNITCH_CHECK(outcome.status == StageStatus::fail);
     SNITCH_CHECK(type_safe::get(outcome.failure_reason).find("skipped") != std::string::npos);
@@ -214,7 +214,7 @@ SNITCH_TEST_CASE("[wait_for_human_handler] unrecognised key selects first choice
     auto g    = make_approve_fix_graph();
     auto gate = make_gate_node("gate");
 
-    auto outcome = h.execute(gate, ctx, g, logs.logs_root());
+    auto outcome = h.execute(gate, ctx, g, RunConfig{.logs_root = logs.logs_root()});
 
     SNITCH_CHECK(outcome.status == StageStatus::success);
     SNITCH_CHECK(outcome.preferred_label == EdgeLabel{"[A] Approve"});
@@ -230,7 +230,7 @@ SNITCH_TEST_CASE("[wait_for_human_handler] AnswerKind::yes routes to Y-keyed edg
     auto g    = make_single_edge_graph("gate", "yes", "[Y] Yes");
     auto gate = make_gate_node("gate");
 
-    auto outcome = h.execute(gate, ctx, g, logs.logs_root());
+    auto outcome = h.execute(gate, ctx, g, RunConfig{.logs_root = logs.logs_root()});
 
     SNITCH_CHECK(outcome.status == StageStatus::success);
     SNITCH_CHECK(outcome.preferred_label == EdgeLabel{"[Y] Yes"});
@@ -256,7 +256,7 @@ SNITCH_TEST_CASE("[wait_for_human_handler] AnswerKind::no routes to N-keyed edge
     g.edges.push_back(e2);
     auto gate = make_gate_node("gate");
 
-    auto outcome = h.execute(gate, ctx, g, logs.logs_root());
+    auto outcome = h.execute(gate, ctx, g, RunConfig{.logs_root = logs.logs_root()});
 
     SNITCH_CHECK(outcome.status == StageStatus::success);
     SNITCH_CHECK(outcome.preferred_label == EdgeLabel{"[N] No"});
@@ -282,7 +282,7 @@ SNITCH_TEST_CASE("[wait_for_human_handler] non-printable accelerator in [X] patt
     g.edges.push_back(e2);
     auto gate = make_gate_node("gate");
 
-    auto outcome = h.execute(gate, ctx, g, logs.logs_root());
+    auto outcome = h.execute(gate, ctx, g, RunConfig{.logs_root = logs.logs_root()});
 
     SNITCH_CHECK(outcome.status == StageStatus::success);
     SNITCH_CHECK(outcome.preferred_label == EdgeLabel{"[A] Approve"});

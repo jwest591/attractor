@@ -46,7 +46,7 @@ void write_status(const std::filesystem::path& stage_dir, const Outcome& outcome
 
 CodergenHandler::CodergenHandler(CodergenBackend* backend) : m_backend{backend} {}
 
-auto CodergenHandler::execute(const Node& node, Context& ctx, const Graph& graph, const LogsRoot& logs_root) const
+auto CodergenHandler::execute(const Node& node, Context& ctx, const Graph& graph, const RunConfig& run_config) const
     -> Outcome
 {
     const auto& id_str = type_safe::get(node.id);
@@ -66,7 +66,7 @@ auto CodergenHandler::execute(const Node& node, Context& ctx, const Graph& graph
             "codergen node '" + id_str + "' has no prompt and no label"});
     }
 
-    const auto stage_dir = std::filesystem::path(type_safe::get(logs_root)) / id_str;
+    const auto stage_dir = std::filesystem::path(type_safe::get(run_config.logs_root)) / id_str;
     std::error_code ec;
     std::filesystem::create_directories(stage_dir, ec);
     if (ec) {

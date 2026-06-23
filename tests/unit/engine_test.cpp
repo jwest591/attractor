@@ -28,7 +28,7 @@ namespace {
 class ThrowingHandler final : public Handler {
   public:
     [[nodiscard]] auto execute(const Node& /*node*/, Context& /*ctx*/, const Graph& /*graph*/,
-                               const LogsRoot& /*logs_root*/) const -> Outcome override
+                               const RunConfig& /*run_config*/) const -> Outcome override
     {
         throw std::runtime_error("intentional test exception");
     }
@@ -39,7 +39,7 @@ class RecordingHandler final : public Handler {
     mutable int call_count{0};
 
     [[nodiscard]] auto execute(const Node& /*node*/, Context& /*ctx*/, const Graph& /*graph*/,
-                               const LogsRoot& /*logs_root*/) const -> Outcome override
+                               const RunConfig& /*run_config*/) const -> Outcome override
     {
         ++call_count;
         return Outcome{};
@@ -559,7 +559,7 @@ SNITCH_TEST_CASE("[engine] multi-gate terminal: gate without retry_target fails 
       public:
         mutable int call_count{0};
         [[nodiscard]] auto execute(const Node& /*node*/, Context& /*ctx*/, const Graph& /*graph*/,
-                                   const LogsRoot& /*logs_root*/) const -> Outcome override
+                                   const RunConfig& /*run_config*/) const -> Outcome override
         {
             ++call_count;
             return Outcome::fail(DiagnosticMessage{"always fails"});

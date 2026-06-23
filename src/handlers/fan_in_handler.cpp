@@ -5,6 +5,7 @@
 #include <attractor/types.hpp>
 
 #include <algorithm>
+#include <cmath>
 #include <nlohmann/json.hpp>
 #include <optional>
 #include <string>
@@ -28,8 +29,9 @@ int outcome_rank(StageStatus s) noexcept
         return 3;
     case StageStatus::skipped:
         return 4;
+    default:
+        return 5;
     }
-    return 5;
 }
 
 struct Candidate {
@@ -46,7 +48,7 @@ FanInHandler::FanInHandler(CodergenBackend* backend)
 {}
 
 auto FanInHandler::execute(const Node& node, Context& ctx, const Graph& /*graph*/,
-                           const LogsRoot& /*logs_root*/) const -> Outcome
+                           const RunConfig& /*run_config*/) const -> Outcome
 {
     const nlohmann::json raw = ctx.get(ContextKey{"parallel.results"});
     if (raw.is_null() || !raw.is_array() || raw.empty()) {
@@ -55,14 +57,27 @@ auto FanInHandler::execute(const Node& node, Context& ctx, const Graph& /*graph*
 
     std::vector<Candidate> candidates;
     candidates.reserve(raw.size());
+    std::string score_diagnostics;
+
     for (const auto& entry : raw) {
         Candidate c;
         c.id    = entry.value("id", "");
-        c.score = entry.value("score", 0.0);
         c.entry = entry;
         StageStatus st{};
-        from_json(entry.at("status"), st);
+        if (!entry.contains("status")) {
+            score_diagnostics += "branch '" + c.id + "' status missing; ";
+            st = StageStatus::fail;
+        } else {
+            from_json(entry.at("status"), st);
+        }
         c.status = st;
+
+        if (!entry.contains("score") || !entry.at("score").is_number()) {
+            score_diagnostics += "branch '" + c.id + "' score missing or non-numeric; ";
+            c.score = 0.0;
+        } else {
+            c.score = entry.at("score").get<double>();
+        }
         candidates.push_back(std::move(c));
     }
 
@@ -90,7 +105,7 @@ auto FanInHandler::execute(const Node& node, Context& ctx, const Graph& /*graph*
             if (ra != rb) {
                 return ra < rb;
             }
-            if (a.score != b.score) {
+            if (std::abs(a.score - b.score) >= 1e-9) {
                 return a.score > b.score;
             }
             return a.id < b.id;
@@ -102,15 +117,26 @@ auto FanInHandler::execute(const Node& node, Context& ctx, const Graph& /*graph*
 
     if (best.status == StageStatus::fail) {
         if (from_llm) {
-            return Outcome::fail(DiagnosticMessage{"FanInHandler: LLM-selected candidate has fail status"});
+            Outcome out = Outcome::fail(DiagnosticMessage{"FanInHandler: LLM-selected candidate has fail status"});
+            if (!score_diagnostics.empty())
+                out.notes = HandlerNote{score_diagnostics};
+            return out;
         }
-        return Outcome::fail(DiagnosticMessage{"FanInHandler: all candidates failed"});
+        Outcome out = Outcome::fail(DiagnosticMessage{"FanInHandler: all candidates failed"});
+        if (!score_diagnostics.empty())
+            out.notes = HandlerNote{score_diagnostics};
+        return out;
     }
 
     Outcome out{.context_updates = nlohmann::json::object()};
     out.context_updates["parallel.fan_in.best_id"]      = best.id;
     out.context_updates["parallel.fan_in.best_outcome"] = best.entry;
-    out.notes = HandlerNote{"FanInHandler: selected best candidate: " + best.id};
+
+    std::string notes_str = "FanInHandler: selected best candidate: " + best.id;
+    if (!score_diagnostics.empty()) {
+        notes_str += "; " + score_diagnostics;
+    }
+    out.notes = HandlerNote{notes_str};
     return out;
 }
 

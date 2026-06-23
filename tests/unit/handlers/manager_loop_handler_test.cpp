@@ -28,9 +28,9 @@ SNITCH_TEST_CASE("[manager_loop_handler] max_cycles=3 with never-satisfied condi
     ManagerLoopHandler h;
     Context ctx;
     Graph g;
-    LogsRoot lr{"./logs"};
+    RunConfig rc{.logs_root = LogsRoot{"./logs"}};
 
-    auto outcome = h.execute(make_manager_node("loop", 3, "context.nope=yes"), ctx, g, lr);
+    auto outcome = h.execute(make_manager_node("loop", 3, "context.nope=yes"), ctx, g, rc);
 
     SNITCH_CHECK(outcome.status == StageStatus::fail);
     SNITCH_CHECK(type_safe::get(outcome.failure_reason) == "Max cycles exceeded");
@@ -41,9 +41,9 @@ SNITCH_TEST_CASE("[manager_loop_handler] stop condition met on cycle 2 returns S
     ManagerLoopHandler h;
     Context ctx;
     Graph g;
-    LogsRoot lr{"./logs"};
+    RunConfig rc{.logs_root = LogsRoot{"./logs"}};
 
-    auto outcome = h.execute(make_manager_node("loop", 5, "context.cycle=2"), ctx, g, lr);
+    auto outcome = h.execute(make_manager_node("loop", 5, "context.cycle=2"), ctx, g, rc);
 
     SNITCH_CHECK(outcome.status == StageStatus::success);
     const int final_cycle = std::stoi(ctx.get(ContextKey{"cycle"}).get<std::string>());
@@ -56,9 +56,9 @@ SNITCH_TEST_CASE("[manager_loop_handler] empty stop condition exhausts max_cycle
     ManagerLoopHandler h;
     Context ctx;
     Graph g;
-    LogsRoot lr{"./logs"};
+    RunConfig rc{.logs_root = LogsRoot{"./logs"}};
 
-    auto outcome = h.execute(make_manager_node("loop", 2, ""), ctx, g, lr);
+    auto outcome = h.execute(make_manager_node("loop", 2, ""), ctx, g, rc);
 
     SNITCH_CHECK(outcome.status == StageStatus::fail);
     SNITCH_CHECK(type_safe::get(outcome.failure_reason) == "Max cycles exceeded");

@@ -58,10 +58,10 @@ const Node* find_node(const Graph& graph, const NodeId& id)
 }
 
 Outcome safe_execute(const Handler& handler, const Node& node, Context& ctx, const Graph& graph,
-                     const LogsRoot& logs_root)
+                     const RunConfig& run_config)
 {
     try {
-        return handler.execute(node, ctx, graph, logs_root);
+        return handler.execute(node, ctx, graph, run_config);
     }
     catch (const std::exception& ex) {
         return Outcome::fail(DiagnosticMessage{ex.what()});
@@ -532,7 +532,7 @@ auto Engine::run_from(const Graph& graph, const NodeId& start_id, const RunConfi
         Outcome outcome;
 
         do {
-            outcome = safe_execute(handler, *node, ctx, graph, config.logs_root);
+            outcome = safe_execute(handler, *node, ctx, graph, config);
             node_outcomes[node->id] = outcome;
             if (outcome.status != StageStatus::retry) {
                 break;

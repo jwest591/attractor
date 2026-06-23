@@ -21,7 +21,7 @@ class FixedOutcomeHandler final : public Handler {
     explicit FixedOutcomeHandler(StageStatus s) : m_status{s} {}
 
     [[nodiscard]] auto execute(const Node& /*node*/, Context& /*ctx*/, const Graph& /*graph*/,
-                               const LogsRoot& /*logs_root*/) const -> Outcome override
+                               const RunConfig& /*run_config*/) const -> Outcome override
     {
         return Outcome{.status = m_status};
     }
@@ -36,7 +36,7 @@ class FailOnceThenSucceedHandler final : public Handler {
     mutable int call_count{0};
 
     [[nodiscard]] auto execute(const Node& /*node*/, Context& /*ctx*/, const Graph& /*graph*/,
-                               const LogsRoot& /*logs_root*/) const -> Outcome override
+                               const RunConfig& /*run_config*/) const -> Outcome override
     {
         ++call_count;
         if (call_count == 1) {

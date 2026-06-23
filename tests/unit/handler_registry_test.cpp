@@ -18,7 +18,7 @@ struct StubHandler final : public Handler {
     StageStatus return_status{StageStatus::success};
     mutable int call_count{0};
 
-    [[nodiscard]] auto execute(const Node&, Context&, const Graph&, const LogsRoot&) const -> Outcome override
+    [[nodiscard]] auto execute(const Node&, Context&, const Graph&, const RunConfig&) const -> Outcome override
     {
         ++call_count;
         return Outcome{.status = return_status};
@@ -100,9 +100,8 @@ SNITCH_TEST_CASE("[handler_registry] Handler::execute called on concrete impl re
     Context ctx;
     Graph g;
     Node n = make_node("work");
-    LogsRoot lr{"./logs"};
 
-    auto outcome = h.execute(n, ctx, g, lr);
+    auto outcome = h.execute(n, ctx, g, RunConfig{.logs_root = LogsRoot{"./logs"}});
     SNITCH_CHECK(outcome.status == StageStatus::success);
     SNITCH_CHECK(h.call_count == 1);
 }
@@ -116,9 +115,8 @@ SNITCH_TEST_CASE("[handler_registry] Handler called via base reference returns c
     Context ctx;
     Graph g;
     Node n = make_node("work");
-    LogsRoot lr{"./logs"};
 
-    auto outcome = h.execute(n, ctx, g, lr);
+    auto outcome = h.execute(n, ctx, g, RunConfig{.logs_root = LogsRoot{"./logs"}});
     SNITCH_CHECK(outcome.status == StageStatus::retry);
     SNITCH_CHECK(impl.call_count == 1);
 }

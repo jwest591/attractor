@@ -3,7 +3,7 @@
 namespace attractor {
 
 auto ExitHandler::execute(const Node& /*node*/, Context& /*ctx*/, const Graph& /*graph*/,
-                          const LogsRoot& /*logs_root*/) const -> Outcome
+                          const RunConfig& /*run_config*/) const -> Outcome
 {
     return Outcome{};
 }

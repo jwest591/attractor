@@ -25,9 +25,9 @@ SNITCH_TEST_CASE("[conditional_handler] execute returns SUCCESS with notes -- 2.
     ConditionalHandler h;
     Context ctx;
     Graph g;
-    LogsRoot lr{"./logs"};
+    RunConfig rc{.logs_root = LogsRoot{"./logs"}};
 
-    auto outcome = h.execute(make_conditional_node("check_quality"), ctx, g, lr);
+    auto outcome = h.execute(make_conditional_node("check_quality"), ctx, g, rc);
 
     SNITCH_CHECK(outcome.status == StageStatus::success);
     SNITCH_CHECK(type_safe::get(outcome.notes) == "Conditional node evaluated: check_quality");
@@ -38,9 +38,9 @@ SNITCH_TEST_CASE("[conditional_handler] notes contain the node id")
     ConditionalHandler h;
     Context ctx;
     Graph g;
-    LogsRoot lr{"./logs"};
+    RunConfig rc{.logs_root = LogsRoot{"./logs"}};
 
-    auto outcome = h.execute(make_conditional_node("route_decision"), ctx, g, lr);
+    auto outcome = h.execute(make_conditional_node("route_decision"), ctx, g, rc);
 
     SNITCH_CHECK(type_safe::get(outcome.notes) == "Conditional node evaluated: route_decision");
 }
@@ -50,9 +50,9 @@ SNITCH_TEST_CASE("[conditional_handler] no context updates and no preferred labe
     ConditionalHandler h;
     Context ctx;
     Graph g;
-    LogsRoot lr{"./logs"};
+    RunConfig rc{.logs_root = LogsRoot{"./logs"}};
 
-    auto outcome = h.execute(make_conditional_node("x"), ctx, g, lr);
+    auto outcome = h.execute(make_conditional_node("x"), ctx, g, rc);
 
     SNITCH_CHECK(outcome.context_updates.empty());
     SNITCH_CHECK(type_safe::get(outcome.preferred_label).empty());

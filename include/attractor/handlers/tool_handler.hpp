@@ -18,7 +18,7 @@ class ToolHandler final : public Handler {
     explicit ToolHandler(CommandRunner runner = {});
 
     [[nodiscard]] auto execute(const Node& node, Context& ctx, const Graph& graph,
-                               const LogsRoot& logs_root) const -> Outcome override;
+                               const RunConfig& run_config) const -> Outcome override;
 
   private:
     CommandRunner m_runner;

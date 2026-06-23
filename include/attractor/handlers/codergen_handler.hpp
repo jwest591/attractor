@@ -10,7 +10,7 @@ class CodergenHandler final : public Handler {
     explicit CodergenHandler(CodergenBackend* backend = nullptr);
 
     [[nodiscard]] auto execute(const Node& node, Context& ctx, const Graph& graph,
-                               const LogsRoot& logs_root) const -> Outcome override;
+                               const RunConfig& run_config) const -> Outcome override;
 
   private:
     CodergenBackend* m_backend{nullptr};

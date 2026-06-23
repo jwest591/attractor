@@ -21,7 +21,7 @@ class RecordingHandler final : public Handler {
     mutable int call_count{0};
 
     [[nodiscard]] auto execute(const Node& /*node*/, Context& /*ctx*/, const Graph& /*graph*/,
-                               const LogsRoot& /*logs_root*/) const -> Outcome override
+                               const RunConfig& /*run_config*/) const -> Outcome override
     {
         ++call_count;
         return Outcome{};
@@ -33,7 +33,7 @@ class ConfigurableHandler final : public Handler {
     explicit ConfigurableHandler(Outcome out) : m_outcome{std::move(out)} {}
 
     [[nodiscard]] auto execute(const Node& /*node*/, Context& /*ctx*/, const Graph& /*graph*/,
-                               const LogsRoot& /*logs_root*/) const -> Outcome override
+                               const RunConfig& /*run_config*/) const -> Outcome override
     {
         return m_outcome;
     }
