@@ -69,8 +69,8 @@ SNITCH_TEST_CASE("[tool_handler] injected runner returns output -- 2.8-U-001")
     auto outcome = h.execute(make_tool_node("my_tool", "echo hello"), ctx, g, rc);
 
     SNITCH_CHECK(outcome.status == StageStatus::success);
-    SNITCH_REQUIRE(outcome.context_updates.contains("tool.output"));
-    SNITCH_CHECK(outcome.context_updates["tool.output"].get<std::string>() == "hello\n");
+    SNITCH_REQUIRE(outcome.context_updates.contains("tool"));
+    SNITCH_CHECK(outcome.context_updates["tool"]["output"].get<std::string>() == "hello\n");
 }
 
 SNITCH_TEST_CASE("[tool_handler] empty tool_command returns FAIL -- 2.8-U-002")

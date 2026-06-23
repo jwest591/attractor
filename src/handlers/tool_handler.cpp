@@ -94,7 +94,7 @@ auto ToolHandler::execute(const Node& node, Context& /*ctx*/, const Graph& /*gra
         }
 
         Outcome out;
-        out.context_updates["tool.output"] = output;
+        out.context_updates["tool"]["output"] = output;
         out.notes = HandlerNote{"Tool completed: " + cmd};
         write_status(stage_dir, out);
         return out;
