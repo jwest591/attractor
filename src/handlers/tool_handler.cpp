@@ -43,6 +43,17 @@ std::string run_popen(std::string_view cmd)
     return result;
 }
 
+std::string expand_goal(std::string s, const GoalText& goal)
+{
+    const auto& goal_str = type_safe::get(goal);
+    std::string::size_type pos = 0;
+    while ((pos = s.find("$goal", pos)) != std::string::npos) {
+        s.replace(pos, 5, goal_str);
+        pos += goal_str.size();
+    }
+    return s;
+}
+
 void write_status(const std::filesystem::path& stage_dir, const Outcome& outcome)
 {
     nlohmann::json j;
@@ -62,25 +73,25 @@ void write_status(const std::filesystem::path& stage_dir, const Outcome& outcome
 
 ToolHandler::ToolHandler(CommandRunner runner) : m_runner{std::move(runner)} {}
 
-auto ToolHandler::execute(const Node& node, Context& /*ctx*/, const Graph& /*graph*/,
-                          const RunConfig& run_config) const -> Outcome
+auto ToolHandler::execute(const Node& node, Context& /*ctx*/, const Graph& graph, const RunConfig& run_config) const
+    -> Outcome
 {
     const std::string& id_str = type_safe::get(node.id);
     if (id_str.find('/') != std::string::npos || id_str.find("..") != std::string::npos) {
-        return Outcome::fail(DiagnosticMessage{"ToolHandler: node.id contains path-unsafe characters: " + id_str});
+        return Outcome::fail(DiagnosticMessage{"node.id contains path-unsafe characters: " + id_str});
     }
 
     const auto stage_dir = std::filesystem::path(type_safe::get(run_config.logs_root)) / id_str;
     std::error_code ec;
     std::filesystem::create_directories(stage_dir, ec);
     if (ec) {
-        return Outcome::fail(DiagnosticMessage{"ToolHandler: failed to create log dir: " + ec.message()});
+        return Outcome::fail(DiagnosticMessage{"failed to create log dir: " + ec.message()});
     }
 
-    const std::string cmd = type_safe::get(node.tool_command);
+    const std::string cmd = expand_goal(type_safe::get(node.tool_command), graph.goal);
 
     if (cmd.empty()) {
-        const auto outcome = Outcome::fail(DiagnosticMessage{"ToolHandler: tool_command is empty"});
+        const auto outcome = Outcome::fail(DiagnosticMessage{"tool_command is empty"});
         write_status(stage_dir, outcome);
         return outcome;
     }
@@ -100,12 +111,12 @@ auto ToolHandler::execute(const Node& node, Context& /*ctx*/, const Graph& /*gra
         return out;
     }
     catch (const std::exception& e) {
-        const auto outcome = Outcome::fail(DiagnosticMessage{std::string{"ToolHandler: "} + e.what()});
+        const auto outcome = Outcome::fail(DiagnosticMessage{e.what()});
         write_status(stage_dir, outcome);
         return outcome;
     }
     catch (...) {
-        const auto outcome = Outcome::fail(DiagnosticMessage{"ToolHandler: unknown exception"});
+        const auto outcome = Outcome::fail(DiagnosticMessage{"unknown exception"});
         write_status(stage_dir, outcome);
         return outcome;
     }

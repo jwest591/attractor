@@ -173,6 +173,25 @@ SNITCH_TEST_CASE("[tool_handler] writes status.json on empty-command failure")
     SNITCH_CHECK(!j["failure_reason"].get<std::string>().empty());
 }
 
+SNITCH_TEST_CASE("[tool_handler] $goal in tool_command is expanded")
+{
+    ScopedTempDir tmp;
+    std::string captured_cmd;
+    ToolHandler h{[&](std::string_view cmd) -> std::string {
+        captured_cmd = std::string(cmd);
+        return "done";
+    }};
+    Context ctx;
+    Graph g;
+    g.goal = GoalText{"7.11"};
+    RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
+
+    Node n = make_tool_node("check", "status.sh $goal --config cfg.yaml");
+    (void)h.execute(n, ctx, g, rc);
+
+    SNITCH_CHECK(captured_cmd == "status.sh 7.11 --config cfg.yaml");
+}
+
 SNITCH_TEST_CASE("[tool_handler] node.id with path separator returns FAIL")
 {
     ScopedTempDir tmp;
