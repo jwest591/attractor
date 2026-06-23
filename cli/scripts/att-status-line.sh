@@ -33,10 +33,13 @@ if [ -n "${ATTRACTOR_NODE_LOG_DIR:-}" ]; then
     printf '{"percent":%s,"total_tokens":%s,"context_window":%s}\n' "$pct" "$total" "$window" > "$tmp"
     mv "$tmp" "$dest"
 
-    # debug: append a timestamped line to status-line.log
+    # debug: append a timestamped entry with full hook payload to status-line.log
     TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    printf '%s  ctx=%s%%  tokens=%s/%s\n' "$TS" "$pct_display" "$total" "$window" \
-        >> "$ATTRACTOR_NODE_LOG_DIR/status-line.log"
+    {
+        printf '%s  ctx=%s%%  tokens=%s/%s\n' "$TS" "$pct_display" "$total" "$window"
+        printf '%s' "$INPUT" | jq . 2>/dev/null || printf '%s\n' "$INPUT"
+        printf '\n'
+    } >> "$ATTRACTOR_NODE_LOG_DIR/status-line.log"
 fi
 
 printf "attractor | ctx: %s%%\n" "$pct_display"
