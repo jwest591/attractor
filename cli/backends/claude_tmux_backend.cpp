@@ -11,6 +11,7 @@
 #include <filesystem>
 #include <format>
 #include <optional>
+#include <print>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -28,6 +29,7 @@ constexpr auto k_jsonl_poll_interval = std::chrono::milliseconds{100};
 
 int tmux_system(const std::string& cmd)
 {
+    std::println(stderr, "{}", cmd);
     // NOLINT(cert-env33-c) -- subprocess via system() is required for tmux control
     return system(cmd.c_str());  // NOLINT(cert-env33-c)
 }
@@ -244,7 +246,10 @@ auto ClaudeCodeTmuxBackend::run(const Node& node, const PromptText& prompt, Cont
         }
     }
 
-    // Monitor JSONL for stop_reason or error; any line with "stop_reason" ends the turn
+    // Monitor JSONL for end_turn or error. Claude Code stores each content block of an API
+    // response as a separate JSONL record (all sharing the same message id and stop_reason).
+    // tool_use records with text content must not be mistaken for end-of-turn; only
+    // stop_reason:"end_turn" marks the final record of the turn.
     // partial persists across poll iterations so a JSONL line split across two reads is assembled
     long jsonl_offset = 0L;
     std::string partial;
@@ -275,13 +280,8 @@ auto ClaudeCodeTmuxBackend::run(const Node& node, const PromptText& prompt, Cont
             }
 
             if (partial.find("\"type\":\"assistant\"") != std::string::npos &&
-                partial.find("\"stop_reason\"") != std::string::npos) {
+                partial.find("\"stop_reason\":\"end_turn\"") != std::string::npos) {
                 auto text = extract_response_text(partial);
-                jsonl_offset += static_cast<long>(partial.size());
-                partial.clear();
-                if (text.empty()) {
-                    continue;  // thinking-only event; keep polling
-                }
                 fclose(fp);  // NOLINT(cppcoreguidelines-owning-memory)
                 return LlmResponse{std::move(text)};
             }
