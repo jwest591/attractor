@@ -104,8 +104,11 @@ auto ToolHandler::execute(const Node& node, Context& /*ctx*/, const Graph& graph
             f << output;
         }
 
+        const auto last = output.find_last_not_of("\r\n");
+        const std::string trimmed = (last == std::string::npos) ? "" : output.substr(0, last + 1);
+
         Outcome out;
-        out.context_updates["tool"]["output"] = output;
+        out.context_updates["tool"]["output"] = trimmed;
         out.notes = HandlerNote{"Tool completed: " + cmd};
         write_status(stage_dir, out);
         return out;

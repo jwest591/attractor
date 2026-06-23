@@ -70,7 +70,7 @@ SNITCH_TEST_CASE("[tool_handler] injected runner returns output -- 2.8-U-001")
 
     SNITCH_CHECK(outcome.status == StageStatus::success);
     SNITCH_REQUIRE(outcome.context_updates.contains("tool"));
-    SNITCH_CHECK(outcome.context_updates["tool"]["output"].get<std::string>() == "hello\n");
+    SNITCH_CHECK(outcome.context_updates["tool"]["output"].get<std::string>() == "hello");
 }
 
 SNITCH_TEST_CASE("[tool_handler] empty tool_command returns FAIL -- 2.8-U-002")
@@ -171,6 +171,33 @@ SNITCH_TEST_CASE("[tool_handler] writes status.json on empty-command failure")
     const auto j = nlohmann::json::parse(read_file(status_file));
     SNITCH_CHECK(j["outcome"].get<std::string>() == "fail");
     SNITCH_CHECK(!j["failure_reason"].get<std::string>().empty());
+}
+
+SNITCH_TEST_CASE("[tool_handler] trailing newlines stripped from context output")
+{
+    ScopedTempDir tmp;
+    ToolHandler h{[](std::string_view) { return "done\n"; }};
+    Context ctx;
+    Graph g;
+    RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
+
+    auto outcome = h.execute(make_tool_node("check", "cmd"), ctx, g, rc);
+
+    SNITCH_REQUIRE(outcome.context_updates.contains("tool"));
+    SNITCH_CHECK(outcome.context_updates["tool"]["output"].get<std::string>() == "done");
+}
+
+SNITCH_TEST_CASE("[tool_handler] output.txt preserves raw bytes including newline")
+{
+    ScopedTempDir tmp;
+    ToolHandler h{[](std::string_view) { return "done\n"; }};
+    Context ctx;
+    Graph g;
+    RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
+
+    (void)h.execute(make_tool_node("check", "cmd"), ctx, g, rc);
+
+    SNITCH_CHECK(read_file(tmp.path / "check" / "output.txt") == "done\n");
 }
 
 SNITCH_TEST_CASE("[tool_handler] $goal in tool_command is expanded")
