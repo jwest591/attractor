@@ -1,10 +1,10 @@
 #include <attractor/handlers/tool_handler.hpp>
 
+#include <array>
 #include <attractor/context.hpp>
 #include <attractor/graph.hpp>
 #include <attractor/handler.hpp>
 #include <attractor/types.hpp>
-#include <array>
 #include <cstdio>
 #include <memory>
 #include <stdexcept>
@@ -56,7 +56,7 @@ auto ToolHandler::execute(const Node& node, Context& /*ctx*/, const Graph& /*gra
         const std::string output = m_runner ? m_runner(cmd) : run_popen(cmd);
 
         Outcome out;
-        out.context_updates["tool_output"] = output;
+        out.context_updates["tool.output"] = output;
         out.notes = HandlerNote{"Tool completed: " + cmd};
         return out;
     }
