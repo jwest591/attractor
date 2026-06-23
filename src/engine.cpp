@@ -14,6 +14,7 @@
 #include <attractor/handlers/fan_in_handler.hpp>
 #include <attractor/handlers/parallel_handler.hpp>
 #include <attractor/handlers/start_handler.hpp>
+#include <attractor/handlers/tool_handler.hpp>
 #include <attractor/handlers/wait_for_human_handler.hpp>
 #include <attractor/interviewer.hpp>
 #include <attractor/types.hpp>
@@ -382,6 +383,7 @@ void Engine::register_default_handlers(std::unique_ptr<CodergenBackend> backend)
             return run_from(g, id, cfg);
         }));
     m_registry.register_handler(HandlerTypeName{"parallel.fan_in"}, std::make_unique<FanInHandler>(m_backend.get()));
+    m_registry.register_handler(HandlerTypeName{"tool"}, std::make_unique<ToolHandler>());
     m_registry.set_default_handler(std::make_unique<StartHandler>());
 }
 
