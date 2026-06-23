@@ -4,7 +4,7 @@ digraph BMAD {
     // ── Graph-level attributes ─────────────────────────────────────────────
 
     graph [
-        goal             = "7.11",
+        goal             = "7-11",
         label            = "Run a bmad story to code review stage",
 
         // default_max_retries applies to every node that omits max_retries
@@ -26,7 +26,7 @@ digraph BMAD {
 
     // Node and edge default blocks — apply to all subsequent declarations
     // in this scope; individual nodes/edges may override.
-    node [shape=box, timeout="20m"]
+    node [shape=box, timeout="40m"]
     edge [weight=0]
 
 
