@@ -1,0 +1,88 @@
+
+digraph BMAD {
+
+    // ── Graph-level attributes ─────────────────────────────────────────────
+
+    graph [
+        goal             = "7.11",
+        label            = "Run a bmad story to code review stage",
+
+        // default_max_retries applies to every node that omits max_retries
+        default_max_retries = 1,
+
+        // default_fidelity: compact = structured bullet-point context summary
+        default_fidelity = "compact",
+
+        // model_stylesheet: CSS-like rules for LLM model/provider/effort.
+        //   *         → universal (lowest specificity)
+        //   .class    → class-name match (medium)
+        //   #node_id  → exact node ID (highest)
+        model_stylesheet = "
+            * { llm_model: claude-sonnet-4-6; llm_provider: anthropic; reasoning_effort: high; }
+            .fast    { llm_model: claude-haiku-4-5; reasoning_effort: low; }
+            #plan    { reasoning_effort: low; }
+        "
+    ]
+
+    // Node and edge default blocks — apply to all subsequent declarations
+    // in this scope; individual nodes/edges may override.
+    node [shape=box, timeout="20m"]
+    edge [weight=0]
+
+
+    // ── Entry and exit ─────────────────────────────────────────────────────
+
+    start [shape=Mdiamond, label="Start"]
+    done  [shape=Msquare,  label="Done"]
+
+
+    // ── Routing ────────────────────────────────────────────
+
+    get_status [
+        shape=parallelogram,
+        label = "Get story status",
+        type = "tool",
+        tool_command = "story-status.sh $goal /home/agent/bmad/_bmad-output/implementation-artifacts/sprint-status.yaml"
+    ]
+
+    // ── Implementation ────────────────────────────────────────────
+
+    story [
+        label = "create story",
+        prompt = "/bmad-create-story $goal",
+        max_retries   = 2
+    ]
+
+    tdd [
+        label = "build tdd",
+        prompt = "/bmad-testarch-atdd create tests for story $goal, complete task without prompting user"
+    ]
+
+    dev [
+        label = "dev story",
+        prompt = "/bmad-dev-story story $goal"
+    ]
+
+    review [
+        label = "review",
+        prompt = "/bmad-code-review story $goal - save all user decisions to a code review file for the user to review offline - do not prompt the user"
+    ]
+
+    ready_for_dev [
+        label        = "Validate story",
+        prompt = "/bmad-agent-dev validate story $goal is ready for dev. Apply any fixes required without prompting user."
+    ]
+
+
+    // ── Edges ──────────────────────────────────────────────────────────────
+
+    start -> get_status
+    get_status -> story [condition="context.tool.output=backlog"]
+    story -> ready_for_dev -> tdd -> get_status
+    get_status -> dev [condition="context.tool.output=ready-for-dev"]
+    get_status -> review [condition="context.tool.output=review"]
+    review -> get_status
+    get_status -> done [condition="context.tool.output=done"]
+    get_status -> done  // failure case
+
+}
