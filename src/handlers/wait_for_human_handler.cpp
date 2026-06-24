@@ -69,7 +69,8 @@ auto WaitForHumanHandler::execute(const Node& node, Context& /*ctx*/, const Grap
     Answer answer = m_interviewer->ask(question);
 
     if (answer.kind == AnswerKind::timeout) {
-        const std::string default_id = type_safe::get(node.human_default_choice);
+        // safe: engine dispatches WaitForHumanHandler only for WaitHumanNode
+        const std::string default_id = type_safe::get(static_cast<const WaitHumanNode&>(node).human_default_choice);
         if (!default_id.empty()) {
             for (const Edge* e : outgoing) {
                 if (type_safe::get(e->to) == default_id) {

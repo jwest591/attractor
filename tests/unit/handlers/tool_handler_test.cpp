@@ -36,9 +36,9 @@ struct ScopedTempDir {
     ScopedTempDir& operator=(ScopedTempDir&&) = delete;
 };
 
-Node make_tool_node(std::string id, std::string cmd)
+ToolNode make_tool_node(std::string id, std::string cmd)
 {
-    Node n;
+    ToolNode n;
     n.id = NodeId{std::move(id)};
     n.shape = NodeShape::parallelogram;
     n.tool_command = ShellCommand{std::move(cmd)};
@@ -259,7 +259,7 @@ SNITCH_TEST_CASE("[tool_handler] $goal in tool_command is expanded")
     g.goal = GoalText{"7.11"};
     RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
 
-    Node n = make_tool_node("check", "status.sh $goal --config cfg.yaml");
+    ToolNode n = make_tool_node("check", "status.sh $goal --config cfg.yaml");
     (void)h.execute(n, ctx, g, rc);
 
     SNITCH_CHECK(captured_cmd == "status.sh 7.11 --config cfg.yaml");

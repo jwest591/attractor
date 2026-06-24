@@ -39,12 +39,14 @@ auto ParallelHandler::execute(const Node& node, Context& /*ctx*/,
     if (branch_starts.empty())
         return Outcome::fail(DiagnosticMessage{"ParallelHandler: no outgoing branches"});
 
-    const auto max_par = static_cast<std::uint32_t>(node.max_parallel.get_value());
+    // safe: engine dispatches ParallelHandler only for ParallelNode
+    const auto& pn = static_cast<const ParallelNode&>(node);
+    const auto max_par = static_cast<std::uint32_t>(pn.max_parallel.get_value());
 
     RunConfig branch_config{run_config};
     branch_config.resume = false;
 
-    if (node.join_policy == JoinPolicy::first_success) {
+    if (pn.join_policy == JoinPolicy::first_success) {
         std::vector<Outcome> results(branch_starts.size(), Outcome{.status = StageStatus::skipped});
         std::atomic<bool> first_success_found{false};
 

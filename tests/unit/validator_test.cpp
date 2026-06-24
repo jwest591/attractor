@@ -61,13 +61,13 @@ SNITCH_TEST_CASE("[validator] edge_target_exists ERROR -- edge to nonexistent no
 {
     Graph g;
     {
-        Node n;
+        StartNode n;
         n.id = NodeId{"start"};
         n.shape = NodeShape::mdiamond;
         g.nodes.push_back(n);
     }
     {
-        Node n;
+        ExitNode n;
         n.id = NodeId{"done"};
         n.shape = NodeShape::msquare;
         g.nodes.push_back(n);
@@ -199,7 +199,7 @@ SNITCH_TEST_CASE("[validator] reachability WARNING -- orphan node")
 SNITCH_TEST_CASE("[validator] type_known WARNING -- unrecognised handler type")
 {
     Graph g = make_valid_linear();
-    g.nodes[1].node_type = HandlerTypeName{"custom_handler"};
+    std::get<CodergenNode>(g.nodes[1]).node_type = HandlerTypeName{"custom_handler"};
 
     // empty known_types -> no warning
     {
@@ -226,7 +226,7 @@ SNITCH_TEST_CASE("[validator] type_known WARNING -- unrecognised handler type")
 SNITCH_TEST_CASE("[validator] retry_target_exists WARNING -- missing retry target")
 {
     Graph g = make_valid_linear();
-    g.nodes[1].retry_target = NodeId{"nonexistent_node"};
+    std::get<CodergenNode>(g.nodes[1]).retry_target = NodeId{"nonexistent_node"};
     auto diags = validate(g);
     SNITCH_CHECK(count_by_rule(diags, "retry_target_exists") >= 1);
 }
@@ -243,7 +243,7 @@ SNITCH_TEST_CASE("[validator] fidelity_valid WARNING -- no spurious diagnostic o
 SNITCH_TEST_CASE("[validator] fidelity_valid WARNING fires for out-of-range FidelityMode -- 4.4-U-005")
 {
     Graph g = make_valid_linear();
-    g.nodes[1].fidelity = static_cast<FidelityMode>(99);
+    std::get<CodergenNode>(g.nodes[1]).fidelity = static_cast<FidelityMode>(99);
     auto diags = validate(g);
     SNITCH_CHECK(count_by_rule(diags, "fidelity_valid") >= 1);
 }
@@ -253,9 +253,11 @@ SNITCH_TEST_CASE("[validator] goal_gate_has_retry WARNING -- goal_gate without r
 {
     Graph g = make_valid_linear();
     auto work_it =
-        std::find_if(g.nodes.begin(), g.nodes.end(), [](const Node& n) { return type_safe::get(n.id) == "work"; });
+        std::find_if(g.nodes.begin(), g.nodes.end(), [](const NodeVariant& nv) {
+            return type_safe::get(to_base(nv).id) == "work";
+        });
     SNITCH_REQUIRE(work_it != g.nodes.end());
-    work_it->goal_gate = ts::boolean{true};
+    std::get<CodergenNode>(*work_it).goal_gate = ts::boolean{true};
 
     auto diags = validate(g);
     SNITCH_CHECK(count_by_rule(diags, "goal_gate_has_retry") == 1);

@@ -11,9 +11,9 @@ using namespace attractor;
 
 namespace {
 
-Node make_manager_node(std::string id, int max_cycles, std::string stop_condition = "")
+ManagerNode make_manager_node(std::string id, int max_cycles, std::string stop_condition = "")
 {
-    Node n;
+    ManagerNode n;
     n.id = NodeId{std::move(id)};
     n.shape = NodeShape::house;
     n.manager_max_cycles = max_cycles;

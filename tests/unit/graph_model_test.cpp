@@ -85,14 +85,16 @@ SNITCH_TEST_CASE("[graph_model] Graph JSON round-trip")
     g.goal = GoalText{"Test goal"};
     g.label = GraphLabel{"My Pipeline"};
 
-    Node start;
+    StartNode start;
     start.id = NodeId{"start"};
     start.label = NodeLabel{"Start"};
+    start.shape = NodeShape::mdiamond;
     g.nodes.push_back(start);
 
-    Node end;
+    ExitNode end;
     end.id = NodeId{"end"};
     end.label = NodeLabel{"End"};
+    end.shape = NodeShape::msquare;
     g.nodes.push_back(end);
 
     Edge e;

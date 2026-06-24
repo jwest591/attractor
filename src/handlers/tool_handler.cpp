@@ -115,7 +115,8 @@ auto ToolHandler::execute(const Node& node, Context& /*ctx*/, const Graph& graph
         return Outcome::fail(DiagnosticMessage{"failed to create log dir: " + ec.message()});
     }
 
-    const std::string cmd = expand_goal(type_safe::get(node.tool_command), graph.goal);
+    // safe: engine dispatches ToolHandler only for ToolNode
+    const std::string cmd = expand_goal(type_safe::get(static_cast<const ToolNode&>(node).tool_command), graph.goal);
     std::ofstream{stage_dir / "command.txt"} << cmd;
 
     if (cmd.empty()) {

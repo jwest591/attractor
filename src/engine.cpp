@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <attractor/backends/noop_backend.hpp>
+#include <variant>
 #include <attractor/checkpoint.hpp>
 #include <attractor/condition_eval.hpp>
 #include <attractor/context.hpp>
@@ -33,11 +34,12 @@ namespace attractor {
 
 namespace {
 
-const Node* find_start_node(const Graph& graph)
+const NodeVariant* find_start_node(const Graph& graph)
 {
-    for (const auto& node : graph.nodes) {
+    for (const auto& nv : graph.nodes) {
+        const Node& node = to_base(nv);
         if (node.shape == NodeShape::mdiamond || node.id == "start" || node.id == "Start") {
-            return &node;
+            return &nv;
         }
     }
     return nullptr;
@@ -48,11 +50,11 @@ bool is_terminal(const Node& node) noexcept
     return node.shape == NodeShape::msquare || node.id == "exit" || node.id == "end";
 }
 
-const Node* find_node(const Graph& graph, const NodeId& id)
+const NodeVariant* find_node(const Graph& graph, const NodeId& id)
 {
-    for (const auto& node : graph.nodes) {
-        if (node.id == id) {
-            return &node;
+    for (const auto& nv : graph.nodes) {
+        if (to_base(nv).id == id) {
+            return &nv;
         }
     }
     return nullptr;
@@ -408,11 +410,11 @@ Engine::Engine(std::unique_ptr<CodergenBackend> backend, EventObserver on_event)
 
 auto Engine::run(const Graph& graph, const RunConfig& config) const -> Outcome
 {
-    const Node* start = find_start_node(graph);
+    const NodeVariant* start = find_start_node(graph);
     if (start == nullptr) {
         return Outcome::fail(DiagnosticMessage{"No start node found in graph"});
     }
-    return run_from(graph, start->id, config);
+    return run_from(graph, to_base(*start).id, config);
 }
 
 auto Engine::run_from(const Graph& graph, const NodeId& start_id, const RunConfig& config, int loop_depth) const -> Outcome
@@ -446,12 +448,13 @@ auto Engine::run_from(const Graph& graph, const NodeId& start_id, const RunConfi
     }
 
     while (true) {
-        const Node* node = find_node(graph, current_id);
-        if (node == nullptr) {
+        const NodeVariant* node_var = find_node(graph, current_id);
+        if (node_var == nullptr) {
             return Outcome::fail(DiagnosticMessage{"Node not found: " + type_safe::get(current_id)});
         }
+        const Node& node = to_base(*node_var);
 
-        if (is_terminal(*node)) {
+        if (is_terminal(node)) {
             // Collect all unsatisfied goal gates in a single pass.
             // skipped counts as unsatisfied: engine retries or fails, never proceeds as satisfied.
             struct GateInfo {
@@ -461,8 +464,10 @@ auto Engine::run_from(const Graph& graph, const NodeId& start_id, const RunConfi
             std::vector<GateInfo> unsatisfied;
 
             for (const auto& [node_id, gate_outcome] : node_outcomes) {
-                const Node* gn = find_node(graph, node_id);
-                if (gn == nullptr || !static_cast<bool>(gn->goal_gate)) {
+                const NodeVariant* gv = find_node(graph, node_id);
+                if (gv == nullptr) { continue; }
+                const Node& gn = to_base(*gv);
+                if (!static_cast<bool>(gn.goal_gate)) {
                     continue;
                 }
                 if (gate_outcome.status == StageStatus::success ||
@@ -470,8 +475,8 @@ auto Engine::run_from(const Graph& graph, const NodeId& start_id, const RunConfi
                     continue;
                 }
                 const NodeId* rt = nullptr;
-                if (!gn->retry_target.empty())                  { rt = &gn->retry_target; }
-                else if (!gn->fallback_retry_target.empty())    { rt = &gn->fallback_retry_target; }
+                if (!gn.retry_target.empty())                  { rt = &gn.retry_target; }
+                else if (!gn.fallback_retry_target.empty())    { rt = &gn.fallback_retry_target; }
                 else if (!graph.retry_target.empty())           { rt = &graph.retry_target; }
                 else if (!graph.fallback_retry_target.empty())  { rt = &graph.fallback_retry_target; }
                 unsatisfied.push_back({node_id, rt});
@@ -509,8 +514,8 @@ auto Engine::run_from(const Graph& graph, const NodeId& start_id, const RunConfi
 
             for (const auto& [nid, nout] : node_outcomes) {
                 if (nout.status == StageStatus::partial_success) {
-                    const Node* n = find_node(graph, nid);
-                    if (n != nullptr && static_cast<bool>(n->allow_partial)) {
+                    const NodeVariant* nv = find_node(graph, nid);
+                    if (nv != nullptr && static_cast<bool>(to_base(*nv).allow_partial)) {
                         return nout;
                     }
                 }
@@ -523,50 +528,52 @@ auto Engine::run_from(const Graph& graph, const NodeId& start_id, const RunConfi
 
         if (m_on_event) {
             m_on_event(Event{
-                StageStarted{node->id, node_index}
+                StageStarted{node.id, node_index}
             });
         }
 
-        const Handler& handler = m_registry.resolve(*node);
-        const int max_retries = effective_max_retries(*node, graph);
-        int remaining = max_retries;
-        int attempt = 0;
         Outcome outcome;
+        std::visit([&](const auto& derived_node) {
+            const Handler& handler = m_registry.resolve(derived_node);
+            const int max_retries = effective_max_retries(node, graph);
+            int remaining = max_retries;
+            int attempt = 0;
 
-        do {
-            outcome = safe_execute(handler, *node, ctx, graph, config);
-            node_outcomes[node->id] = outcome;
-            if (outcome.status != StageStatus::retry) {
-                break;
-            }
-            if (remaining == 0) {
-                break;
-            }
-            --remaining;
-            do_sleep(config.retry_policy, attempt);
-            ++attempt;
-        } while (true);
+            do {
+                outcome = safe_execute(handler, derived_node, ctx, graph, config);
+                node_outcomes[node.id] = outcome;
+                if (outcome.status != StageStatus::retry) {
+                    break;
+                }
+                if (remaining == 0) {
+                    break;
+                }
+                --remaining;
+                do_sleep(config.retry_policy, attempt);
+                ++attempt;
+            } while (true);
 
-        if (attempt > 0) {
-            node_retries_map[type_safe::get(node->id)] = attempt;
-        }
+            if (attempt > 0) {
+                node_retries_map[type_safe::get(node.id)] = attempt;
+            }
+        }, *node_var);
 
         if (outcome.status == StageStatus::retry) {
-            if (static_cast<bool>(node->allow_partial)) {
+            if (static_cast<bool>(node.allow_partial)) {
                 outcome = Outcome{.status = StageStatus::partial_success,
                                   .failure_reason =
-                                      DiagnosticMessage{"Retry exhausted (partial): " + type_safe::get(node->id)}};
+                                      DiagnosticMessage{"Retry exhausted (partial): " + type_safe::get(node.id)}};
             }
             else {
-                outcome = Outcome::fail(DiagnosticMessage{"Retry exhausted: " + type_safe::get(node->id)});
+                outcome = Outcome::fail(DiagnosticMessage{"Retry exhausted: " + type_safe::get(node.id)});
             }
-            node_outcomes[node->id] = outcome;
+            node_outcomes[node.id] = outcome;
         }
 
         // Emit StageCompleted after final outcome is determined.
         if (m_on_event) {
             m_on_event(Event{
-                StageCompleted{node->id, node_index}
+                StageCompleted{node.id, node_index}
             });
         }
 
@@ -579,7 +586,7 @@ auto Engine::run_from(const Graph& graph, const NodeId& start_id, const RunConfi
 
         // Use context snapshot for edge condition evaluation.
         const auto context_snapshot = ctx.snapshot();
-        const Edge* next_edge = select_edge(*node, outcome, context_snapshot, graph);
+        const Edge* next_edge = select_edge(node, outcome, context_snapshot, graph);
 
         if (next_edge == nullptr) {
             if (outcome.status == StageStatus::fail || outcome.status == StageStatus::retry) {
@@ -588,13 +595,13 @@ auto Engine::run_from(const Graph& graph, const NodeId& start_id, const RunConfi
             // skipped with no outgoing edges: treat as partial_success if allow_partial, else FAIL.
             // Implicit success for skipped would silently mask unintended termination.
             if (outcome.status == StageStatus::skipped) {
-                if (static_cast<bool>(node->allow_partial)) {
+                if (static_cast<bool>(node.allow_partial)) {
                     return Outcome{.status = StageStatus::partial_success,
                                    .failure_reason =
-                                       DiagnosticMessage{"skipped node: " + type_safe::get(node->id)}};
+                                       DiagnosticMessage{"skipped node: " + type_safe::get(node.id)}};
                 }
                 return Outcome::fail(
-                    DiagnosticMessage{"skipped node with no outgoing edges: " + type_safe::get(node->id)});
+                    DiagnosticMessage{"skipped node with no outgoing edges: " + type_safe::get(node.id)});
             }
             return Outcome{};
         }
@@ -608,11 +615,11 @@ auto Engine::run_from(const Graph& graph, const NodeId& start_id, const RunConfi
         // Fail/retry outcomes do not follow unconditional edges, except when goal_gate is
         // set -- the terminal node must evaluate the gate before deciding to retry or fail.
         if ((outcome.status == StageStatus::fail || outcome.status == StageStatus::retry) &&
-            next_edge->condition.empty() && !static_cast<bool>(node->goal_gate)) {
+            next_edge->condition.empty() && !static_cast<bool>(node.goal_gate)) {
             return outcome;
         }
 
-        completed_nodes.push_back(node->id);
+        completed_nodes.push_back(node.id);
         current_id = next_edge->to;
 
         // Checkpoint saved AFTER advancing current_id; current_node = NEXT node to execute.

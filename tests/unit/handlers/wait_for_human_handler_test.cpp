@@ -29,9 +29,9 @@ Graph make_approve_fix_graph()
     return g;
 }
 
-Node make_gate_node(std::string id = "gate")
+WaitHumanNode make_gate_node(std::string id = "gate")
 {
-    Node n;
+    WaitHumanNode n;
     n.id        = NodeId{std::move(id)};
     n.node_type = HandlerTypeName{"wait.human"};
     return n;

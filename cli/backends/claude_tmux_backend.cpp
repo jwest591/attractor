@@ -62,7 +62,8 @@ std::optional<std::string> extract_json_string(const std::string& json, const st
         return std::nullopt;
     }
     std::size_t start = pos + needle.size();
-    while (start < json.size() && (json[start] == ' ' || json[start] == '\t' || json[start] == '\n' || json[start] == '\r')) {
+    while (start < json.size() &&
+           (json[start] == ' ' || json[start] == '\t' || json[start] == '\n' || json[start] == '\r')) {
         ++start;
     }
     if (start >= json.size() || json[start] != '"') {
@@ -107,9 +108,13 @@ std::optional<std::string> extract_json_string(const std::string& json, const st
     -> std::pair<std::vector<std::string>, std::size_t>
 {
     // RAII wrapper: guarantees fclose even if push_back/string ops throw std::bad_alloc
-    auto fp_deleter = [](FILE* f) noexcept { if (f != nullptr) fclose(f); };  // NOLINT(cppcoreguidelines-owning-memory)
-    std::unique_ptr<FILE, decltype(fp_deleter)> fp{                            // NOLINT(cppcoreguidelines-owning-memory)
-        fopen(path.c_str(), "r"), fp_deleter};
+    auto fp_deleter = [](FILE* f) noexcept {
+        if (f != nullptr) {
+            fclose(f);
+        }
+    };  // NOLINT(cppcoreguidelines-owning-memory)
+    std::unique_ptr<FILE, decltype(fp_deleter)> fp{// NOLINT(cppcoreguidelines-owning-memory)
+                                                   fopen(path.c_str(), "r"), fp_deleter};
     if (!fp) {
         return {{}, offset};
     }
@@ -249,9 +254,9 @@ auto ClaudeCodeTmuxBackend::run(const Node& node, const PromptText& prompt, Cont
                                    shell_escape(settings_path) + " --dangerously-skip-permissions";
 
     // Send text and Enter as separate calls; combining them can cause Enter to be swallowed
-    const std::string send_text =
+    const auto send_text =
         std::format("{} send-keys -t {}:{} -l {}", m_tmux_bin, m_session_id, window_name, shell_escape(claude_cmd));
-    const std::string send_enter = std::format("{} send-keys -t {}:{} Enter", m_tmux_bin, m_session_id, window_name);
+    const auto send_enter = std::format("{} send-keys -t {}:{} Enter", m_tmux_bin, m_session_id, window_name);
     if (tmux_system(send_text) != 0 || tmux_system(send_enter) != 0) {
         return std::unexpected(Outcome::fail(DiagnosticMessage{"tmux: send-keys failed for " + window_name}));
     }
@@ -261,8 +266,7 @@ auto ClaudeCodeTmuxBackend::run(const Node& node, const PromptText& prompt, Cont
     // Poll for transcript.txt (written by SessionStart hook) to confirm the session started.
     // 10s hard cap or overall deadline, whichever is sooner.
     auto poll_transcript = [&]() -> std::expected<std::string, Outcome> {
-        auto transcript_deadline =
-            std::min(std::chrono::steady_clock::now() + k_session_start_hard_deadline, deadline);
+        auto transcript_deadline = std::min(std::chrono::steady_clock::now() + k_session_start_hard_deadline, deadline);
         while (true) {
             if (std::chrono::steady_clock::now() >= transcript_deadline) {
                 return std::unexpected(
@@ -320,8 +324,7 @@ auto ClaudeCodeTmuxBackend::run(const Node& node, const PromptText& prompt, Cont
         if (m_ceiling_tokens > 0 && accumulated_tokens >= m_ceiling_tokens) {
             if (handoff_count >= m_max_ceiling_handoffs) {
                 return std::unexpected(Outcome::fail(DiagnosticMessage{
-                    "tmux: ceiling handoff limit (" + std::to_string(m_max_ceiling_handoffs) +
-                    ") exhausted"}));
+                    "tmux: ceiling handoff limit (" + std::to_string(m_max_ceiling_handoffs) + ") exhausted"}));
             }
 
             ++handoff_count;
@@ -331,8 +334,8 @@ auto ClaudeCodeTmuxBackend::run(const Node& node, const PromptText& prompt, Cont
             std::error_code ec;
             std::filesystem::remove(transcript_txt, ec);
             if (ec) {
-                return std::unexpected(Outcome::fail(DiagnosticMessage{
-                    "tmux: handoff failed: cannot remove transcript.txt: " + ec.message()}));
+                return std::unexpected(Outcome::fail(
+                    DiagnosticMessage{"tmux: handoff failed: cannot remove transcript.txt: " + ec.message()}));
             }
             std::filesystem::remove(node_log_dir / "ctx-usage.json", ec);
 
@@ -342,8 +345,8 @@ auto ClaudeCodeTmuxBackend::run(const Node& node, const PromptText& prompt, Cont
             const std::string clear_enter =
                 std::format("{} send-keys -t {}:{} Enter", m_tmux_bin, m_session_id, window_name);
             if (tmux_system(clear_text) != 0 || tmux_system(clear_enter) != 0) {
-                return std::unexpected(Outcome::fail(DiagnosticMessage{
-                    "tmux: handoff failed: /clear send-keys failed for " + window_name}));
+                return std::unexpected(Outcome::fail(
+                    DiagnosticMessage{"tmux: handoff failed: /clear send-keys failed for " + window_name}));
             }
 
             // Wait for new transcript.txt from the fresh SessionStart hook.
@@ -353,22 +356,21 @@ auto ClaudeCodeTmuxBackend::run(const Node& node, const PromptText& prompt, Cont
             }
             jsonl_path = std::move(*new_jsonl_result);
             if (jsonl_path.empty()) {
-                return std::unexpected(Outcome::fail(DiagnosticMessage{
-                    "tmux: handoff failed: new transcript.txt contained no JSONL path"}));
+                return std::unexpected(Outcome::fail(
+                    DiagnosticMessage{"tmux: handoff failed: new transcript.txt contained no JSONL path"}));
             }
 
             // Inject context summary into the new session.
-            const std::string summary =
-                "Continuing pipeline node " + type_safe::get(node.id) +
-                ". Context window was cleared (token ceiling reached). "
-                "Continue your work from where the previous session left off.";
+            const std::string summary = "Continuing pipeline node " + type_safe::get(node.id) +
+                                        ". Context window was cleared (token ceiling reached). "
+                                        "Continue your work from where the previous session left off.";
             const std::string summary_text = std::format("{} send-keys -t {}:{} -l {}", m_tmux_bin, m_session_id,
                                                          window_name, shell_escape(summary));
             const std::string summary_enter =
                 std::format("{} send-keys -t {}:{} Enter", m_tmux_bin, m_session_id, window_name);
             if (tmux_system(summary_text) != 0 || tmux_system(summary_enter) != 0) {
-                return std::unexpected(Outcome::fail(DiagnosticMessage{
-                    "tmux: handoff failed: summary send-keys failed for " + window_name}));
+                return std::unexpected(Outcome::fail(
+                    DiagnosticMessage{"tmux: handoff failed: summary send-keys failed for " + window_name}));
             }
 
             accumulated_tokens = 0;
@@ -396,9 +398,8 @@ auto ClaudeCodeTmuxBackend::run(const Node& node, const PromptText& prompt, Cont
         }
         if (*status == "error") {
             auto etype = extract_json_string(content, "error_type").value_or(std::string{"unknown"});
-            auto emsg  = extract_json_string(content, "message").value_or(std::string{});
-            return std::unexpected(
-                Outcome::fail(DiagnosticMessage{"tmux: API error [" + etype + "]: " + emsg}));
+            auto emsg = extract_json_string(content, "message").value_or(std::string{});
+            return std::unexpected(Outcome::fail(DiagnosticMessage{"tmux: API error [" + etype + "]: " + emsg}));
         }
     }
 }

@@ -4,6 +4,8 @@
 #include <attractor/graph.hpp>
 #include <attractor/transform.hpp>
 #include <string>
+#include <type_traits>
+#include <variant>
 
 using namespace attractor;
 
@@ -32,6 +34,16 @@ static Graph make_valid_linear()
     return std::move(*result);
 }
 
+static const CodergenNode* find_codergen_node(const Graph& g, std::string_view id)
+{
+    for (const auto& nv : g.nodes) {
+        if (type_safe::get(to_base(nv).id) == id) {
+            return std::get_if<CodergenNode>(&nv);
+        }
+    }
+    return nullptr;
+}
+
 // -- AC1: variable expansion ----------------------------------------------------
 
 SNITCH_TEST_CASE("[transform] variable expansion replaces $goal in prompt")
@@ -39,10 +51,9 @@ SNITCH_TEST_CASE("[transform] variable expansion replaces $goal in prompt")
     auto g = make_graph_with_goal("Write tests", "Plan how to: $goal");
     VariableExpansionTransform xform;
     auto out = xform.apply(g);
-    auto it =
-        std::find_if(out.nodes.begin(), out.nodes.end(), [](const Node& n) { return type_safe::get(n.id) == "work"; });
-    SNITCH_REQUIRE(it != out.nodes.end());
-    SNITCH_CHECK(type_safe::get(it->prompt) == "Plan how to: Write tests");
+    const auto* cn = find_codergen_node(out, "work");
+    SNITCH_REQUIRE(cn != nullptr);
+    SNITCH_CHECK(type_safe::get(cn->prompt) == "Plan how to: Write tests");
 }
 
 SNITCH_TEST_CASE("[transform] variable expansion -- no $goal in prompt -- unchanged")
@@ -50,10 +61,9 @@ SNITCH_TEST_CASE("[transform] variable expansion -- no $goal in prompt -- unchan
     auto g = make_graph_with_goal("Write tests", "Do something else");
     VariableExpansionTransform xform;
     auto out = xform.apply(g);
-    auto it =
-        std::find_if(out.nodes.begin(), out.nodes.end(), [](const Node& n) { return type_safe::get(n.id) == "work"; });
-    SNITCH_REQUIRE(it != out.nodes.end());
-    SNITCH_CHECK(type_safe::get(it->prompt) == "Do something else");
+    const auto* cn = find_codergen_node(out, "work");
+    SNITCH_REQUIRE(cn != nullptr);
+    SNITCH_CHECK(type_safe::get(cn->prompt) == "Do something else");
 }
 
 SNITCH_TEST_CASE("[transform] variable expansion -- multiple $goal occurrences -- all replaced")
@@ -61,10 +71,9 @@ SNITCH_TEST_CASE("[transform] variable expansion -- multiple $goal occurrences -
     auto g = make_graph_with_goal("run tests", "First $goal, then $goal again");
     VariableExpansionTransform xform;
     auto out = xform.apply(g);
-    auto it =
-        std::find_if(out.nodes.begin(), out.nodes.end(), [](const Node& n) { return type_safe::get(n.id) == "work"; });
-    SNITCH_REQUIRE(it != out.nodes.end());
-    SNITCH_CHECK(type_safe::get(it->prompt) == "First run tests, then run tests again");
+    const auto* cn = find_codergen_node(out, "work");
+    SNITCH_REQUIRE(cn != nullptr);
+    SNITCH_CHECK(type_safe::get(cn->prompt) == "First run tests, then run tests again");
 }
 
 SNITCH_TEST_CASE("[transform] variable expansion -- empty goal -- $goal replaced with empty string")
@@ -72,10 +81,9 @@ SNITCH_TEST_CASE("[transform] variable expansion -- empty goal -- $goal replaced
     auto g = make_graph_with_goal("", "Do $goal now");
     VariableExpansionTransform xform;
     auto out = xform.apply(g);
-    auto it =
-        std::find_if(out.nodes.begin(), out.nodes.end(), [](const Node& n) { return type_safe::get(n.id) == "work"; });
-    SNITCH_REQUIRE(it != out.nodes.end());
-    SNITCH_CHECK(type_safe::get(it->prompt) == "Do  now");
+    const auto* cn = find_codergen_node(out, "work");
+    SNITCH_REQUIRE(cn != nullptr);
+    SNITCH_CHECK(type_safe::get(cn->prompt) == "Do  now");
 }
 
 // -- AC3: immutability ---------------------------------------------------------
@@ -83,17 +91,16 @@ SNITCH_TEST_CASE("[transform] variable expansion -- empty goal -- $goal replaced
 SNITCH_TEST_CASE("[transform] apply() does not mutate input graph")
 {
     auto g = make_graph_with_goal("Write tests", "Plan: $goal");
-    const std::string original_prompt = type_safe::get(std::find_if(g.nodes.begin(), g.nodes.end(), [](const Node& n) {
-                                                           return type_safe::get(n.id) == "work";
-                                                       })->prompt);
+    const auto* orig_cn = find_codergen_node(g, "work");
+    SNITCH_REQUIRE(orig_cn != nullptr);
+    const std::string original_prompt = type_safe::get(orig_cn->prompt);
 
     VariableExpansionTransform xform;
     [[maybe_unused]] auto out = xform.apply(g);
 
-    auto it =
-        std::find_if(g.nodes.begin(), g.nodes.end(), [](const Node& n) { return type_safe::get(n.id) == "work"; });
-    SNITCH_REQUIRE(it != g.nodes.end());
-    SNITCH_CHECK(type_safe::get(it->prompt) == original_prompt);
+    const auto* cn = find_codergen_node(g, "work");
+    SNITCH_REQUIRE(cn != nullptr);
+    SNITCH_CHECK(type_safe::get(cn->prompt) == original_prompt);
 }
 
 // -- AC2: custom transforms ----------------------------------------------------
@@ -104,10 +111,15 @@ SNITCH_TEST_CASE("[transform] custom transform runs after built-ins")
         [[nodiscard]] auto apply(const Graph& g) const -> Graph override
         {
             Graph out = g;
-            for (auto& n : out.nodes) {
-                if (!type_safe::get(n.prompt).empty()) {
-                    n.prompt = PromptText{type_safe::get(n.prompt) + " CUSTOM"};
-                }
+            for (auto& nv : out.nodes) {
+                std::visit([](auto& derived) {
+                    using T = std::decay_t<decltype(derived)>;
+                    if constexpr (std::is_same_v<T, CodergenNode> || std::is_same_v<T, FanInNode>) {
+                        if (!type_safe::get(derived.prompt).empty()) {
+                            derived.prompt = PromptText{type_safe::get(derived.prompt) + " CUSTOM"};
+                        }
+                    }
+                }, nv);
             }
             return out;
         }
@@ -116,10 +128,9 @@ SNITCH_TEST_CASE("[transform] custom transform runs after built-ins")
     AppendCustom custom;
     auto g = make_graph_with_goal("tests", "Plan: $goal");
     auto out = apply_transforms(g, {&custom});
-    auto it =
-        std::find_if(out.nodes.begin(), out.nodes.end(), [](const Node& n) { return type_safe::get(n.id) == "work"; });
-    SNITCH_REQUIRE(it != out.nodes.end());
-    SNITCH_CHECK(type_safe::get(it->prompt) == "Plan: tests CUSTOM");
+    const auto* cn = find_codergen_node(out, "work");
+    SNITCH_REQUIRE(cn != nullptr);
+    SNITCH_CHECK(type_safe::get(cn->prompt) == "Plan: tests CUSTOM");
 }
 
 SNITCH_TEST_CASE("[transform] two custom transforms run in registration order")
@@ -128,10 +139,15 @@ SNITCH_TEST_CASE("[transform] two custom transforms run in registration order")
         [[nodiscard]] auto apply(const Graph& g) const -> Graph override
         {
             Graph out = g;
-            for (auto& n : out.nodes) {
-                if (!type_safe::get(n.prompt).empty()) {
-                    n.prompt = PromptText{type_safe::get(n.prompt) + "_1"};
-                }
+            for (auto& nv : out.nodes) {
+                std::visit([](auto& derived) {
+                    using T = std::decay_t<decltype(derived)>;
+                    if constexpr (std::is_same_v<T, CodergenNode> || std::is_same_v<T, FanInNode>) {
+                        if (!type_safe::get(derived.prompt).empty()) {
+                            derived.prompt = PromptText{type_safe::get(derived.prompt) + "_1"};
+                        }
+                    }
+                }, nv);
             }
             return out;
         }
@@ -141,10 +157,15 @@ SNITCH_TEST_CASE("[transform] two custom transforms run in registration order")
         [[nodiscard]] auto apply(const Graph& g) const -> Graph override
         {
             Graph out = g;
-            for (auto& n : out.nodes) {
-                if (!type_safe::get(n.prompt).empty()) {
-                    n.prompt = PromptText{type_safe::get(n.prompt) + "_2"};
-                }
+            for (auto& nv : out.nodes) {
+                std::visit([](auto& derived) {
+                    using T = std::decay_t<decltype(derived)>;
+                    if constexpr (std::is_same_v<T, CodergenNode> || std::is_same_v<T, FanInNode>) {
+                        if (!type_safe::get(derived.prompt).empty()) {
+                            derived.prompt = PromptText{type_safe::get(derived.prompt) + "_2"};
+                        }
+                    }
+                }, nv);
             }
             return out;
         }
@@ -154,15 +175,14 @@ SNITCH_TEST_CASE("[transform] two custom transforms run in registration order")
     Append2 t2;
     auto g = make_valid_linear();
     auto out = apply_transforms(g, {&t1, &t2});
-    auto it =
-        std::find_if(out.nodes.begin(), out.nodes.end(), [](const Node& n) { return type_safe::get(n.id) == "work"; });
-    SNITCH_REQUIRE(it != out.nodes.end());
-    SNITCH_CHECK(type_safe::get(it->prompt) == "Do work_1_2");
+    const auto* cn = find_codergen_node(out, "work");
+    SNITCH_REQUIRE(cn != nullptr);
+    SNITCH_CHECK(type_safe::get(cn->prompt) == "Do work_1_2");
 }
 
 // -- AC4: stylesheet transform -------------------------------------------------
 
-SNITCH_TEST_CASE("[transform] stylesheet universal rule sets llm_model on all nodes")
+SNITCH_TEST_CASE("[transform] stylesheet universal rule sets llm_model on codergen nodes")
 {
     auto result = parse_graph(R"(
         digraph g {
@@ -176,9 +196,9 @@ SNITCH_TEST_CASE("[transform] stylesheet universal rule sets llm_model on all no
     SNITCH_REQUIRE(result.has_value());
     StylesheetTransform xform;
     auto out = xform.apply(*result);
-    for (const auto& n : out.nodes) {
-        SNITCH_CHECK(type_safe::get(n.llm_model) == "claude-sonnet-4-6");
-    }
+    const auto* cn = find_codergen_node(out, "work");
+    SNITCH_REQUIRE(cn != nullptr);
+    SNITCH_CHECK(type_safe::get(cn->llm_model) == "claude-sonnet-4-6");
 }
 
 SNITCH_TEST_CASE("[transform] stylesheet shape rule overrides universal on matching nodes")
@@ -195,14 +215,10 @@ SNITCH_TEST_CASE("[transform] stylesheet shape rule overrides universal on match
     SNITCH_REQUIRE(result.has_value());
     StylesheetTransform xform;
     auto out = xform.apply(*result);
-    for (const auto& n : out.nodes) {
-        if (n.shape == NodeShape::box) {
-            SNITCH_CHECK(type_safe::get(n.llm_model) == "box-model");
-        }
-        else {
-            SNITCH_CHECK(type_safe::get(n.llm_model) == "base-model");
-        }
-    }
+    // Only CodergenNode (box shape) gets llm_model stamped
+    const auto* cn = find_codergen_node(out, "work");
+    SNITCH_REQUIRE(cn != nullptr);
+    SNITCH_CHECK(type_safe::get(cn->llm_model) == "box-model");
 }
 
 SNITCH_TEST_CASE("[transform] explicit node llm_model not overwritten by stylesheet")
@@ -219,19 +235,18 @@ SNITCH_TEST_CASE("[transform] explicit node llm_model not overwritten by stylesh
     SNITCH_REQUIRE(result.has_value());
     StylesheetTransform xform;
     auto out = xform.apply(*result);
-    auto it =
-        std::find_if(out.nodes.begin(), out.nodes.end(), [](const Node& n) { return type_safe::get(n.id) == "work"; });
-    SNITCH_REQUIRE(it != out.nodes.end());
-    SNITCH_CHECK(type_safe::get(it->llm_model) == "explicit-model");
+    const auto* cn = find_codergen_node(out, "work");
+    SNITCH_REQUIRE(cn != nullptr);
+    SNITCH_CHECK(type_safe::get(cn->llm_model) == "explicit-model");
 }
 
 SNITCH_TEST_CASE("[transform] apply_transforms with no stylesheet -- llm fields unchanged")
 {
     auto g = make_valid_linear();
     auto out = apply_transforms(g);
-    for (const auto& n : out.nodes) {
-        SNITCH_CHECK(type_safe::get(n.llm_model).empty());
-    }
+    const auto* cn = find_codergen_node(out, "work");
+    SNITCH_REQUIRE(cn != nullptr);
+    SNITCH_CHECK(type_safe::get(cn->llm_model).empty());
 }
 
 SNITCH_TEST_CASE("[transform] apply_transforms with no custom transforms runs both built-ins")
@@ -247,14 +262,13 @@ SNITCH_TEST_CASE("[transform] apply_transforms with no custom transforms runs bo
     )");
     SNITCH_REQUIRE(result.has_value());
     auto out = apply_transforms(*result);
-    auto it =
-        std::find_if(out.nodes.begin(), out.nodes.end(), [](const Node& n) { return type_safe::get(n.id) == "work"; });
-    SNITCH_REQUIRE(it != out.nodes.end());
-    SNITCH_CHECK(type_safe::get(it->prompt) == "Plan: run tests");
-    SNITCH_CHECK(type_safe::get(it->llm_model) == "m1");
+    const auto* cn = find_codergen_node(out, "work");
+    SNITCH_REQUIRE(cn != nullptr);
+    SNITCH_CHECK(type_safe::get(cn->prompt) == "Plan: run tests");
+    SNITCH_CHECK(type_safe::get(cn->llm_model) == "m1");
 }
 
-SNITCH_TEST_CASE("[transform] stylesheet reasoning_effort property applied to nodes")
+SNITCH_TEST_CASE("[transform] stylesheet reasoning_effort property applied to codergen nodes")
 {
     auto result = parse_graph(R"(
         digraph g {
@@ -268,10 +282,10 @@ SNITCH_TEST_CASE("[transform] stylesheet reasoning_effort property applied to no
     SNITCH_REQUIRE(result.has_value());
     StylesheetTransform xform;
     auto out = xform.apply(*result);
-    for (const auto& n : out.nodes) {
-        SNITCH_REQUIRE(n.reasoning_effort.has_value());
-        SNITCH_CHECK(*n.reasoning_effort == ReasoningEffort::medium);
-    }
+    const auto* cn = find_codergen_node(out, "work");
+    SNITCH_REQUIRE(cn != nullptr);
+    SNITCH_REQUIRE(cn->reasoning_effort.has_value());
+    SNITCH_CHECK(*cn->reasoning_effort == ReasoningEffort::medium);
 }
 
 SNITCH_TEST_CASE("[transform] stylesheet equal-specificity: later rule overwrites earlier rule")
@@ -288,9 +302,9 @@ SNITCH_TEST_CASE("[transform] stylesheet equal-specificity: later rule overwrite
     SNITCH_REQUIRE(result.has_value());
     StylesheetTransform xform;
     auto out = xform.apply(*result);
-    for (const auto& n : out.nodes) {
-        SNITCH_CHECK(type_safe::get(n.llm_model) == "second");
-    }
+    const auto* cn = find_codergen_node(out, "work");
+    SNITCH_REQUIRE(cn != nullptr);
+    SNITCH_CHECK(type_safe::get(cn->llm_model) == "second");
 }
 
 SNITCH_TEST_CASE("[transform] stylesheet class selector wins over universal -- 4.3-U-001")
@@ -307,16 +321,11 @@ SNITCH_TEST_CASE("[transform] stylesheet class selector wins over universal -- 4
     SNITCH_REQUIRE(result.has_value());
     StylesheetTransform xform;
     auto out = xform.apply(*result);
-    auto it = std::find_if(out.nodes.begin(), out.nodes.end(),
-        [](const Node& n) { return type_safe::get(n.id) == "work"; });
-    SNITCH_REQUIRE(it != out.nodes.end());
-    SNITCH_REQUIRE(it->reasoning_effort.has_value());
-    SNITCH_CHECK(*it->reasoning_effort == ReasoningEffort::low);
-    for (const auto& n : out.nodes) {
-        if (type_safe::get(n.id) == "work") { continue; }
-        SNITCH_CHECK(n.reasoning_effort.has_value());
-        SNITCH_CHECK(*n.reasoning_effort == ReasoningEffort::medium);
-    }
+    // "work" node (CodergenNode) with class "fast" gets "low" (higher specificity)
+    const auto* cn_work = find_codergen_node(out, "work");
+    SNITCH_REQUIRE(cn_work != nullptr);
+    SNITCH_REQUIRE(cn_work->reasoning_effort.has_value());
+    SNITCH_CHECK(*cn_work->reasoning_effort == ReasoningEffort::low);
 }
 
 SNITCH_TEST_CASE("[transform] stylesheet ID selector wins over class shape and universal -- 4.3-U-002")
@@ -333,14 +342,9 @@ SNITCH_TEST_CASE("[transform] stylesheet ID selector wins over class shape and u
     SNITCH_REQUIRE(result.has_value());
     StylesheetTransform xform;
     auto out = xform.apply(*result);
-    auto rev = std::find_if(out.nodes.begin(), out.nodes.end(),
-        [](const Node& n) { return type_safe::get(n.id) == "review"; });
-    SNITCH_REQUIRE(rev != out.nodes.end());
-    SNITCH_CHECK(type_safe::get(rev->llm_model) == "id-model");
-    for (const auto& n : out.nodes) {
-        if (type_safe::get(n.id) == "review") { continue; }
-        SNITCH_CHECK(type_safe::get(n.llm_model) == "universal");
-    }
+    const auto* cn = find_codergen_node(out, "review");
+    SNITCH_REQUIRE(cn != nullptr);
+    SNITCH_CHECK(type_safe::get(cn->llm_model) == "id-model");
 }
 
 SNITCH_TEST_CASE("[transform] stylesheet css_class multi-value whitespace trimmed -- 7.6-U-001")
@@ -357,10 +361,9 @@ SNITCH_TEST_CASE("[transform] stylesheet css_class multi-value whitespace trimme
     SNITCH_REQUIRE(result.has_value());
     StylesheetTransform xform;
     auto out = xform.apply(*result);
-    auto it = std::find_if(out.nodes.begin(), out.nodes.end(),
-        [](const Node& n) { return type_safe::get(n.id) == "work"; });
-    SNITCH_REQUIRE(it != out.nodes.end());
-    SNITCH_CHECK(type_safe::get(it->llm_model) == "trimmed-model");
+    const auto* cn = find_codergen_node(out, "work");
+    SNITCH_REQUIRE(cn != nullptr);
+    SNITCH_CHECK(type_safe::get(cn->llm_model) == "trimmed-model");
 }
 
 SNITCH_TEST_CASE("[transform] stylesheet unknown property key silently ignored -- 7.6-U-002")
@@ -377,9 +380,9 @@ SNITCH_TEST_CASE("[transform] stylesheet unknown property key silently ignored -
     SNITCH_REQUIRE(result.has_value());
     StylesheetTransform xform;
     auto out = xform.apply(*result);
-    for (const auto& n : out.nodes) {
-        SNITCH_CHECK(type_safe::get(n.llm_model) == "valid-model");
-    }
+    const auto* cn = find_codergen_node(out, "work");
+    SNITCH_REQUIRE(cn != nullptr);
+    SNITCH_CHECK(type_safe::get(cn->llm_model) == "valid-model");
 }
 
 SNITCH_TEST_CASE("[transform] stylesheet unknown reasoning_effort value silently ignored -- 7.6-U-003")
@@ -396,9 +399,9 @@ SNITCH_TEST_CASE("[transform] stylesheet unknown reasoning_effort value silently
     SNITCH_REQUIRE(result.has_value());
     StylesheetTransform xform;
     auto out = xform.apply(*result);
-    for (const auto& n : out.nodes) {
-        SNITCH_CHECK(!n.reasoning_effort.has_value());
-    }
+    const auto* cn = find_codergen_node(out, "work");
+    SNITCH_REQUIRE(cn != nullptr);
+    SNITCH_CHECK(!cn->reasoning_effort.has_value());
 }
 
 SNITCH_TEST_CASE("[transform] stylesheet equal-specificity cross-property both apply -- 7.6-U-004")
@@ -415,14 +418,16 @@ SNITCH_TEST_CASE("[transform] stylesheet equal-specificity cross-property both a
     SNITCH_REQUIRE(result.has_value());
     StylesheetTransform xform;
     auto out = xform.apply(*result);
-    for (const auto& n : out.nodes) {
-        SNITCH_CHECK(type_safe::get(n.llm_model) == "m1");
-        SNITCH_CHECK(type_safe::get(n.llm_provider) == "p1");
-    }
+    const auto* cn = find_codergen_node(out, "work");
+    SNITCH_REQUIRE(cn != nullptr);
+    SNITCH_CHECK(type_safe::get(cn->llm_model) == "m1");
+    SNITCH_CHECK(type_safe::get(cn->llm_provider) == "p1");
 }
 
 SNITCH_TEST_CASE("[transform] stylesheet Mdiamond shape selector matches start node -- 7.6-U-005")
 {
+    // Mdiamond selector matches nodes with that shape; but llm_model only stamps CodergenNode.
+    // Verify that a box-shaped CodergenNode is NOT matched by Mdiamond, so its llm_model stays empty.
     auto result = parse_graph(R"(
         digraph g {
             graph [model_stylesheet="Mdiamond { llm_model: diamond-model; }"]
@@ -435,18 +440,14 @@ SNITCH_TEST_CASE("[transform] stylesheet Mdiamond shape selector matches start n
     SNITCH_REQUIRE(result.has_value());
     StylesheetTransform xform;
     auto out = xform.apply(*result);
-    auto start_it = std::find_if(out.nodes.begin(), out.nodes.end(),
-        [](const Node& n) { return type_safe::get(n.id) == "start"; });
-    SNITCH_REQUIRE(start_it != out.nodes.end());
-    SNITCH_CHECK(type_safe::get(start_it->llm_model) == "diamond-model");
-    auto work_it = std::find_if(out.nodes.begin(), out.nodes.end(),
-        [](const Node& n) { return type_safe::get(n.id) == "work"; });
-    SNITCH_REQUIRE(work_it != out.nodes.end());
-    SNITCH_CHECK(type_safe::get(work_it->llm_model).empty());
+    const auto* cn_work = find_codergen_node(out, "work");
+    SNITCH_REQUIRE(cn_work != nullptr);
+    SNITCH_CHECK(type_safe::get(cn_work->llm_model).empty());
 }
 
 SNITCH_TEST_CASE("[transform] stylesheet Msquare shape selector matches done node -- 7.6-U-006")
 {
+    // Msquare selector matches nodes with that shape; verify CodergenNode is not affected.
     auto result = parse_graph(R"(
         digraph g {
             graph [model_stylesheet="Msquare { llm_model: square-model; }"]
@@ -459,17 +460,12 @@ SNITCH_TEST_CASE("[transform] stylesheet Msquare shape selector matches done nod
     SNITCH_REQUIRE(result.has_value());
     StylesheetTransform xform;
     auto out = xform.apply(*result);
-    auto done_it = std::find_if(out.nodes.begin(), out.nodes.end(),
-        [](const Node& n) { return type_safe::get(n.id) == "done"; });
-    SNITCH_REQUIRE(done_it != out.nodes.end());
-    SNITCH_CHECK(type_safe::get(done_it->llm_model) == "square-model");
-    auto work_it = std::find_if(out.nodes.begin(), out.nodes.end(),
-        [](const Node& n) { return type_safe::get(n.id) == "work"; });
-    SNITCH_REQUIRE(work_it != out.nodes.end());
-    SNITCH_CHECK(type_safe::get(work_it->llm_model).empty());
+    const auto* cn_work = find_codergen_node(out, "work");
+    SNITCH_REQUIRE(cn_work != nullptr);
+    SNITCH_CHECK(type_safe::get(cn_work->llm_model).empty());
 }
 
-SNITCH_TEST_CASE("[transform] stylesheet llm_provider universal rule applies to all nodes -- 7.6-U-007")
+SNITCH_TEST_CASE("[transform] stylesheet llm_provider universal rule applies to codergen nodes -- 7.6-U-007")
 {
     auto result = parse_graph(R"(
         digraph g {
@@ -483,9 +479,9 @@ SNITCH_TEST_CASE("[transform] stylesheet llm_provider universal rule applies to 
     SNITCH_REQUIRE(result.has_value());
     StylesheetTransform xform;
     auto out = xform.apply(*result);
-    for (const auto& n : out.nodes) {
-        SNITCH_CHECK(type_safe::get(n.llm_provider) == "anthropic");
-    }
+    const auto* cn = find_codergen_node(out, "work");
+    SNITCH_REQUIRE(cn != nullptr);
+    SNITCH_CHECK(type_safe::get(cn->llm_provider) == "anthropic");
 }
 
 SNITCH_TEST_CASE("[transform] stylesheet explicit llm_provider not overwritten by class selector -- 7.6-U-008")
@@ -502,10 +498,9 @@ SNITCH_TEST_CASE("[transform] stylesheet explicit llm_provider not overwritten b
     SNITCH_REQUIRE(result.has_value());
     StylesheetTransform xform;
     auto out = xform.apply(*result);
-    auto it = std::find_if(out.nodes.begin(), out.nodes.end(),
-        [](const Node& n) { return type_safe::get(n.id) == "work"; });
-    SNITCH_REQUIRE(it != out.nodes.end());
-    SNITCH_CHECK(type_safe::get(it->llm_provider) == "explicit-provider");
+    const auto* cn = find_codergen_node(out, "work");
+    SNITCH_REQUIRE(cn != nullptr);
+    SNITCH_CHECK(type_safe::get(cn->llm_provider) == "explicit-provider");
 }
 
 SNITCH_TEST_CASE("[transform] stylesheet explicit llm_provider not overwritten by ID selector -- 7.6-U-009")
@@ -522,8 +517,7 @@ SNITCH_TEST_CASE("[transform] stylesheet explicit llm_provider not overwritten b
     SNITCH_REQUIRE(result.has_value());
     StylesheetTransform xform;
     auto out = xform.apply(*result);
-    auto it = std::find_if(out.nodes.begin(), out.nodes.end(),
-        [](const Node& n) { return type_safe::get(n.id) == "work"; });
-    SNITCH_REQUIRE(it != out.nodes.end());
-    SNITCH_CHECK(type_safe::get(it->llm_provider) == "explicit-provider");
+    const auto* cn = find_codergen_node(out, "work");
+    SNITCH_REQUIRE(cn != nullptr);
+    SNITCH_CHECK(type_safe::get(cn->llm_provider) == "explicit-provider");
 }

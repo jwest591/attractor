@@ -8,6 +8,7 @@
 #include <string_view>
 #include <unordered_map>
 #include <unordered_set>
+#include <variant>
 
 namespace attractor {
 
@@ -60,6 +61,21 @@ static auto reachable_ids(const Graph& g, const NodeId& start_id) -> std::unorde
         }
     }
     return visited;
+}
+
+// Expected shape for each built-in handler type. Returns nullopt for custom types.
+static auto shape_for_handler_type(std::string_view nt) -> std::optional<NodeShape>
+{
+    if (nt == "codergen")     return NodeShape::box;
+    if (nt == "tool")         return NodeShape::parallelogram;
+    if (nt == "manager.loop") return NodeShape::house;
+    if (nt == "wait.human")   return NodeShape::hexagon;
+    if (nt == "parallel")     return NodeShape::component;
+    if (nt == "fan.in")       return NodeShape::triple_octagon;
+    if (nt == "conditional")  return NodeShape::diamond;
+    if (nt == "start")        return NodeShape::mdiamond;
+    if (nt == "exit")         return NodeShape::msquare;
+    return std::nullopt;
 }
 
 static auto trim(std::string_view s) -> std::string
@@ -247,7 +263,8 @@ auto validate(const Graph& graph, const ValidationConfig& config,
 
     {
         std::vector<const Node*> starts;
-        for (const auto& n : graph.nodes) {
+        for (const auto& nv : graph.nodes) {
+            const Node& n = to_base(nv);
             if (is_start_node(n)) {
                 starts.push_back(&n);
             }
@@ -266,7 +283,8 @@ auto validate(const Graph& graph, const ValidationConfig& config,
 
     {
         std::vector<const Node*> terminals;
-        for (const auto& n : graph.nodes) {
+        for (const auto& nv : graph.nodes) {
+            const Node& n = to_base(nv);
             if (is_terminal_node(n)) {
                 terminals.push_back(&n);
             }
@@ -284,7 +302,8 @@ auto validate(const Graph& graph, const ValidationConfig& config,
     }
 
     // A node matching both predicates is structurally invalid.
-    for (const auto& n : graph.nodes) {
+    for (const auto& nv : graph.nodes) {
+        const Node& n = to_base(nv);
         if (is_start_node(n) && is_terminal_node(n)) {
             structural_errors = true;
             diags.push_back(
@@ -298,8 +317,8 @@ auto validate(const Graph& graph, const ValidationConfig& config,
     }
 
     std::unordered_set<std::string> node_ids;
-    for (const auto& n : graph.nodes) {
-        node_ids.insert(type_safe::get(n.id));
+    for (const auto& nv : graph.nodes) {
+        node_ids.insert(type_safe::get(to_base(nv).id));
     }
 
     for (const auto& e : graph.edges) {
@@ -327,7 +346,8 @@ auto validate(const Graph& graph, const ValidationConfig& config,
         has_outgoing.insert(type_safe::get(e.from));
     }
 
-    for (const auto& n : graph.nodes) {
+    for (const auto& nv : graph.nodes) {
+        const Node& n = to_base(nv);
         const auto& id = type_safe::get(n.id);
         if (is_start_node(n) && has_incoming.count(id)) {
             diags.push_back({.rule_id = RuleId{"start_no_incoming"},
@@ -388,7 +408,8 @@ auto validate(const Graph& graph, const ValidationConfig& config,
 
     {
         const Node* start = nullptr;
-        for (const auto& n : graph.nodes) {
+        for (const auto& nv : graph.nodes) {
+            const Node& n = to_base(nv);
             if (is_start_node(n)) {
                 start = &n;
                 break;
@@ -396,7 +417,8 @@ auto validate(const Graph& graph, const ValidationConfig& config,
         }
         if (start) {
             auto reachable = reachable_ids(graph, start->id);
-            for (const auto& n : graph.nodes) {
+            for (const auto& nv : graph.nodes) {
+                const Node& n = to_base(nv);
                 const auto& nid = type_safe::get(n.id);
                 if (!is_start_node(n) && !reachable.count(nid)) {
                     diags.push_back({.rule_id = RuleId{"reachability"},
@@ -414,7 +436,8 @@ auto validate(const Graph& graph, const ValidationConfig& config,
         for (const auto& t : config.known_types) {
             known.insert(type_safe::get(t));
         }
-        for (const auto& n : graph.nodes) {
+        for (const auto& nv : graph.nodes) {
+            const Node& n = to_base(nv);
             const auto& nt = type_safe::get(n.node_type);
             if (!nt.empty() && !known.count(nt)) {
                 diags.push_back(
@@ -427,7 +450,25 @@ auto validate(const Graph& graph, const ValidationConfig& config,
         }
     }
 
-    for (const auto& n : graph.nodes) {
+    for (const auto& nv : graph.nodes) {
+        const Node& n = to_base(nv);
+        const auto& nt = type_safe::get(n.node_type);
+        if (!nt.empty()) {
+            if (auto expected = shape_for_handler_type(nt); expected && *expected != n.shape) {
+                diags.push_back(
+                    {.rule_id = RuleId{"shape_type_consistency"},
+                     .severity = Severity::error,
+                     .node_id = n.id,
+                     .message = DiagnosticMessage{"Node '" + type_safe::get(n.id) +
+                                                  "' has type='" + nt +
+                                                  "' but shape does not match (handler would perform an unsafe cast)"},
+                     .suggested_fix = SuggestedFix{"Remove the explicit shape= attribute or align it with the type= value"}});
+            }
+        }
+    }
+
+    for (const auto& nv : graph.nodes) {
+        const Node& n = to_base(nv);
         if (n.fidelity.has_value() && !is_known_fidelity_mode(*n.fidelity)) {
             diags.push_back({.rule_id = RuleId{"fidelity_valid"},
                              .severity = Severity::warning,
@@ -462,7 +503,8 @@ auto validate(const Graph& graph, const ValidationConfig& config,
                  .suggested_fix = SuggestedFix{"Ensure retry_target references an existing node ID"}});
         }
     };
-    for (const auto& n : graph.nodes) {
+    for (const auto& nv : graph.nodes) {
+        const Node& n = to_base(nv);
         check_retry_target(n.retry_target, n.id, "retry_target");
         check_retry_target(n.fallback_retry_target, n.id, "fallback_retry_target");
     }
@@ -484,7 +526,8 @@ auto validate(const Graph& graph, const ValidationConfig& config,
              .suggested_fix = SuggestedFix{"Ensure graph-level fallback_retry_target references an existing node ID"}});
     }
 
-    for (const auto& n : graph.nodes) {
+    for (const auto& nv : graph.nodes) {
+        const Node& n = to_base(nv);
         if (n.goal_gate) {
             const bool node_has_retry =
                 !type_safe::get(n.retry_target).empty() || !type_safe::get(n.fallback_retry_target).empty();
@@ -501,19 +544,22 @@ auto validate(const Graph& graph, const ValidationConfig& config,
         }
     }
 
-    for (const auto& n : graph.nodes) {
+    for (const auto& nv : graph.nodes) {
+        const Node& n = to_base(nv);
         if (is_start_node(n) || is_terminal_node(n)) {
             continue;
         }
         const auto& lbl = type_safe::get(n.label);
         const bool label_is_auto = lbl.empty() || lbl == type_safe::get(n.id);
-        if (n.shape == NodeShape::box && type_safe::get(n.prompt).empty() && label_is_auto) {
-            diags.push_back({.rule_id = RuleId{"prompt_on_llm_nodes"},
-                             .severity = Severity::warning,
-                             .node_id = n.id,
-                             .message = DiagnosticMessage{"Codergen node '" + type_safe::get(n.id) +
-                                                          "' has neither prompt nor label"},
-                             .suggested_fix = SuggestedFix{"Add a prompt or label attribute to this codergen node"}});
+        if (const auto* cn = std::get_if<CodergenNode>(&nv)) {
+            if (type_safe::get(cn->prompt).empty() && label_is_auto) {
+                diags.push_back({.rule_id = RuleId{"prompt_on_llm_nodes"},
+                                 .severity = Severity::warning,
+                                 .node_id = n.id,
+                                 .message = DiagnosticMessage{"Codergen node '" + type_safe::get(n.id) +
+                                                              "' has neither prompt nor label"},
+                                 .suggested_fix = SuggestedFix{"Add a prompt or label attribute to this codergen node"}});
+            }
         }
     }
 

@@ -84,8 +84,10 @@ auto FanInHandler::execute(const Node& node, Context& ctx, const Graph& /*graph*
     std::optional<std::size_t> best_idx;
     bool from_llm = false;
 
-    if (!node.prompt.empty() && m_backend != nullptr) {
-        auto result = m_backend->run(node, node.prompt, ctx);
+    // safe: engine dispatches FanInHandler only for FanInNode
+    const auto& derived = static_cast<const FanInNode&>(node);
+    if (!derived.prompt.empty() && m_backend != nullptr) {
+        auto result = m_backend->run(node, derived.prompt, ctx);
         if (result.has_value()) {
             const std::string llm_id = type_safe::get(*result);
             for (std::size_t i = 0; i < candidates.size(); ++i) {

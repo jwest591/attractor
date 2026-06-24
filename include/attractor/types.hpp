@@ -255,6 +255,15 @@ struct LlmResponse
     bool empty() const noexcept { return static_cast<std::string>(*this).empty(); }
 };
 
+struct SubgraphId
+    : ts::strong_typedef<SubgraphId, std::string>
+    , ts::strong_typedef_op::equality_comparison<SubgraphId>
+    , ts::strong_typedef_op::relational_comparison<SubgraphId> {
+    using strong_typedef::strong_typedef;
+
+    bool empty() const noexcept { return static_cast<std::string>(*this).empty(); }
+};
+
 // -- Constrained types (AC2) ---------------------------------------------------
 // Each constrained type uses its own constraint struct so the four `using`
 // aliases produce distinct instantiations of ts::constrained_type.
@@ -388,6 +397,9 @@ void from_json(const nlohmann::json& j, HandlerNote& v);
 
 void to_json(nlohmann::json& j, const LlmResponse& v);
 void from_json(const nlohmann::json& j, LlmResponse& v);
+
+void to_json(nlohmann::json& j, const SubgraphId& v);
+void from_json(const nlohmann::json& j, SubgraphId& v);
 
 void to_json(nlohmann::json& j, ReasoningEffort v);
 void from_json(const nlohmann::json& j, ReasoningEffort& v);

@@ -54,7 +54,9 @@ auto CodergenHandler::execute(const Node& node, Context& ctx, const Graph& graph
         return Outcome::fail(DiagnosticMessage{"node.id contains path-unsafe characters: " + id_str});
     }
 
-    std::string prompt_str = type_safe::get(node.prompt);
+    // safe: engine dispatches CodergenHandler only for CodergenNode
+    const auto& derived = static_cast<const CodergenNode&>(node);
+    std::string prompt_str = type_safe::get(derived.prompt);
     if (prompt_str.empty()) {
         prompt_str = type_safe::get(node.label);
     }

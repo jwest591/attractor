@@ -57,7 +57,7 @@ SNITCH_TEST_CASE("[fan_in_handler] one SUCCESS and one FAIL returns SUCCESS with
     results.push_back(make_entry("b1", "fail"));
     set_results(ctx, results);
     Graph g;
-    Node par;
+    FanInNode par;
     par.id = NodeId{"fan_in"};
 
     const Outcome out = h.execute(par, ctx, g, RunConfig{.logs_root = LogsRoot{"/tmp"}});
@@ -78,7 +78,7 @@ SNITCH_TEST_CASE("[fan_in_handler] two SUCCESS with different scores selects hig
     results.push_back(make_entry("b1", "success", 5.0));
     set_results(ctx, results);
     Graph g;
-    Node par;
+    FanInNode par;
     par.id = NodeId{"fan_in"};
 
     const Outcome out = h.execute(par, ctx, g, RunConfig{.logs_root = LogsRoot{"/tmp"}});
@@ -97,7 +97,7 @@ SNITCH_TEST_CASE("[fan_in_handler] two SUCCESS equal score tiebreaks on id ascen
     results.push_back(make_entry("b1", "success", 0.0));
     set_results(ctx, results);
     Graph g;
-    Node par;
+    FanInNode par;
     par.id = NodeId{"fan_in"};
 
     const Outcome out = h.execute(par, ctx, g, RunConfig{.logs_root = LogsRoot{"/tmp"}});
@@ -116,7 +116,7 @@ SNITCH_TEST_CASE("[fan_in_handler] all candidates FAIL returns FAIL -- 4.2-U-004
     results.push_back(make_entry("b1", "fail"));
     set_results(ctx, results);
     Graph g;
-    Node par;
+    FanInNode par;
     par.id = NodeId{"fan_in"};
 
     const Outcome out = h.execute(par, ctx, g, RunConfig{.logs_root = LogsRoot{"/tmp"}});
@@ -129,7 +129,7 @@ SNITCH_TEST_CASE("[fan_in_handler] no parallel.results key in context returns FA
     FanInHandler h{nullptr};
     Context ctx;
     Graph g;
-    Node par;
+    FanInNode par;
     par.id = NodeId{"fan_in"};
 
     const Outcome out = h.execute(par, ctx, g, RunConfig{.logs_root = LogsRoot{"/tmp"}});
@@ -149,7 +149,7 @@ SNITCH_TEST_CASE("[fan_in_handler] prompt and backend causes backend to be calle
     results.push_back(make_entry("b1", "success", 0.0));
     set_results(ctx, results);
     Graph g;
-    Node par;
+    FanInNode par;
     par.id    = NodeId{"fan_in"};
     par.prompt = PromptText{"select the best candidate"};
 
@@ -170,7 +170,7 @@ SNITCH_TEST_CASE("[fan_in_handler] partial_success vs success selects success by
     results.push_back(make_entry("b1", "success", 0.0));
     set_results(ctx, results);
     Graph g;
-    Node par;
+    FanInNode par;
     par.id = NodeId{"fan_in"};
 
     const Outcome out = h.execute(par, ctx, g, RunConfig{.logs_root = LogsRoot{"/tmp"}});
@@ -189,7 +189,7 @@ SNITCH_TEST_CASE("[fan_in_handler] callable through Handler interface -- 4.2-U-0
     results.push_back(make_entry("b0", "success", 0.0));
     set_results(ctx, results);
     Graph g;
-    Node par;
+    FanInNode par;
     par.id = NodeId{"fan_in"};
 
     const Outcome out = iface.execute(par, ctx, g, RunConfig{.logs_root = LogsRoot{"/tmp"}});
@@ -212,7 +212,7 @@ SNITCH_TEST_CASE("[fan_in_handler] missing score in results entry appends diagno
     });
     set_results(ctx, results);
     Graph g;
-    Node par;
+    FanInNode par;
     par.id = NodeId{"fan_in"};
 
     const Outcome out = h.execute(par, ctx, g, RunConfig{.logs_root = LogsRoot{"/tmp"}});
@@ -234,7 +234,7 @@ SNITCH_TEST_CASE("[fan_in_handler] all-fail with missing score surfaces diagnost
     });
     set_results(ctx, results);
     Graph g;
-    Node par;
+    FanInNode par;
     par.id = NodeId{"fan_in"};
 
     const Outcome out = h.execute(par, ctx, g, RunConfig{.logs_root = LogsRoot{"/tmp"}});

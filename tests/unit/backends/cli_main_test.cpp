@@ -37,9 +37,9 @@ SNITCH_TEST_CASE("[cli_main] write_manifest node_count and edge_count reflect gr
     TempLogsDir logs;
     Graph g;
     g.digraph_id = GraphId{"count-graph"};
-    Node n1;
+    CodergenNode n1;
     n1.id = NodeId{"n1"};
-    Node n2;
+    CodergenNode n2;
     n2.id = NodeId{"n2"};
     g.nodes.push_back(n1);
     g.nodes.push_back(n2);

@@ -10,9 +10,9 @@ using namespace attractor;
 
 namespace {
 
-Node make_start_node()
+StartNode make_start_node()
 {
-    Node n;
+    StartNode n;
     n.id = NodeId{"start"};
     n.shape = NodeShape::mdiamond;
     return n;

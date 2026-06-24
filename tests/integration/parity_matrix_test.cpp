@@ -50,7 +50,7 @@ SNITCH_TEST_CASE("[parity] Wait.human presents choices and routes on selection -
     WaitForHumanHandler h{qi};
     Context ctx;
     Graph g;
-    Node gate;
+    WaitHumanNode gate;
     gate.id        = NodeId{"gate"};
     gate.node_type = HandlerTypeName{"wait.human"};
     Edge e1;
@@ -85,15 +85,15 @@ SNITCH_TEST_CASE("[parity] Parallel fan-out spawns branches with isolated contex
     ParallelHandler h{fn};
 
     Graph g;
-    Node par;
+    ParallelNode par;
     par.id          = NodeId{"par"};
     par.join_policy = JoinPolicy::wait_all;
     par.max_parallel = MaxParallel{4};
     g.nodes.push_back(par);
-    Node b0;
+    CodergenNode b0;
     b0.id = NodeId{"b0"};
     g.nodes.push_back(b0);
-    Node b1;
+    CodergenNode b1;
     b1.id = NodeId{"b1"};
     g.nodes.push_back(b1);
     Edge e0;
@@ -105,10 +105,10 @@ SNITCH_TEST_CASE("[parity] Parallel fan-out spawns branches with isolated contex
     e1.to   = NodeId{"b1"};
     g.edges.push_back(e1);
 
-    const Node* par_ptr = nullptr;
-    for (const auto& n : g.nodes) {
-        if (n.id == NodeId{"par"}) {
-            par_ptr = &n;
+    const ParallelNode* par_ptr = nullptr;
+    for (const auto& nv : g.nodes) {
+        if (to_base(nv).id == NodeId{"par"}) {
+            par_ptr = &std::get<ParallelNode>(nv);
             break;
         }
     }
@@ -133,7 +133,7 @@ SNITCH_TEST_CASE("[parity] Parallel fan-in consolidates results by outcome rank 
 
     FanInHandler h{nullptr};
     Graph g;
-    Node fan_in_node;
+    FanInNode fan_in_node;
     fan_in_node.id = NodeId{"fan_in"};
 
     const Outcome out = h.execute(fan_in_node, ctx, g, RunConfig{.logs_root = LogsRoot{"/tmp"}});
@@ -160,12 +160,14 @@ SNITCH_TEST_CASE("[parity] Stylesheet applies model override to nodes by shape -
     const auto out = apply_transforms(*result);
     SNITCH_REQUIRE(!out.nodes.empty());
     SNITCH_CHECK(out.nodes.size() == result->nodes.size());
-    for (const auto& n : out.nodes) {
-        if (n.shape == NodeShape::box) {
-            SNITCH_CHECK(type_safe::get(n.llm_model) == "box-model");
-        }
-        else {
-            SNITCH_CHECK(type_safe::get(n.llm_model) == "base-model");
+    for (const auto& nv : out.nodes) {
+        if (const auto* cn = std::get_if<CodergenNode>(&nv)) {
+            if (cn->shape == NodeShape::box) {
+                SNITCH_CHECK(type_safe::get(cn->llm_model) == "box-model");
+            }
+            else {
+                SNITCH_CHECK(type_safe::get(cn->llm_model) == "base-model");
+            }
         }
     }
 }
@@ -184,7 +186,8 @@ SNITCH_TEST_CASE("[parity] Fidelity mode resolves compact by default -- INT-PARI
     SNITCH_REQUIRE(result.has_value());
     const auto& g = *result;
     const Node* work_node = nullptr;
-    for (const auto& n : g.nodes) {
+    for (const auto& nv : g.nodes) {
+        const Node& n = to_base(nv);
         if (type_safe::get(n.id) == "work") {
             work_node = &n;
             break;

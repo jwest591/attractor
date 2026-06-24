@@ -6,6 +6,7 @@ add_executable(attractor_unit_tests
     unit/types_test.cpp
     unit/dot_parser_test.cpp
     unit/graph_model_test.cpp
+    unit/node_variant_test.cpp
     unit/validator_test.cpp
     unit/transform_test.cpp
     unit/engine_test.cpp

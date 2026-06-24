@@ -38,9 +38,9 @@ struct ScopedTempDir {
     ScopedTempDir& operator=(ScopedTempDir&&) = delete;
 };
 
-Node make_codergen_node(std::string id, std::string prompt_text = "")
+CodergenNode make_codergen_node(std::string id, std::string prompt_text = "")
 {
-    Node n;
+    CodergenNode n;
     n.id = NodeId{std::move(id)};
     n.shape = NodeShape::box;
     n.prompt = PromptText{std::move(prompt_text)};
@@ -78,7 +78,7 @@ class FailingBackend final : public CodergenBackend {
 SNITCH_TEST_CASE("[codergen_handler] NoOpBackend::run returns simulated LlmResponse")
 {
     NoOpBackend backend;
-    Node n = make_codergen_node("test_node");
+    CodergenNode n = make_codergen_node("test_node");
     Context ctx;
     Graph g;
 
@@ -93,7 +93,7 @@ SNITCH_TEST_CASE("[codergen_handler] NoOpBackend::run makes no external calls")
     // Verifies the simulation contract: run always returns quickly with no I/O.
     // If this test hangs, the NoOpBackend is wrongly calling external systems.
     NoOpBackend backend;
-    Node n = make_codergen_node("any_node");
+    CodergenNode n = make_codergen_node("any_node");
     Context ctx;
     Graph g;
 
@@ -110,7 +110,7 @@ SNITCH_TEST_CASE("[codergen_handler] execute with NoOpBackend returns SUCCESS --
     CodergenHandler h{&backend};
     Context ctx;
     Graph g;
-    Node n = make_codergen_node("plan", "Analyze this");
+    CodergenNode n = make_codergen_node("plan", "Analyze this");
     RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
 
     auto outcome = h.execute(n, ctx, g, rc);
@@ -125,7 +125,7 @@ SNITCH_TEST_CASE("[codergen_handler] execute expands $goal in prompt")
     CodergenHandler h{&backend};
     Context ctx;
     Graph g = make_graph_with_goal("Write tests");
-    Node n = make_codergen_node("plan", "Plan how to: $goal");
+    CodergenNode n = make_codergen_node("plan", "Plan how to: $goal");
     RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
 
     (void)h.execute(n, ctx, g, rc);
@@ -142,7 +142,7 @@ SNITCH_TEST_CASE("[codergen_handler] execute writes prompt.md to stage directory
     CodergenHandler h{&backend};
     Context ctx;
     Graph g;
-    Node n = make_codergen_node("my_stage", "Analyze requirements");
+    CodergenNode n = make_codergen_node("my_stage", "Analyze requirements");
     RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
 
     (void)h.execute(n, ctx, g, rc);
@@ -157,7 +157,7 @@ SNITCH_TEST_CASE("[codergen_handler] execute sets last_response in context_updat
     CodergenHandler h{&backend};
     Context ctx;
     Graph g;
-    Node n = make_codergen_node("work", "Do something");
+    CodergenNode n = make_codergen_node("work", "Do something");
     RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
 
     auto outcome = h.execute(n, ctx, g, rc);
@@ -172,7 +172,7 @@ SNITCH_TEST_CASE("[codergen_handler] execute sets last_stage in context_updates"
     CodergenHandler h{nullptr};
     Context ctx;
     Graph g;
-    Node n = make_codergen_node("my_work", "Do work");
+    CodergenNode n = make_codergen_node("my_work", "Do work");
     RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
 
     auto outcome = h.execute(n, ctx, g, rc);
@@ -187,7 +187,7 @@ SNITCH_TEST_CASE("[codergen_handler] null backend uses simulation mode")
     CodergenHandler h{nullptr};  // simulation mode
     Context ctx;
     Graph g;
-    Node n = make_codergen_node("sim_node", "Do work");
+    CodergenNode n = make_codergen_node("sim_node", "Do work");
     RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
 
     auto outcome = h.execute(n, ctx, g, rc);
@@ -203,7 +203,7 @@ SNITCH_TEST_CASE("[codergen_handler] empty prompt falls back to node label")
     CodergenHandler h{nullptr};
     Context ctx;
     Graph g;
-    Node n;
+    CodergenNode n;
     n.id = NodeId{"labeled_node"};
     n.shape = NodeShape::box;
     n.label = NodeLabel{"My fallback label"};
@@ -223,7 +223,7 @@ SNITCH_TEST_CASE("[codergen_handler] multiple $goal occurrences all expanded")
     CodergenHandler h{nullptr};
     Context ctx;
     Graph g = make_graph_with_goal("build app");
-    Node n = make_codergen_node("node1", "First: $goal. Second: $goal.");
+    CodergenNode n = make_codergen_node("node1", "First: $goal. Second: $goal.");
     RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
 
     (void)h.execute(n, ctx, g, rc);
@@ -239,7 +239,7 @@ SNITCH_TEST_CASE("[codergen_handler] backend failure propagates as Outcome::fail
     CodergenHandler h{&backend};
     Context ctx;
     Graph g;
-    Node n = make_codergen_node("fail_node", "Do work");
+    CodergenNode n = make_codergen_node("fail_node", "Do work");
     RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
 
     auto outcome = h.execute(n, ctx, g, rc);
@@ -254,7 +254,7 @@ SNITCH_TEST_CASE("[codergen_handler] node.id with path separator returns Outcome
     CodergenHandler h{nullptr};
     Context ctx;
     Graph g;
-    Node n = make_codergen_node("../escape", "prompt");
+    CodergenNode n = make_codergen_node("../escape", "prompt");
     RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
 
     auto outcome = h.execute(n, ctx, g, rc);
@@ -269,7 +269,7 @@ SNITCH_TEST_CASE("[codergen_handler] empty prompt and empty label returns Outcom
     CodergenHandler h{nullptr};
     Context ctx;
     Graph g;
-    Node n;
+    CodergenNode n;
     n.id    = NodeId{"empty_node"};
     n.shape = NodeShape::box;
     RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};

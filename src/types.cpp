@@ -118,6 +118,7 @@ void from_json(const nlohmann::json& j, LogsRoot& v)
 
 ATTRACTOR_STRING_TYPEDEF_JSON(NodeLabel)
 ATTRACTOR_STRING_TYPEDEF_JSON(CssClass)
+ATTRACTOR_STRING_TYPEDEF_JSON(SubgraphId)
 ATTRACTOR_STRING_TYPEDEF_JSON(LlmModel)
 ATTRACTOR_STRING_TYPEDEF_JSON(LlmProvider)
 ATTRACTOR_STRING_TYPEDEF_JSON(GraphId)
@@ -289,6 +290,11 @@ static const std::pair<NodeShape, std::string_view> k_node_shape_map[] = {
     {NodeShape::house,         "house"        },
 };
 
+// Alternate string forms accepted during deserialization (not emitted by to_string)
+static const std::pair<NodeShape, std::string_view> k_node_shape_aliases[] = {
+    {NodeShape::triple_octagon, "triple_octagon"},
+};
+
 auto node_shape_to_string(NodeShape s) noexcept -> std::string_view
 {
     for (const auto& [enumerator, name] : k_node_shape_map) {
@@ -302,6 +308,11 @@ auto node_shape_to_string(NodeShape s) noexcept -> std::string_view
 auto node_shape_from_string(std::string_view s) noexcept -> std::optional<NodeShape>
 {
     for (const auto& [enumerator, name] : k_node_shape_map) {
+        if (name == s) {
+            return enumerator;
+        }
+    }
+    for (const auto& [enumerator, name] : k_node_shape_aliases) {
         if (name == s) {
             return enumerator;
         }

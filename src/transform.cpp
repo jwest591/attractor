@@ -5,6 +5,8 @@
 #include <attractor/types.hpp>
 #include <string>
 #include <string_view>
+#include <type_traits>
+#include <variant>
 #include <vector>
 
 namespace attractor {
@@ -160,8 +162,9 @@ static auto parse_stylesheet(const StylesheetId& ssid) -> std::vector<StyleRule>
     return rules;
 }
 
-static auto node_matches_rule(const Node& node, const StyleRule& rule) -> bool
+static auto node_matches_rule(const NodeVariant& nv, const StyleRule& rule) -> bool
 {
+    const Node& node = to_base(nv);
     switch (rule.type) {
     case StyleRule::SelectorType::universal:
         return true;
@@ -195,9 +198,14 @@ auto VariableExpansionTransform::apply(const Graph& graph) const -> Graph
 {
     Graph out = graph;
     const auto& goal = type_safe::get(graph.goal);
-    for (auto& node : out.nodes) {
-        auto expanded = detail::replace_all(type_safe::get(node.prompt), "$goal", goal);
-        node.prompt = PromptText{std::move(expanded)};
+    for (auto& nv : out.nodes) {
+        std::visit([&goal](auto& derived) {
+            using T = std::decay_t<decltype(derived)>;
+            if constexpr (std::is_same_v<T, CodergenNode> || std::is_same_v<T, FanInNode>) {
+                auto expanded = detail::replace_all(type_safe::get(derived.prompt), "$goal", goal);
+                derived.prompt = PromptText{std::move(expanded)};
+            }
+        }, nv);
     }
     return out;
 }
@@ -211,14 +219,14 @@ auto StylesheetTransform::apply(const Graph& graph) const -> Graph
     auto rules = detail::parse_stylesheet(graph.model_stylesheet);
     Graph out = graph;
 
-    for (auto& node : out.nodes) {
+    for (auto& nv : out.nodes) {
         // For each property, find the winning rule: highest specificity wins;
         // among equal specificity, the later rule wins (stable: iterate in order, last survives).
         std::string best_model, best_provider, best_effort;
         int spec_model = -1, spec_provider = -1, spec_effort = -1;
 
         for (const auto& rule : rules) {
-            if (!detail::node_matches_rule(node, rule)) {
+            if (!detail::node_matches_rule(nv, rule)) {
                 continue;
             }
             if (!rule.llm_model.empty() && rule.specificity >= spec_model) {
@@ -235,23 +243,29 @@ auto StylesheetTransform::apply(const Graph& graph) const -> Graph
             }
         }
 
-        if (!best_model.empty() && node.llm_model.empty()) {
-            node.llm_model = LlmModel{best_model};
-        }
-        if (!best_provider.empty() && node.llm_provider.empty()) {
-            node.llm_provider = LlmProvider{best_provider};
-        }
-        if (!best_effort.empty() && !node.reasoning_effort.has_value()) {
-            if (best_effort == "low") {
-                node.reasoning_effort = ReasoningEffort::low;
+        // LLM fields only apply to CodergenNode
+        std::visit([&](auto& derived) {
+            using T = std::decay_t<decltype(derived)>;
+            if constexpr (std::is_same_v<T, CodergenNode>) {
+                if (!best_model.empty() && derived.llm_model.empty()) {
+                    derived.llm_model = LlmModel{best_model};
+                }
+                if (!best_provider.empty() && derived.llm_provider.empty()) {
+                    derived.llm_provider = LlmProvider{best_provider};
+                }
+                if (!best_effort.empty() && !derived.reasoning_effort.has_value()) {
+                    if (best_effort == "low") {
+                        derived.reasoning_effort = ReasoningEffort::low;
+                    }
+                    else if (best_effort == "medium") {
+                        derived.reasoning_effort = ReasoningEffort::medium;
+                    }
+                    else if (best_effort == "high") {
+                        derived.reasoning_effort = ReasoningEffort::high;
+                    }
+                }
             }
-            else if (best_effort == "medium") {
-                node.reasoning_effort = ReasoningEffort::medium;
-            }
-            else if (best_effort == "high") {
-                node.reasoning_effort = ReasoningEffort::high;
-            }
-        }
+        }, nv);
     }
 
     return out;

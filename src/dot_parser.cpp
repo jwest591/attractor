@@ -4,7 +4,9 @@
 #include <limits>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <unordered_map>
+#include <variant>
 #include <vector>
 
 namespace attractor {
@@ -560,8 +562,61 @@ struct TokenStream {
 
 // -- Attribute application -----------------------------------------------------
 
-static auto apply_attrs_to_node(Node& node, const std::unordered_map<std::string, std::string>& attrs)
-    -> std::optional<ParseError>
+using AttrMap = std::unordered_map<std::string, std::string>;
+
+// Map handler type name to its canonical shape, so type= alone selects the correct NodeVariant.
+static auto node_shape_from_handler_type(std::string_view type) -> std::optional<NodeShape>
+{
+    if (type == "codergen")     return NodeShape::box;
+    if (type == "tool")         return NodeShape::parallelogram;
+    if (type == "manager.loop") return NodeShape::house;
+    if (type == "wait.human")   return NodeShape::hexagon;
+    if (type == "parallel")     return NodeShape::component;
+    if (type == "fan.in")       return NodeShape::triple_octagon;
+    if (type == "conditional")  return NodeShape::diamond;
+    if (type == "start")        return NodeShape::mdiamond;
+    if (type == "exit")         return NodeShape::msquare;
+    return std::nullopt;
+}
+
+// Determine final shape from attr map; returns default_shape if "shape" key absent or unknown.
+// When "shape" is absent, falls back to the shape implied by "type" (if any).
+static auto node_shape_from_attrs(const AttrMap& attrs, NodeShape default_shape = NodeShape::box) -> NodeShape
+{
+    auto it = attrs.find("shape");
+    if (it != attrs.end()) {
+        auto s = node_shape_from_string(it->second);
+        return s.value_or(default_shape);
+    }
+    auto type_it = attrs.find("type");
+    if (type_it != attrs.end()) {
+        auto s = node_shape_from_handler_type(type_it->second);
+        if (s) {
+            return *s;
+        }
+    }
+    return default_shape;
+}
+
+// Create a default-initialized NodeVariant for a given shape.
+static auto make_default_variant(NodeShape shape) -> NodeVariant
+{
+    switch (shape) {
+    case NodeShape::mdiamond:       return StartNode{};
+    case NodeShape::msquare:        return ExitNode{};
+    case NodeShape::box:            return CodergenNode{};
+    case NodeShape::parallelogram:  return ToolNode{};
+    case NodeShape::house:          return ManagerNode{};
+    case NodeShape::hexagon:        return WaitHumanNode{};
+    case NodeShape::component:      return ParallelNode{};
+    case NodeShape::triple_octagon: return FanInNode{};
+    case NodeShape::diamond:        return ConditionalNode{};
+    }
+    return CodergenNode{};
+}
+
+// Apply base (common) node attributes.
+static auto apply_base_attrs(Node& node, const AttrMap& attrs) -> std::optional<ParseError>
 {
     for (const auto& [key, val] : attrs) {
         if (key == "label") {
@@ -576,9 +631,6 @@ static auto apply_attrs_to_node(Node& node, const std::unordered_map<std::string
         }
         else if (key == "type") {
             node.node_type = HandlerTypeName{val};
-        }
-        else if (key == "prompt") {
-            node.prompt = PromptText{val};
         }
         else if (key == "max_retries") {
             auto n_opt = parse_int_attr(val);
@@ -621,6 +673,23 @@ static auto apply_attrs_to_node(Node& node, const std::unordered_map<std::string
             }
             node.timeout = d;
         }
+        else if (key == "auto_status") {
+            node.auto_status = (val == "true");
+        }
+        else if (key == "allow_partial") {
+            node.allow_partial = (val == "true");
+        }
+    }
+    return std::nullopt;
+}
+
+// Apply CodergenNode-specific attributes.
+static auto apply_codergen_attrs(CodergenNode& node, const AttrMap& attrs) -> std::optional<ParseError>
+{
+    for (const auto& [key, val] : attrs) {
+        if (key == "prompt") {
+            node.prompt = PromptText{val};
+        }
         else if (key == "llm_model") {
             node.llm_model = LlmModel{val};
         }
@@ -634,19 +703,26 @@ static auto apply_attrs_to_node(Node& node, const std::unordered_map<std::string
             }
             node.reasoning_effort = r;
         }
-        else if (key == "auto_status") {
-            node.auto_status = (val == "true");
-        }
-        else if (key == "allow_partial") {
-            node.allow_partial = (val == "true");
-        }
-        else if (key == "human.default_choice") {
-            node.human_default_choice = NodeId{val};
-        }
-        else if (key == "tool_command") {
+    }
+    return std::nullopt;
+}
+
+// Apply ToolNode-specific attributes.
+static auto apply_tool_attrs(ToolNode& node, const AttrMap& attrs) -> std::optional<ParseError>
+{
+    for (const auto& [key, val] : attrs) {
+        if (key == "tool_command") {
             node.tool_command = ShellCommand{val};
         }
-        else if (key == "manager.stop_condition") {
+    }
+    return std::nullopt;
+}
+
+// Apply ManagerNode-specific attributes.
+static auto apply_manager_attrs(ManagerNode& node, const AttrMap& attrs) -> std::optional<ParseError>
+{
+    for (const auto& [key, val] : attrs) {
+        if (key == "manager.stop_condition") {
             node.manager_stop_condition = ConditionExpr{val};
         }
         else if (key == "manager.max_cycles") {
@@ -656,13 +732,35 @@ static auto apply_attrs_to_node(Node& node, const std::unordered_map<std::string
             }
             node.manager_max_cycles = *n_opt;
         }
-        else if (key == "join_policy") {
-            if (val == "wait_all")
+    }
+    return std::nullopt;
+}
+
+// Apply WaitHumanNode-specific attributes.
+static auto apply_wait_human_attrs(WaitHumanNode& node, const AttrMap& attrs) -> std::optional<ParseError>
+{
+    for (const auto& [key, val] : attrs) {
+        if (key == "human.default_choice") {
+            node.human_default_choice = NodeId{val};
+        }
+    }
+    return std::nullopt;
+}
+
+// Apply ParallelNode-specific attributes.
+static auto apply_parallel_attrs(ParallelNode& node, const AttrMap& attrs) -> std::optional<ParseError>
+{
+    for (const auto& [key, val] : attrs) {
+        if (key == "join_policy") {
+            if (val == "wait_all") {
                 node.join_policy = JoinPolicy::wait_all;
-            else if (val == "first_success")
+            }
+            else if (val == "first_success") {
                 node.join_policy = JoinPolicy::first_success;
-            else
+            }
+            else {
                 return ParseError{"unknown join_policy: " + val};
+            }
         }
         else if (key == "max_parallel") {
             auto n_opt = parse_int_attr(val);
@@ -673,6 +771,85 @@ static auto apply_attrs_to_node(Node& node, const std::unordered_map<std::string
         }
     }
     return std::nullopt;
+}
+
+// Apply FanInNode-specific attributes.
+static auto apply_fan_in_attrs(FanInNode& node, const AttrMap& attrs) -> std::optional<ParseError>
+{
+    for (const auto& [key, val] : attrs) {
+        if (key == "prompt") {
+            node.prompt = PromptText{val};
+        }
+    }
+    return std::nullopt;
+}
+
+// Apply all attributes to a NodeVariant: base attrs + derived attrs for the variant's actual type.
+static auto apply_attrs_to_variant(NodeVariant& nv, const AttrMap& attrs) -> std::optional<ParseError>
+{
+    // Apply base attrs
+    std::optional<ParseError> err = std::visit([&](auto& derived) -> std::optional<ParseError> {
+        return apply_base_attrs(static_cast<Node&>(derived), attrs);
+    }, nv);
+    if (err) {
+        return err;
+    }
+
+    // Apply derived attrs
+    return std::visit([&](auto& derived) -> std::optional<ParseError> {
+        using T = std::decay_t<decltype(derived)>;
+        if constexpr (std::is_same_v<T, CodergenNode>) {
+            return apply_codergen_attrs(derived, attrs);
+        }
+        else if constexpr (std::is_same_v<T, ToolNode>) {
+            return apply_tool_attrs(derived, attrs);
+        }
+        else if constexpr (std::is_same_v<T, ManagerNode>) {
+            return apply_manager_attrs(derived, attrs);
+        }
+        else if constexpr (std::is_same_v<T, WaitHumanNode>) {
+            return apply_wait_human_attrs(derived, attrs);
+        }
+        else if constexpr (std::is_same_v<T, ParallelNode>) {
+            return apply_parallel_attrs(derived, attrs);
+        }
+        else if constexpr (std::is_same_v<T, FanInNode>) {
+            return apply_fan_in_attrs(derived, attrs);
+        }
+        return std::nullopt;
+    }, nv);
+}
+
+// Copy base fields from one Node to another (used when reconstructing variant after shape change).
+static void copy_base_fields(Node& dst, const Node& src)
+{
+    dst.id                    = src.id;
+    dst.label                 = src.label;
+    dst.shape                 = src.shape;
+    dst.node_type             = src.node_type;
+    dst.max_retries           = src.max_retries;
+    dst.goal_gate             = src.goal_gate;
+    dst.retry_target          = src.retry_target;
+    dst.fallback_retry_target = src.fallback_retry_target;
+    dst.fidelity              = src.fidelity;
+    dst.thread_id             = src.thread_id;
+    dst.css_class             = src.css_class;
+    dst.timeout               = src.timeout;
+    dst.auto_status           = src.auto_status;
+    dst.allow_partial         = src.allow_partial;
+    dst.enclosing_subgraph    = src.enclosing_subgraph;
+}
+
+// Return a mutable reference to the base Node within a NodeVariant.
+[[nodiscard]] static auto variant_base(NodeVariant& nv) -> Node&
+{
+    return std::visit([](auto& derived) -> Node& { return derived; }, nv);
+}
+
+// Return a const reference to the base Node within a NodeVariant.
+[[nodiscard]] static auto variant_base(const NodeVariant& nv) -> const Node&
+{
+    return std::visit([](const auto& derived) -> const Node& { return derived; }, nv);
 }
 
 static auto apply_attrs_to_edge(Edge& edge, const std::unordered_map<std::string, std::string>& attrs)
@@ -760,8 +937,6 @@ static auto apply_attrs_to_graph(Graph& graph, const std::unordered_map<std::str
 
 // -- Forward declarations ------------------------------------------------------
 
-using AttrMap = std::unordered_map<std::string, std::string>;
-
 static auto parse_attr_block(TokenStream& ts) -> std::expected<AttrMap, ParseError>;
 static auto parse_statement_list(TokenStream& ts, ParseContext& ctx, bool is_subgraph,
                                  std::string* subgraph_label_out = nullptr) -> std::optional<ParseError>;
@@ -826,26 +1001,28 @@ static auto parse_attr_block(TokenStream& ts) -> std::expected<AttrMap, ParseErr
 
 static auto ensure_node_exists(ParseContext& ctx, const std::string& id) -> std::optional<ParseError>
 {
-    for (const auto& nd : ctx.graph.nodes) {
-        if (type_safe::get(nd.id) == id) {
+    for (const auto& nv : ctx.graph.nodes) {
+        if (type_safe::get(variant_base(nv).id) == id) {
             return std::nullopt;
         }
     }
-    Node nd;
-    nd.id = NodeId{id};
-    nd.label = NodeLabel{id};
-    if (auto err = apply_attrs_to_node(nd, ctx.node_defaults)) {
+    const NodeShape shape = node_shape_from_attrs(ctx.node_defaults);
+    NodeVariant nv = make_default_variant(shape);
+    Node& base = variant_base(nv);
+    base.id = NodeId{id};
+    base.label = NodeLabel{id};
+    if (auto err = apply_attrs_to_variant(nv, ctx.node_defaults)) {
         return err;
     }
     if (!ctx.subgraph_class.empty()) {
-        if (nd.css_class.empty()) {
-            nd.css_class = CssClass{ctx.subgraph_class};
+        if (base.css_class.empty()) {
+            base.css_class = CssClass{ctx.subgraph_class};
         }
         else {
-            type_safe::get(nd.css_class) += ' ' + ctx.subgraph_class;
+            type_safe::get(base.css_class) += ' ' + ctx.subgraph_class;
         }
     }
-    ctx.graph.nodes.push_back(std::move(nd));
+    ctx.graph.nodes.push_back(std::move(nv));
     return std::nullopt;
 }
 
@@ -869,42 +1046,58 @@ static auto parse_node_stmt(TokenStream& ts, ParseContext& ctx, const Token& id_
         ts.consume();
     }
 
+    // Determine target shape: defaults first, then explicit attrs override
+    const NodeShape defaults_shape = node_shape_from_attrs(ctx.node_defaults);
+    const NodeShape final_shape    = node_shape_from_attrs(attrs, defaults_shape);
+
     // Find existing node or create new one
-    Node* existing = nullptr;
-    for (auto& nd : ctx.graph.nodes) {
-        if (type_safe::get(nd.id) == id_tok.value) {
-            existing = &nd;
+    NodeVariant* existing = nullptr;
+    for (auto& nv : ctx.graph.nodes) {
+        if (type_safe::get(variant_base(nv).id) == id_tok.value) {
+            existing = &nv;
             break;
         }
     }
 
     if (existing) {
-        if (auto err = apply_attrs_to_node(*existing, attrs)) {
+        const NodeShape current_shape = variant_base(*existing).shape;
+        if (current_shape != final_shape) {
+            // Shape changed: reconstruct variant, copy base fields, then stamp correct shape.
+            // copy_base_fields transfers the old shape value, so we must correct it afterwards.
+            const Node old_base = variant_base(*existing);
+            *existing = make_default_variant(final_shape);
+            copy_base_fields(variant_base(*existing), old_base);
+            variant_base(*existing).shape = final_shape;
+        }
+        // Apply only explicit attrs from the current statement. Defaults were applied at node
+        // creation time and must not overwrite values the user set in earlier statements.
+        if (auto err = apply_attrs_to_variant(*existing, attrs)) {
             return err;
         }
     }
     else {
-        Node nd;
-        nd.id = NodeId{id_tok.value};
-        nd.label = NodeLabel{id_tok.value};
+        NodeVariant nv = make_default_variant(final_shape);
+        Node& base = variant_base(nv);
+        base.id    = NodeId{id_tok.value};
+        base.label = NodeLabel{id_tok.value};
         // Apply context defaults first
-        if (auto err = apply_attrs_to_node(nd, ctx.node_defaults)) {
+        if (auto err = apply_attrs_to_variant(nv, ctx.node_defaults)) {
             return err;
         }
         // Then apply explicit attrs (override)
-        if (auto err = apply_attrs_to_node(nd, attrs)) {
+        if (auto err = apply_attrs_to_variant(nv, attrs)) {
             return err;
         }
         // Apply subgraph CSS class
         if (!ctx.subgraph_class.empty()) {
-            if (nd.css_class.empty()) {
-                nd.css_class = CssClass{ctx.subgraph_class};
+            if (base.css_class.empty()) {
+                base.css_class = CssClass{ctx.subgraph_class};
             }
             else {
-                type_safe::get(nd.css_class) += ' ' + ctx.subgraph_class;
+                type_safe::get(base.css_class) += ' ' + ctx.subgraph_class;
             }
         }
-        ctx.graph.nodes.push_back(std::move(nd));
+        ctx.graph.nodes.push_back(std::move(nv));
     }
     return std::nullopt;
 }
@@ -1024,11 +1217,12 @@ static auto parse_subgraph_stmt(TokenStream& ts, ParseContext& ctx) -> std::opti
 {
     ts.consume();  // 'subgraph'
 
+    std::string subgraph_id;
     std::string subgraph_label;
 
     // Optional subgraph id
     if (ts.peek().kind == TokenKind::identifier || ts.peek().kind == TokenKind::bare_value) {
-        ts.consume();
+        subgraph_id = ts.consume().value;
     }
 
     if (ts.peek().kind != TokenKind::lbrace) {
@@ -1052,16 +1246,22 @@ static auto parse_subgraph_stmt(TokenStream& ts, ParseContext& ctx) -> std::opti
     }
     ts.consume();  // '}'
 
-    // Apply derived CSS class to all nodes added in this subgraph
+    // Apply derived CSS class and enclosing_subgraph to all nodes added in this subgraph
     std::string derived_class = derive_css_class(subgraph_label);
-    if (!derived_class.empty()) {
-        for (std::size_t i = nodes_before; i < ctx.graph.nodes.size(); ++i) {
-            Node& nd = ctx.graph.nodes[i];
+    for (std::size_t i = nodes_before; i < ctx.graph.nodes.size(); ++i) {
+        Node& nd = variant_base(ctx.graph.nodes[i]);
+        if (!derived_class.empty()) {
             if (nd.css_class.empty()) {
                 nd.css_class = CssClass{derived_class};
             }
             else {
                 type_safe::get(nd.css_class) += ' ' + derived_class;
+            }
+        }
+        if (!nd.enclosing_subgraph.has_value()) {
+            const std::string& sg_key = !subgraph_id.empty() ? subgraph_id : subgraph_label;
+            if (!sg_key.empty()) {
+                nd.enclosing_subgraph = SubgraphId{sg_key};
             }
         }
     }
@@ -1243,7 +1443,8 @@ auto parse_graph(std::string_view source) -> std::expected<Graph, ParseError>
     ts.consume();
 
     // Apply default labels: label = id string where label is empty
-    for (auto& nd : ctx.graph.nodes) {
+    for (auto& nv : ctx.graph.nodes) {
+        Node& nd = variant_base(nv);
         if (nd.label.empty()) {
             nd.label = NodeLabel{type_safe::get(nd.id)};
         }

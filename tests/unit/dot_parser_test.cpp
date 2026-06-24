@@ -2,6 +2,7 @@
 #include <attractor/dot_parser.hpp>
 #include <attractor/graph.hpp>
 #include <chrono>
+#include <variant>
 
 using namespace attractor;
 
@@ -55,7 +56,7 @@ SNITCH_TEST_CASE("[dot_parser] subgraph class derived from label")
     )");
     SNITCH_REQUIRE(result.has_value());
     SNITCH_REQUIRE(!result->nodes.empty());
-    SNITCH_CHECK(type_safe::get(result->nodes[0].css_class).find("loop-a") != std::string::npos);
+    SNITCH_CHECK(type_safe::get(to_base(result->nodes[0]).css_class).find("loop-a") != std::string::npos);
 }
 
 // -- AC4: Comments stripped ----------------------------------------------------
@@ -81,7 +82,7 @@ SNITCH_TEST_CASE("[dot_parser] block comment does not strip quoted string conten
     )");
     SNITCH_REQUIRE(result.has_value());
     SNITCH_REQUIRE(!result->nodes.empty());
-    SNITCH_CHECK(type_safe::get(result->nodes[0].label) == "// not a comment");
+    SNITCH_CHECK(type_safe::get(to_base(result->nodes[0]).label) == "// not a comment");
 }
 
 // -- AC5: Rejected inputs ------------------------------------------------------
@@ -140,7 +141,8 @@ SNITCH_TEST_CASE("[dot_parser] timeout duration parsing")
     SNITCH_REQUIRE(result.has_value());
     const auto& nodes = result->nodes;
     auto find_node = [&](std::string_view id) -> const Node* {
-        for (const auto& n : nodes) {
+        for (const auto& nv : nodes) {
+            const Node& n = to_base(nv);
             if (type_safe::get(n.id) == id) {
                 return &n;
             }
@@ -185,7 +187,8 @@ SNITCH_TEST_CASE("[dot_parser] subgraph defaults inheritance")
     SNITCH_REQUIRE(result.has_value());
     const auto& nodes = result->nodes;
     auto find = [&](std::string_view id) -> const Node* {
-        for (const auto& n : nodes) {
+        for (const auto& nv : nodes) {
+            const Node& n = to_base(nv);
             if (type_safe::get(n.id) == id) {
                 return &n;
             }
@@ -256,7 +259,8 @@ SNITCH_TEST_CASE("[dot_parser] node and edge defaults scoped correctly")
     )");
     SNITCH_REQUIRE(result.has_value());
     auto find = [&](std::string_view id) -> const Node* {
-        for (const auto& n : result->nodes) {
+        for (const auto& nv : result->nodes) {
+            const Node& n = to_base(nv);
             if (type_safe::get(n.id) == id) {
                 return &n;
             }
@@ -290,7 +294,7 @@ SNITCH_TEST_CASE("[dot_parser] multi-line attribute block")
     )");
     SNITCH_REQUIRE(result.has_value());
     SNITCH_REQUIRE(!result->nodes.empty());
-    const auto& n = result->nodes[0];
+    const Node& n = to_base(result->nodes[0]);
     SNITCH_CHECK(type_safe::get(n.label) == "Multi-line node");
     SNITCH_CHECK(n.goal_gate == true);
 }
@@ -304,7 +308,7 @@ SNITCH_TEST_CASE("[dot_parser] class attribute applied directly to node")
     )");
     SNITCH_REQUIRE(result.has_value());
     SNITCH_REQUIRE(!result->nodes.empty());
-    SNITCH_CHECK(type_safe::get(result->nodes[0].css_class) == "my-class");
+    SNITCH_CHECK(type_safe::get(to_base(result->nodes[0]).css_class) == "my-class");
 }
 
 SNITCH_TEST_CASE("[dot_parser] class attribute appended to subgraph css class")
@@ -319,8 +323,8 @@ SNITCH_TEST_CASE("[dot_parser] class attribute appended to subgraph css class")
     )");
     SNITCH_REQUIRE(result.has_value());
     SNITCH_REQUIRE(!result->nodes.empty());
-    SNITCH_CHECK(type_safe::get(result->nodes[0].css_class).find("extra") != std::string::npos);
-    SNITCH_CHECK(type_safe::get(result->nodes[0].css_class).find("group-a") != std::string::npos);
+    SNITCH_CHECK(type_safe::get(to_base(result->nodes[0]).css_class).find("extra") != std::string::npos);
+    SNITCH_CHECK(type_safe::get(to_base(result->nodes[0]).css_class).find("group-a") != std::string::npos);
 }
 
 SNITCH_TEST_CASE("[dot_parser] node auto-created from edge endpoint")
@@ -340,7 +344,7 @@ SNITCH_TEST_CASE("[dot_parser] quoted and unquoted attribute values")
     )");
     SNITCH_REQUIRE(result.has_value());
     SNITCH_REQUIRE(!result->nodes.empty());
-    const auto& n = result->nodes[0];
+    const Node& n = to_base(result->nodes[0]);
     SNITCH_CHECK(n.shape == NodeShape::box);
     SNITCH_CHECK(n.goal_gate == true);
     SNITCH_CHECK(type_safe::get(n.label) == "quoted label");
@@ -376,7 +380,8 @@ SNITCH_TEST_CASE("[dot_parser] all 9 canonical shapes parse to correct enum valu
     SNITCH_REQUIRE(result->nodes.size() == 9);
 
     auto find = [&](std::string_view id) -> const Node* {
-        for (const auto& n : result->nodes) {
+        for (const auto& nv : result->nodes) {
+            const Node& n = to_base(nv);
             if (type_safe::get(n.id) == id) return &n;
         }
         return nullptr;
@@ -391,4 +396,96 @@ SNITCH_TEST_CASE("[dot_parser] all 9 canonical shapes parse to correct enum valu
     auto* t = find("T"); SNITCH_REQUIRE(t); SNITCH_CHECK(t->shape == NodeShape::triple_octagon);
     auto* p = find("P"); SNITCH_REQUIRE(p); SNITCH_CHECK(p->shape == NodeShape::parallelogram);
     auto* m = find("M"); SNITCH_REQUIRE(m); SNITCH_CHECK(m->shape == NodeShape::house);
+}
+
+// -- Story 7.13: Parser constructs correct NodeVariant per shape (AC5) -----------
+
+using namespace attractor::test;
+
+SNITCH_TEST_CASE("[dot_parser] box shape creates CodergenNode in NodeVariant -- 7.13-U-015")
+{
+    auto g = parse_ok(R"(digraph g { work [shape=box, prompt="Do work"] })");
+    SNITCH_REQUIRE(g.nodes.size() == 1u);
+    SNITCH_REQUIRE(std::holds_alternative<CodergenNode>(g.nodes[0]));
+    const auto& n = std::get<CodergenNode>(g.nodes[0]);
+    SNITCH_CHECK(type_safe::get(n.prompt) == "Do work");
+}
+
+SNITCH_TEST_CASE("[dot_parser] mdiamond shape creates StartNode -- 7.13-U-016")
+{
+    auto g = parse_ok(R"(digraph g { s [shape=Mdiamond, label="Start"] })");
+    SNITCH_REQUIRE(g.nodes.size() == 1u);
+    SNITCH_CHECK(std::holds_alternative<StartNode>(g.nodes[0]));
+    const auto& n = std::get<StartNode>(g.nodes[0]);
+    SNITCH_CHECK(type_safe::get(n.label) == "Start");
+}
+
+SNITCH_TEST_CASE("[dot_parser] msquare shape creates ExitNode -- 7.13-U-017")
+{
+    auto g = parse_ok(R"(digraph g { e [shape=Msquare] })");
+    SNITCH_REQUIRE(g.nodes.size() == 1u);
+    SNITCH_CHECK(std::holds_alternative<ExitNode>(g.nodes[0]));
+}
+
+SNITCH_TEST_CASE("[dot_parser] parallelogram shape creates ToolNode with tool_command -- 7.13-U-018")
+{
+    auto g = parse_ok(R"(digraph g { t [shape=parallelogram, tool_command="echo hello"] })");
+    SNITCH_REQUIRE(g.nodes.size() == 1u);
+    SNITCH_REQUIRE(std::holds_alternative<ToolNode>(g.nodes[0]));
+    const auto& n = std::get<ToolNode>(g.nodes[0]);
+    SNITCH_CHECK(type_safe::get(n.tool_command) == "echo hello");
+}
+
+SNITCH_TEST_CASE("[dot_parser] house shape creates ManagerNode -- 7.13-U-019")
+{
+    auto g = parse_ok(R"(digraph g { m [shape=house] })");
+    SNITCH_REQUIRE(g.nodes.size() == 1u);
+    SNITCH_CHECK(std::holds_alternative<ManagerNode>(g.nodes[0]));
+}
+
+SNITCH_TEST_CASE("[dot_parser] hexagon shape creates WaitHumanNode -- 7.13-U-020")
+{
+    auto g = parse_ok(R"(digraph g { w [shape=hexagon] })");
+    SNITCH_REQUIRE(g.nodes.size() == 1u);
+    SNITCH_CHECK(std::holds_alternative<WaitHumanNode>(g.nodes[0]));
+}
+
+SNITCH_TEST_CASE("[dot_parser] component shape creates ParallelNode -- 7.13-U-021")
+{
+    auto g = parse_ok(R"(digraph g { p [shape=component] })");
+    SNITCH_REQUIRE(g.nodes.size() == 1u);
+    SNITCH_CHECK(std::holds_alternative<ParallelNode>(g.nodes[0]));
+}
+
+SNITCH_TEST_CASE("[dot_parser] triple_octagon shape creates FanInNode with prompt -- 7.13-U-022")
+{
+    auto g = parse_ok(R"(digraph g { f [shape=tripleoctagon, prompt="Merge results"] })");
+    SNITCH_REQUIRE(g.nodes.size() == 1u);
+    SNITCH_REQUIRE(std::holds_alternative<FanInNode>(g.nodes[0]));
+    const auto& n = std::get<FanInNode>(g.nodes[0]);
+    SNITCH_CHECK(type_safe::get(n.prompt) == "Merge results");
+}
+
+SNITCH_TEST_CASE("[dot_parser] diamond shape creates ConditionalNode -- 7.13-U-023")
+{
+    auto g = parse_ok(R"(digraph g { c [shape=diamond] })");
+    SNITCH_REQUIRE(g.nodes.size() == 1u);
+    SNITCH_CHECK(std::holds_alternative<ConditionalNode>(g.nodes[0]));
+}
+
+SNITCH_TEST_CASE("[dot_parser] subgraph stamps enclosing_subgraph on contained nodes -- 7.13-U-024")
+{
+    auto g = parse_ok(R"(
+        digraph g {
+            subgraph cluster_loop {
+                label = "Loop Stage"
+                work [shape=box, prompt="Do work"]
+            }
+        }
+    )");
+    SNITCH_REQUIRE(!g.nodes.empty());
+    // safe: all derived types inherit from Node, lambda upcast works for any alternative
+    const Node& base = std::visit([](const Node& n) -> const Node& { return n; }, g.nodes[0]);
+    SNITCH_REQUIRE(base.enclosing_subgraph.has_value());
+    SNITCH_CHECK(!base.enclosing_subgraph->empty());
 }

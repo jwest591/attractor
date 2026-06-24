@@ -20,17 +20,17 @@ namespace {
 Graph make_parallel_graph(JoinPolicy join_policy = JoinPolicy::wait_all, int max_parallel = 4)
 {
     Graph g;
-    Node par;
+    ParallelNode par;
     par.id = NodeId{"par"};
     par.join_policy = join_policy;
     par.max_parallel = MaxParallel{max_parallel};
     g.nodes.push_back(par);
 
-    Node b0;
+    CodergenNode b0;
     b0.id = NodeId{"b0"};
     g.nodes.push_back(b0);
 
-    Node b1;
+    CodergenNode b1;
     b1.id = NodeId{"b1"};
     g.nodes.push_back(b1);
 
@@ -51,14 +51,14 @@ Graph make_parallel_graph_n(int n, JoinPolicy join_policy = JoinPolicy::wait_all
 {
     SNITCH_REQUIRE(n > 0);
     Graph g;
-    Node par;
+    ParallelNode par;
     par.id = NodeId{"par"};
     par.join_policy = join_policy;
     par.max_parallel = MaxParallel{max_parallel};
     g.nodes.push_back(par);
 
     for (int i = 0; i < n; ++i) {
-        Node b;
+        CodergenNode b;
         b.id = NodeId{"b" + std::to_string(i)};
         g.nodes.push_back(b);
 
@@ -71,11 +71,13 @@ Graph make_parallel_graph_n(int n, JoinPolicy join_policy = JoinPolicy::wait_all
     return g;
 }
 
-const Node& find_par_node(const Graph& g)
+const ParallelNode& find_par_node(const Graph& g)
 {
-    auto it = std::ranges::find_if(g.nodes, [](const Node& n) { return n.id == NodeId{"par"}; });
+    auto it = std::ranges::find_if(g.nodes, [](const NodeVariant& nv) {
+        return to_base(nv).id == NodeId{"par"};
+    });
     assert(it != g.nodes.end());
-    return *it;
+    return std::get<ParallelNode>(*it);
 }
 
 }  // namespace
@@ -88,7 +90,7 @@ SNITCH_TEST_CASE("[parallel_handler] wait_all both branches succeed returns SUCC
     ParallelHandler h{always_succeed};
     Context ctx;
     const Graph g = make_parallel_graph();
-    const Node& par = find_par_node(g);
+    const ParallelNode& par = find_par_node(g);
 
     const Outcome out = h.execute(par, ctx, g, RunConfig{.logs_root = LogsRoot{"/tmp"}});
 
@@ -110,7 +112,7 @@ SNITCH_TEST_CASE("[parallel_handler] wait_all one branch fails returns PARTIAL_S
     ParallelHandler h{mixed_fn};
     Context ctx;
     const Graph g = make_parallel_graph();
-    const Node& par = find_par_node(g);
+    const ParallelNode& par = find_par_node(g);
 
     const Outcome out = h.execute(par, ctx, g, RunConfig{.logs_root = LogsRoot{"/tmp"}});
 
@@ -131,7 +133,7 @@ SNITCH_TEST_CASE("[parallel_handler] first_success one branch succeeds returns S
     ParallelHandler h{mixed_fn};
     Context ctx;
     const Graph g = make_parallel_graph(JoinPolicy::first_success);
-    const Node& par = find_par_node(g);
+    const ParallelNode& par = find_par_node(g);
 
     const Outcome out = h.execute(par, ctx, g, RunConfig{.logs_root = LogsRoot{"/tmp"}});
 
@@ -146,7 +148,7 @@ SNITCH_TEST_CASE("[parallel_handler] first_success all branches fail returns FAI
     ParallelHandler h{always_fail};
     Context ctx;
     const Graph g = make_parallel_graph(JoinPolicy::first_success);
-    const Node& par = find_par_node(g);
+    const ParallelNode& par = find_par_node(g);
 
     const Outcome out = h.execute(par, ctx, g, RunConfig{.logs_root = LogsRoot{"/tmp"}});
 
@@ -162,7 +164,7 @@ SNITCH_TEST_CASE("[parallel_handler] parent context unchanged after fan-out -- 4
     Context ctx;
     (void)ctx.set(ContextKey{"parent.key"}, nlohmann::json{"original"});
     const Graph g = make_parallel_graph();
-    const Node& par = find_par_node(g);
+    const ParallelNode& par = find_par_node(g);
 
     (void)h.execute(par, ctx, g, RunConfig{.logs_root = LogsRoot{"/tmp"}});
 
@@ -184,7 +186,7 @@ SNITCH_TEST_CASE("[parallel_handler] max_parallel limits concurrent branch count
     ParallelHandler h{counting_fn};
     Context ctx;
     const Graph g = make_parallel_graph_n(4, JoinPolicy::wait_all, 2);
-    const Node& par = find_par_node(g);
+    const ParallelNode& par = find_par_node(g);
 
     (void)h.execute(par, ctx, g, RunConfig{.logs_root = LogsRoot{"/tmp"}});
 
@@ -199,7 +201,7 @@ SNITCH_TEST_CASE("[parallel_handler] no outgoing branches returns FAIL -- 4.1-U-
     ParallelHandler h{unreachable};
     Context ctx;
     Graph g;
-    Node par;
+    ParallelNode par;
     par.id = NodeId{"par"};
     par.join_policy = JoinPolicy::wait_all;
     par.max_parallel = MaxParallel{4};
@@ -220,7 +222,7 @@ SNITCH_TEST_CASE("[parallel_handler] callable through Handler interface -- 4.1-U
     Handler& iface = h;
     Context ctx;
     const Graph g = make_parallel_graph();
-    const Node& par = find_par_node(g);
+    const ParallelNode& par = find_par_node(g);
 
     const Outcome out = iface.execute(par, ctx, g, RunConfig{.logs_root = LogsRoot{"/tmp"}});
 
@@ -235,7 +237,7 @@ SNITCH_TEST_CASE("[parallel_handler] results entries contain id and score fields
     ParallelHandler h{fn};
     Context ctx;
     const Graph g = make_parallel_graph();
-    const Node& par = find_par_node(g);
+    const ParallelNode& par = find_par_node(g);
 
     const Outcome out = h.execute(par, ctx, g, RunConfig{.logs_root = LogsRoot{"/tmp"}});
 
@@ -259,7 +261,7 @@ SNITCH_TEST_CASE("[parallel_handler] first_success cancels unstarted branches --
     ParallelHandler h{fn};
     Context ctx;
     const Graph g = make_parallel_graph_n(2, JoinPolicy::first_success, 1);
-    const Node& par = find_par_node(g);
+    const ParallelNode& par = find_par_node(g);
 
     const Outcome out = h.execute(par, ctx, g, RunConfig{.logs_root = LogsRoot{"/tmp"}});
 
@@ -277,7 +279,7 @@ SNITCH_TEST_CASE("[parallel_handler] retry_policy propagated to branch RunFn con
     ParallelHandler h{fn};
     Context ctx;
     const Graph g = make_parallel_graph_n(1, JoinPolicy::wait_all, 1);
-    const Node& par = find_par_node(g);
+    const ParallelNode& par = find_par_node(g);
     const RunConfig parent_config{
         .logs_root    = LogsRoot{"/tmp"},
         .retry_policy = RetryPolicy{.preset = BackoffPreset::fixed_1s, .sleep_fn = {}}
@@ -298,7 +300,7 @@ SNITCH_TEST_CASE("[parallel_handler] non-finite score in context_updates returns
     ParallelHandler h{fn};
     Context ctx;
     const Graph g = make_parallel_graph();
-    const Node& par = find_par_node(g);
+    const ParallelNode& par = find_par_node(g);
 
     const Outcome out = h.execute(par, ctx, g, RunConfig{.logs_root = LogsRoot{"/tmp"}});
 
@@ -323,7 +325,7 @@ SNITCH_TEST_CASE("[parallel_handler] first_success succeeds when in-flight branc
     ParallelHandler h{fn};
     Context ctx;
     const Graph g = make_parallel_graph_n(2, JoinPolicy::first_success, 2);
-    const Node& par = find_par_node(g);
+    const ParallelNode& par = find_par_node(g);
 
     const Outcome out = h.execute(par, ctx, g, RunConfig{.logs_root = LogsRoot{"/tmp"}});
 

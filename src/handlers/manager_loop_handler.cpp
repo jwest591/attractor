@@ -13,8 +13,10 @@ namespace attractor {
 auto ManagerLoopHandler::execute(const Node& node, Context& ctx, const Graph& /*graph*/,
                                  const RunConfig& /*run_config*/) const -> Outcome
 {
-    const int max_cycles = node.manager_max_cycles;
-    const ConditionExpr& stop_cond = node.manager_stop_condition;
+    // safe: engine dispatches ManagerLoopHandler only for ManagerNode
+    const auto& derived = static_cast<const ManagerNode&>(node);
+    const int max_cycles = derived.manager_max_cycles;
+    const ConditionExpr& stop_cond = derived.manager_stop_condition;
 
     for (int cycle = 1; cycle <= max_cycles; ++cycle) {
         // Write current cycle number to context so stop conditions can reference it.
