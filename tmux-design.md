@@ -60,15 +60,17 @@ When a tmux claude node is run:
     env vars, and pointing to the shared settings file containing the hook script configuration.
   - Launch claude in a new tmux window named `<node_id>-<counter>` with the initial prompt.
 
-SessionStart hook fires and writes a file containing the jsonl log path into the node log dir. Each
-window runs exactly one claude process, so this file must not already exist when the hook fires —
-if it does, the hook should treat it as an error. The backend polls for this file with a 10-second
-deadline; if it does not appear, return `Outcome::fail` (graph retry logic handles recovery).
+SessionStart hook fires and writes `transcript.txt` to the node log dir (content is the jsonl log
+path, preserved for diagnostics). Each window runs exactly one claude process, so this file must
+not already exist when the hook fires — if it does, the hook treats it as an error. The backend
+polls for this file with a 10-second deadline; if it does not appear, return `Outcome::fail`
+(graph retry logic handles recovery).
 
-Monitor the jsonl log for an assistant message containing a `stop_reason` field (any value signals
-turn completion). A per-node configurable timeout (default 30 minutes) acts as a hard deadline;
-expiry is treated as `Outcome::fail`. Process crashes produce no jsonl output and are caught only
-by the timeout.
+The Stop hook fires on every end_turn. It writes `done.json` atomically to the node log dir only
+when `background_tasks` is empty (i.e. all background agents have completed). The StopFailure hook
+writes `done.json` unconditionally on API errors. The backend polls for `done.json`; a per-node
+configurable timeout (default 30 minutes) acts as a hard deadline. Process crashes produce no hook
+output and are caught only by the timeout.
 
-On `stop_reason` detected or timeout: destroy the tmux window and return result to caller
+On `done.json` detected or timeout: destroy the tmux window and return result to caller
 (`HandoffAwareBackend` or the engine directly).

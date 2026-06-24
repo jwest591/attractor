@@ -31,6 +31,29 @@
           }
         ]
       }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/att-stop.sh'",
+            "timeout": 5000
+          }
+        ]
+      }
+    ],
+    "StopFailure": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/att-stop.sh'",
+            "timeout": 5000
+          }
+        ]
+      }
     ]
   }
 }

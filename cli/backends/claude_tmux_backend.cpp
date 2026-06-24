@@ -13,19 +13,17 @@
 #include <optional>
 #include <print>
 #include <string>
-#include <string_view>
 #include <thread>
 
 #include <cassert>
-#include <cstdio>   // fopen, fclose, fgets, fseek, ftell
+#include <cstdio>   // fopen, fclose, fgets
 #include <cstdlib>  // system
 
 namespace {
 
 constexpr auto k_session_start_hard_deadline = std::chrono::seconds{10};
 constexpr auto k_default_node_deadline = std::chrono::minutes{30};
-constexpr auto k_transcript_poll_interval = std::chrono::milliseconds{200};
-constexpr auto k_jsonl_poll_interval = std::chrono::milliseconds{100};
+constexpr auto k_poll_interval = std::chrono::milliseconds{200};
 
 int tmux_system(const std::string& cmd)
 {
@@ -91,42 +89,6 @@ std::optional<std::string> extract_json_string(const std::string& json, const st
         }
     }
     return std::nullopt;
-}
-
-std::string extract_response_text(const std::string& line)
-{
-    static constexpr std::string_view k_type_text = "\"type\":\"text\"";
-    std::string result;
-    std::size_t search_from = 0;
-    while (true) {
-        const auto text_type = line.find(k_type_text, search_from);
-        if (text_type == std::string::npos) {
-            break;
-        }
-        search_from = text_type + k_type_text.size();
-        if (auto text = extract_json_string(line.substr(text_type), "text")) {
-            result += *text;
-        }
-    }
-    return result;
-}
-
-std::string extract_error_type(const std::string& line)
-{
-    const auto pos = line.find("\"error\":{");
-    if (pos == std::string::npos) {
-        return {};
-    }
-    return extract_json_string(line.substr(pos), "type").value_or(std::string{});
-}
-
-std::string extract_error_message(const std::string& line)
-{
-    const auto pos = line.find("\"error\":{");
-    if (pos == std::string::npos) {
-        return {};
-    }
-    return extract_json_string(line.substr(pos), "message").value_or(std::string{});
 }
 
 }  // namespace
@@ -216,82 +178,54 @@ auto ClaudeCodeTmuxBackend::run(const Node& node, const PromptText& prompt, Cont
         return std::unexpected(Outcome::fail(DiagnosticMessage{"tmux: send-keys failed for " + window_name}));
     }
 
-    // Poll for transcript.txt (10s hard cap or overall deadline, whichever is sooner)
+    // Poll for transcript.txt (written by SessionStart hook) to confirm the session started.
+    // 10s hard cap or overall deadline, whichever is sooner.
     auto transcript_deadline = std::min(std::chrono::steady_clock::now() + k_session_start_hard_deadline, deadline);
-
-    std::string transcript_path;
     while (true) {
         if (std::chrono::steady_clock::now() >= transcript_deadline) {
             return std::unexpected(Outcome::fail(DiagnosticMessage{"tmux: SessionStart timeout for " + window_name}));
         }
-        std::this_thread::sleep_for(k_transcript_poll_interval);
-
-        const auto txt_file = node_log_dir / "transcript.txt";
-        FILE* fp = fopen(txt_file.c_str(), "r");  // NOLINT(cppcoreguidelines-owning-memory)
-        if (fp == nullptr) {
-            continue;
-        }
-
-        char buf[4096] = {};
-        fgets(buf, sizeof(buf), fp);
-        fclose(fp);  // NOLINT(cppcoreguidelines-owning-memory)
-
-        std::string path{buf};
-        if (!path.empty() && path.back() == '\n') {
-            path.pop_back();
-        }
-        if (!path.empty()) {
-            transcript_path = std::move(path);
+        std::this_thread::sleep_for(k_poll_interval);
+        std::error_code ec;
+        if (std::filesystem::file_size(node_log_dir / "transcript.txt", ec) > 0) {
             break;
         }
     }
 
-    // Monitor JSONL for end_turn or error. Claude Code stores each content block of an API
-    // response as a separate JSONL record (all sharing the same message id and stop_reason).
-    // tool_use records with text content must not be mistaken for end-of-turn; only
-    // stop_reason:"end_turn" marks the final record of the turn.
-    // partial persists across poll iterations so a JSONL line split across two reads is assembled
-    long jsonl_offset = 0L;
-    std::string partial;
+    // Poll for done.json written atomically by the Stop/StopFailure hook once all background
+    // agents have completed. Format: {"status":"ok","message":"..."} or
+    // {"status":"error","error_type":"...","message":"..."}.
+    const auto done_file = node_log_dir / "done.json";
     while (true) {
         if (std::chrono::steady_clock::now() >= deadline) {
             return std::unexpected(Outcome::fail(DiagnosticMessage{"timeout"}));
         }
-        std::this_thread::sleep_for(k_jsonl_poll_interval);
+        std::this_thread::sleep_for(k_poll_interval);
 
-        FILE* fp = fopen(transcript_path.c_str(), "r");  // NOLINT(cppcoreguidelines-owning-memory)
+        FILE* fp = fopen(done_file.c_str(), "r");  // NOLINT(cppcoreguidelines-owning-memory)
         if (fp == nullptr) {
             continue;
         }
-
-        fseek(fp, jsonl_offset, SEEK_SET);
         char buf[65536];
-
+        std::string content;
         while (fgets(buf, sizeof(buf), fp) != nullptr) {
-            partial += buf;
-            if (partial.empty() || partial.back() != '\n') {
-                continue;
-            }
-
-            if (partial.find("\"type\":\"error\"") != std::string::npos) {
-                fclose(fp);  // NOLINT(cppcoreguidelines-owning-memory)
-                return std::unexpected(Outcome::fail(DiagnosticMessage{
-                    "tmux: API error [" + extract_error_type(partial) + "]: " + extract_error_message(partial)}));
-            }
-
-            if (partial.find("\"type\":\"assistant\"") != std::string::npos &&
-                partial.find("\"stop_reason\":\"end_turn\"") != std::string::npos) {
-                auto text = extract_response_text(partial);
-                fclose(fp);  // NOLINT(cppcoreguidelines-owning-memory)
-                return LlmResponse{std::move(text)};
-            }
-
-            jsonl_offset += static_cast<long>(partial.size());
-            partial.clear();
+            content += buf;
         }
-        // Do not advance jsonl_offset to EOF here: a partial line currently being written
-        // would be skipped and never re-read. Leave offset at the last complete line boundary.
         fclose(fp);  // NOLINT(cppcoreguidelines-owning-memory)
+
+        auto status = extract_json_string(content, "status");
+        if (!status) {
+            continue;
+        }
+        if (*status == "ok") {
+            return LlmResponse{extract_json_string(content, "message").value_or(std::string{})};
+        }
+        if (*status == "error") {
+            auto etype = extract_json_string(content, "error_type").value_or(std::string{"unknown"});
+            auto emsg  = extract_json_string(content, "message").value_or(std::string{});
+            return std::unexpected(
+                Outcome::fail(DiagnosticMessage{"tmux: API error [" + etype + "]: " + emsg}));
+        }
     }
 }
 

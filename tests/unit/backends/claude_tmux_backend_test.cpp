@@ -51,7 +51,7 @@ void write_script(const std::filesystem::path& p, const std::string& content)
 }
 
 // Mock tmux handler that parses -e ATTRACTOR_NODE_LOG_DIR=<path> from new-window args.
-// Used by success/error tests; timeout tests omit transcript.txt or stop_reason.
+// Used by success/error tests; timeout tests omit transcript.txt or done.json.
 constexpr const char* k_mock_preamble = R"(#!/usr/bin/env bash
 set -u
 case "$1" in
@@ -80,19 +80,19 @@ exit 1
 
 }  // namespace
 
-SNITCH_TEST_CASE("[claude_tmux] single run returns LlmResponse on stop_reason -- 7.19-U-001")
+SNITCH_TEST_CASE("[claude_tmux] single run returns LlmResponse on done.json ok -- 7.19-U-001")
 {
     auto script = std::filesystem::temp_directory_path() / "att_tmux_7_19_001.sh";
     TmpFile g_script{script};
     TmpDir  logs_root{std::filesystem::temp_directory_path() / "att_logs_7_19_001"};
 
-    // new-window: create node_log_dir, write transcript.txt + JSONL with stop_reason
+    // new-window: create node_log_dir, write transcript.txt + done.json with status ok
     write_script(script,
         std::string{k_mock_preamble} +
         R"(    if [ -n "$NDL" ]; then
       mkdir -p "$NDL"
-      printf '%s/transcript.jsonl\n' "$NDL" > "$NDL/transcript.txt"
-      printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"mock response"}],"stop_reason":"end_turn"}}\n' > "$NDL/transcript.jsonl"
+      printf 'started\n' > "$NDL/transcript.txt"
+      printf '{"status":"ok","message":"mock response"}\n' > "$NDL/done.json"
     fi
 )" + k_mock_suffix);
 
@@ -137,19 +137,19 @@ SNITCH_TEST_CASE("[claude_tmux] SessionStart timeout returns fail -- 7.19-U-002"
     SNITCH_CHECK(result.error().status == StageStatus::fail);
 }
 
-SNITCH_TEST_CASE("[claude_tmux] JSONL error type returns fail -- 7.19-U-003")
+SNITCH_TEST_CASE("[claude_tmux] done.json error status returns fail -- 7.19-U-003")
 {
     auto script = std::filesystem::temp_directory_path() / "att_tmux_7_19_003.sh";
     TmpFile g_script{script};
     TmpDir  logs_root{std::filesystem::temp_directory_path() / "att_logs_7_19_003"};
 
-    // new-window: write transcript.txt + JSONL with "type":"error"
+    // new-window: write transcript.txt + done.json with status error
     write_script(script,
         std::string{k_mock_preamble} +
         R"(    if [ -n "$NDL" ]; then
       mkdir -p "$NDL"
-      printf '%s/transcript.jsonl\n' "$NDL" > "$NDL/transcript.txt"
-      printf '{"type":"error","error":{"type":"api_error","message":"internal server error"}}\n' > "$NDL/transcript.jsonl"
+      printf 'started\n' > "$NDL/transcript.txt"
+      printf '{"status":"error","error_type":"server_error","message":"internal server error"}\n' > "$NDL/done.json"
     fi
 )" + k_mock_suffix);
 
@@ -171,13 +171,12 @@ SNITCH_TEST_CASE("[claude_tmux] node.timeout deadline returns fail -- 7.19-U-004
     TmpFile g_script{script};
     TmpDir  logs_root{std::filesystem::temp_directory_path() / "att_logs_7_19_004"};
 
-    // new-window: write transcript.txt + JSONL but never include stop_reason
+    // new-window: write transcript.txt but never write done.json -> deadline expires
     write_script(script,
         std::string{k_mock_preamble} +
         R"(    if [ -n "$NDL" ]; then
       mkdir -p "$NDL"
-      printf '%s/transcript.jsonl\n' "$NDL" > "$NDL/transcript.txt"
-      printf '{"type":"system","subtype":"init","session_id":"abc"}\n' > "$NDL/transcript.jsonl"
+      printf 'started\n' > "$NDL/transcript.txt"
     fi
 )" + k_mock_suffix);
 

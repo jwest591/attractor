@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # SessionStart hook for ClaudeCodeTmuxBackend.
-# Writes the transcript path (from stdin JSON) to $ATTRACTOR_NODE_LOG_DIR/transcript.txt
-# so the backend can discover it without scanning ~/.claude/projects/.
+# Writes the transcript path (from stdin JSON) to $ATTRACTOR_NODE_LOG_DIR/transcript.txt.
+# The backend polls for this file to confirm the session started; the path is preserved for
+# diagnostics. Completion is signalled separately via done.json written by att-stop.sh.
 set -u
 
 if [ -z "${ATTRACTOR_NODE_LOG_DIR:-}" ]; then

@@ -100,15 +100,24 @@
     ],
 
     "Stop": [
-      { "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh Stop'" } ] }
+      { "hooks": [
+        { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh Stop'" },
+        { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/att-stop.sh'", "timeout": 5000 }
+      ]}
     ],
 
     "StopFailure": [
-      { "matcher": "*",                     "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh StopFailure star'" } ] },
+      { "matcher": "*",                     "hooks": [
+        { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh StopFailure star'" },
+        { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/att-stop.sh'", "timeout": 5000 }
+      ]},
       { "matcher": "rate_limit",            "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh StopFailure rate_limit'" } ] },
+      { "matcher": "overloaded",            "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh StopFailure overloaded'" } ] },
       { "matcher": "authentication_failed", "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh StopFailure authentication_failed'" } ] },
+      { "matcher": "oauth_org_not_allowed", "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh StopFailure oauth_org_not_allowed'" } ] },
       { "matcher": "billing_error",         "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh StopFailure billing_error'" } ] },
       { "matcher": "invalid_request",       "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh StopFailure invalid_request'" } ] },
+      { "matcher": "model_not_found",       "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh StopFailure model_not_found'" } ] },
       { "matcher": "server_error",          "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh StopFailure server_error'" } ] },
       { "matcher": "max_output_tokens",     "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh StopFailure max_output_tokens'" } ] },
       { "matcher": "unknown",               "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh StopFailure unknown'" } ] }
