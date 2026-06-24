@@ -192,3 +192,95 @@ SNITCH_TEST_CASE("[claude_tmux] node.timeout deadline returns fail -- 7.19-U-004
     SNITCH_REQUIRE_FALSE(result.has_value());
     SNITCH_CHECK(result.error().status == StageStatus::fail);
 }
+
+SNITCH_TEST_CASE("[claude_tmux] ceiling disabled: high-token JSONL does not trigger handoff -- 7.12-U-001")
+{
+    auto script = std::filesystem::temp_directory_path() / "att_tmux_7_12_001.sh";
+    TmpFile g_script{script};
+    TmpDir  logs_root{std::filesystem::temp_directory_path() / "att_logs_7_12_001"};
+
+    // new-window: write JSONL with 200k tokens, transcript.txt pointing to it, and done.json ok.
+    // With ceiling_tokens=0 (disabled) the backend must ignore the usage event and return ok.
+    write_script(script,
+        std::string{k_mock_preamble} +
+        R"(    if [ -n "$NDL" ]; then
+      mkdir -p "$NDL"
+      printf '{"type":"usage","input_tokens":200000}\n' > "$NDL/session.jsonl"
+      printf '%s/session.jsonl\n' "$NDL" > "$NDL/transcript.txt"
+      printf '{"status":"ok","message":"ceiling disabled ok"}\n' > "$NDL/done.json"
+    fi
+)" + k_mock_suffix);
+
+    ClaudeCodeTmuxBackend backend{script.string(), logs_root.path, 0, 5};
+    Node node{};
+    node.id = NodeId{"n5"};
+    Context ctx;
+    SNITCH_CHECK(ctx.next_execution_counter() == 1);
+
+    auto result = backend.run(node, PromptText{"hello"}, ctx);
+
+    SNITCH_REQUIRE(result.has_value());
+    SNITCH_CHECK(type_safe::get(*result) == "ceiling disabled ok");
+}
+
+SNITCH_TEST_CASE("[claude_tmux] ceiling enabled: tokens below threshold do not trigger handoff -- 7.12-U-002")
+{
+    auto script = std::filesystem::temp_directory_path() / "att_tmux_7_12_002.sh";
+    TmpFile g_script{script};
+    TmpDir  logs_root{std::filesystem::temp_directory_path() / "att_logs_7_12_002"};
+
+    // new-window: write JSONL with 100k tokens (below 160k ceiling), transcript.txt, and done.json ok.
+    write_script(script,
+        std::string{k_mock_preamble} +
+        R"(    if [ -n "$NDL" ]; then
+      mkdir -p "$NDL"
+      printf '{"type":"usage","input_tokens":100000}\n' > "$NDL/session.jsonl"
+      printf '%s/session.jsonl\n' "$NDL" > "$NDL/transcript.txt"
+      printf '{"status":"ok","message":"below ceiling ok"}\n' > "$NDL/done.json"
+    fi
+)" + k_mock_suffix);
+
+    ClaudeCodeTmuxBackend backend{script.string(), logs_root.path, 160'000, 5};
+    Node node{};
+    node.id = NodeId{"n6"};
+    Context ctx;
+    SNITCH_CHECK(ctx.next_execution_counter() == 1);
+
+    auto result = backend.run(node, PromptText{"hello"}, ctx);
+
+    SNITCH_REQUIRE(result.has_value());
+    SNITCH_CHECK(type_safe::get(*result) == "below ceiling ok");
+}
+
+SNITCH_TEST_CASE("[claude_tmux] ceiling exceeded with max_handoffs=0 returns fail immediately -- 7.12-U-003")
+{
+    auto script = std::filesystem::temp_directory_path() / "att_tmux_7_12_003.sh";
+    TmpFile g_script{script};
+    TmpDir  logs_root{std::filesystem::temp_directory_path() / "att_logs_7_12_003"};
+
+    // new-window: write JSONL with 170k tokens (above 160k ceiling), transcript.txt, but NO done.json.
+    // With max_ceiling_handoffs=0, the backend must detect the ceiling and return FAIL immediately
+    // without waiting for done.json or attempting a /clear handoff.
+    write_script(script,
+        std::string{k_mock_preamble} +
+        R"(    if [ -n "$NDL" ]; then
+      mkdir -p "$NDL"
+      printf '{"type":"usage","input_tokens":170000}\n' > "$NDL/session.jsonl"
+      printf '%s/session.jsonl\n' "$NDL" > "$NDL/transcript.txt"
+    fi
+)" + k_mock_suffix);
+
+    ClaudeCodeTmuxBackend backend{script.string(), logs_root.path, 160'000, 0};
+    Node node{};
+    node.id = NodeId{"n7"};
+    node.timeout = TimeoutDuration{std::chrono::milliseconds{500}};
+    Context ctx;
+    SNITCH_CHECK(ctx.next_execution_counter() == 1);
+
+    auto result = backend.run(node, PromptText{"hello"}, ctx);
+
+    SNITCH_REQUIRE_FALSE(result.has_value());
+    SNITCH_CHECK(result.error().status == StageStatus::fail);
+    const auto& reason = type_safe::get(result.error().failure_reason);
+    SNITCH_CHECK(reason.find("exhausted") != std::string::npos);
+}

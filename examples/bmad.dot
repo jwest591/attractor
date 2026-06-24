@@ -4,7 +4,7 @@ digraph BMAD {
     // ── Graph-level attributes ─────────────────────────────────────────────
 
     graph [
-        goal             = "7-11",
+        goal             = "7-12",
         label            = "Run a bmad story to code review stage",
 
         // default_max_retries applies to every node that omits max_retries
@@ -60,7 +60,7 @@ digraph BMAD {
 
     dev [
         label = "dev story",
-        prompt = "/bmad-dev-story story $goal"
+        prompt = "/bmad-dev-story story $goal. You MUST update sprint status for the story once dev is copmlete."
     ]
 
     review [
@@ -80,8 +80,9 @@ digraph BMAD {
     get_status -> story [condition="context.tool.output=backlog"]
     story -> ready_for_dev -> tdd -> get_status
     get_status -> dev [condition="context.tool.output=ready-for-dev"]
+    dev -> get_status
     get_status -> review [condition="context.tool.output=review"]
-    review -> get_status
+    review -> done
     get_status -> done [condition="context.tool.output=done"]
     get_status -> done  // failure case
 

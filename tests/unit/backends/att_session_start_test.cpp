@@ -55,7 +55,9 @@ SNITCH_TEST_CASE("[att_session_start] writes transcript path to ATTRACTOR_NODE_L
 SNITCH_TEST_CASE("[att_session_start] fails when ATTRACTOR_NODE_LOG_DIR is unset -- 7.19-I-002")
 {
     const std::string json = "{\"transcript_path\":\"/tmp/test.jsonl\"}";
-    const std::string cmd = "printf '%s\\n' '" + json + "' | " + std::string{k_script};
+    // env -u ensures the variable is unset even when the parent process has it set
+    // (e.g. when running inside an attractor pipeline)
+    const std::string cmd = "printf '%s\\n' '" + json + "' | env -u ATTRACTOR_NODE_LOG_DIR " + std::string{k_script};
     const int rc = std::system(cmd.c_str()); // NOLINT(cert-env33-c)
     SNITCH_CHECK(rc != 0);
 }
