@@ -1,12 +1,15 @@
 #include <attractor/handlers/tool_handler.hpp>
 
+#include <algorithm>
 #include <array>
 #include <attractor/context.hpp>
 #include <attractor/graph.hpp>
 #include <attractor/handler.hpp>
 #include <attractor/types.hpp>
+#include <cctype>
 #include <cstdio>
 #include <filesystem>
+#include <format>
 #include <fstream>
 #include <memory>
 #include <nlohmann/json.hpp>
@@ -20,10 +23,33 @@ namespace attractor {
 
 namespace {
 
-std::string run_popen(std::string_view cmd)
+// Returns node_dir/NNN where NNN is one past the highest existing 3-digit invocation subdir.
+std::filesystem::path next_invocation_dir(const std::filesystem::path& node_dir)
 {
+    unsigned int next = 1;
+    std::error_code ec;
+    for (const auto& entry : std::filesystem::directory_iterator(node_dir, ec)) {
+        if (!entry.is_directory()) continue;
+        const auto name = entry.path().filename().string();
+        if (name.size() == 3 &&
+            std::all_of(name.begin(), name.end(), [](unsigned char c) { return std::isdigit(c) != 0; })) {
+            if (const unsigned int n = static_cast<unsigned int>(std::stoul(name)); n >= next) {
+                next = n + 1;
+            }
+        }
+    }
+    return node_dir / std::format("{:03d}", next);
+}
+
+// Runs cmd in a shell, capturing stdout. stderr is redirected to stage_dir/stderr.txt.
+// stage_dir must already exist. Throws on popen failure, read error, or non-zero exit.
+std::string run_popen(std::string_view cmd, const std::filesystem::path& stage_dir)
+{
+    // Single-quote the stderr path. Attractor log dirs don't contain single quotes.
+    const std::string wrapped =
+        "( " + std::string(cmd) + " ) 2>'" + (stage_dir / "stderr.txt").string() + "'";
     // NOLINTNEXTLINE(cert-env33-c) -- intentional shell execution for tool nodes
-    FILE* raw = popen(std::string(cmd).c_str(), "r");
+    FILE* raw = popen(wrapped.c_str(), "r");
     if (raw == nullptr) {
         throw std::runtime_error{"ToolHandler: popen failed"};
     }
@@ -81,7 +107,8 @@ auto ToolHandler::execute(const Node& node, Context& /*ctx*/, const Graph& graph
         return Outcome::fail(DiagnosticMessage{"node.id contains path-unsafe characters: " + id_str});
     }
 
-    const auto stage_dir = std::filesystem::path(type_safe::get(run_config.logs_root)) / id_str;
+    const auto node_dir = std::filesystem::path(type_safe::get(run_config.logs_root)) / id_str;
+    const auto stage_dir = next_invocation_dir(node_dir);
     std::error_code ec;
     std::filesystem::create_directories(stage_dir, ec);
     if (ec) {
@@ -89,6 +116,7 @@ auto ToolHandler::execute(const Node& node, Context& /*ctx*/, const Graph& graph
     }
 
     const std::string cmd = expand_goal(type_safe::get(node.tool_command), graph.goal);
+    std::ofstream{stage_dir / "command.txt"} << cmd;
 
     if (cmd.empty()) {
         const auto outcome = Outcome::fail(DiagnosticMessage{"tool_command is empty"});
@@ -97,7 +125,7 @@ auto ToolHandler::execute(const Node& node, Context& /*ctx*/, const Graph& graph
     }
 
     try {
-        const std::string output = m_runner ? m_runner(cmd) : run_popen(cmd);
+        const std::string output = m_runner ? m_runner(cmd) : run_popen(cmd, stage_dir);
 
         {
             std::ofstream f{stage_dir / "output.txt"};
