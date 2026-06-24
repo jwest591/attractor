@@ -98,6 +98,31 @@ target_compile_definitions(attractor_cli_tests
         $<$<BOOL:${ATTRACTOR_ENABLE_SLOW_TESTS}>:ATTRACTOR_ENABLE_SLOW_TESTS>
 )
 
+# -- Tmux backend integration tests (require real tmux + jq) -------------------
+add_executable(attractor_tmux_integration_tests
+    support/main_stub.cpp
+    integration/backends/claude_tmux_backend_integration_test.cpp
+    ../cli/backends/claude_tmux_backend.cpp
+)
+
+target_link_libraries(attractor_tmux_integration_tests
+    PRIVATE
+        attractor::attractor
+        snitch::snitch
+)
+
+target_include_directories(attractor_tmux_integration_tests
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/support
+        ${CMAKE_SOURCE_DIR}/cli
+        ${CMAKE_SOURCE_DIR}/cli/backends
+)
+
+target_compile_definitions(attractor_tmux_integration_tests
+    PRIVATE
+        ATTRACTOR_CLI_SCRIPTS_DIR="${CMAKE_SOURCE_DIR}/cli/scripts"
+)
+
 # -- CTest registration ---------------------------------------------------------
 include(CTest)
 
@@ -114,6 +139,11 @@ add_test(
 add_test(
     NAME cli_tests
     COMMAND attractor_cli_tests
+)
+
+add_test(
+    NAME tmux_integration_tests
+    COMMAND attractor_tmux_integration_tests
 )
 
 # Tag-based filtering examples (document in README):

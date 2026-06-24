@@ -12,6 +12,7 @@
 #include <fstream>
 #include <print>
 #include <string>
+#include <system_error>
 
 #include <cstdlib>
 #include <unistd.h>
@@ -42,6 +43,9 @@ struct TmpDir {
         std::error_code ec;
         std::filesystem::remove_all(path, ec);
         std::filesystem::create_directories(path, ec);
+        if (ec) {
+            throw std::system_error{ec, "TmpDir: could not create " + path.string()};
+        }
     }
     TmpDir(const TmpDir&) = delete;
     TmpDir& operator=(const TmpDir&) = delete;
@@ -57,7 +61,15 @@ void write_script(const std::filesystem::path& p, const std::string& content)
 {
     {
         std::ofstream f{p};
+        if (!f) {
+            throw std::system_error{errno, std::generic_category(),
+                                    "write_script: could not open " + p.string()};
+        }
         f << content;
+        if (!f) {
+            throw std::system_error{errno, std::generic_category(),
+                                    "write_script: write failed for " + p.string()};
+        }
     }
     std::filesystem::permissions(p, std::filesystem::perms::owner_exec | std::filesystem::perms::owner_read |
                                         std::filesystem::perms::owner_write);
@@ -176,5 +188,5 @@ SNITCH_TEST_CASE("[tmux_integration] SessionStart timeout returns Outcome::fail 
     SNITCH_REQUIRE_FALSE(result.has_value());
     SNITCH_CHECK(result.error().status == StageStatus::fail);
     const auto& reason = type_safe::get(result.error().failure_reason);
-    SNITCH_CHECK(reason.find("timeout") != std::string::npos);
+    SNITCH_CHECK(reason == "timeout");
 }
