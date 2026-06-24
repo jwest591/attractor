@@ -51,13 +51,20 @@ std::string shell_escape(const std::string& s)
 
 std::optional<std::string> extract_json_string(const std::string& json, const std::string& key)
 {
-    const std::string needle = "\"" + key + "\":\"";
+    const std::string needle = "\"" + key + "\":";
     const auto pos = json.find(needle);
     if (pos == std::string::npos) {
         return std::nullopt;
     }
+    std::size_t start = pos + needle.size();
+    while (start < json.size() && (json[start] == ' ' || json[start] == '\t' || json[start] == '\n' || json[start] == '\r')) {
+        ++start;
+    }
+    if (start >= json.size() || json[start] != '"') {
+        return std::nullopt;
+    }
     std::string out;
-    for (std::size_t i = pos + needle.size(); i < json.size(); ++i) {
+    for (std::size_t i = start + 1; i < json.size(); ++i) {
         if (json[i] == '"') {
             return out;
         }

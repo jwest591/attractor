@@ -32,12 +32,12 @@ case "$EVENT" in
         count="$(printf '%s' "$INPUT" | jq '(.background_tasks // []) | length')"
         [ "$count" != "0" ] && exit 0
         msg="$(printf '%s' "$INPUT" | jq -r '.last_assistant_message // ""')"
-        write_done "$(jq -n --arg m "$msg" '{"status":"ok","message":$m}')"
+        write_done "$(jq -cn --arg m "$msg" '{"status":"ok","message":$m}')"
         ;;
     StopFailure)
         etype="$(printf '%s' "$INPUT" | jq -r '.error_type // "unknown"')"
         emsg="$(printf '%s' "$INPUT" | jq -r '.error_message // ""')"
-        write_done "$(jq -n --arg t "$etype" --arg m "$emsg" '{"status":"error","error_type":$t,"message":$m}')"
+        write_done "$(jq -cn --arg t "$etype" --arg m "$emsg" '{"status":"error","error_type":$t,"message":$m}')"
         ;;
 esac
 
