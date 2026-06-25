@@ -1,3 +1,4 @@
+#include "backend_utils.hpp"
 #include "claude_tmux_backend.hpp"
 
 #include <attractor/context.hpp>
@@ -283,4 +284,167 @@ SNITCH_TEST_CASE("[claude_tmux] ceiling exceeded with max_handoffs=0 returns fai
     SNITCH_CHECK(result.error().status == StageStatus::fail);
     const auto& reason = type_safe::get(result.error().failure_reason);
     SNITCH_CHECK(reason.find("exhausted") != std::string::npos);
+}
+
+// ---------------------------------------------------------------------------
+// parse_rate_limit_reset unit tests
+// ---------------------------------------------------------------------------
+
+SNITCH_TEST_CASE("[backend_utils] parse_rate_limit_reset returns time and tz for valid message -- rate-limit-P-001")
+{
+    const auto result = parse_rate_limit_reset(
+        "You've hit your session limit resets 8:30pm (Europe/London)");
+    SNITCH_REQUIRE(result.has_value());
+    SNITCH_CHECK(result->first == "8:30pm");
+    SNITCH_CHECK(result->second == "Europe/London");
+}
+
+SNITCH_TEST_CASE("[backend_utils] parse_rate_limit_reset handles am suffix -- rate-limit-P-002")
+{
+    const auto result = parse_rate_limit_reset("session limit resets 12:00am (America/New_York)");
+    SNITCH_REQUIRE(result.has_value());
+    SNITCH_CHECK(result->first == "12:00am");
+    SNITCH_CHECK(result->second == "America/New_York");
+}
+
+SNITCH_TEST_CASE("[backend_utils] parse_rate_limit_reset returns nullopt for message without reset time -- rate-limit-P-003")
+{
+    SNITCH_CHECK_FALSE(parse_rate_limit_reset("You've hit your session limit").has_value());
+    SNITCH_CHECK_FALSE(parse_rate_limit_reset("").has_value());
+    SNITCH_CHECK_FALSE(parse_rate_limit_reset("resets 8:30 (Europe/London)").has_value());
+}
+
+// ---------------------------------------------------------------------------
+// Rate limit recovery / exhaustion behavior tests
+//
+// k_mock_preamble intercepts send-keys) exit 0 before any custom handler, so
+// these tests use a custom preamble that omits that case and handles send-keys
+// themselves with an Enter-count-based state machine.
+// ---------------------------------------------------------------------------
+
+// Like k_mock_preamble but without the send-keys) exit 0 ;; line so the
+// caller can supply its own send-keys) handler below new-window).
+constexpr const char* k_mock_preamble_no_sk = R"(#!/usr/bin/env bash
+set -u
+case "$1" in
+  new-session) exit 0 ;;
+  kill-session) exit 0 ;;
+  kill-window)  exit 0 ;;
+  new-window)
+    shift
+    NDL=""
+    while [ "$#" -gt 0 ]; do
+      if [ "$1" = "-e" ] && [ "$#" -gt 1 ]; then
+        shift
+        case "$1" in
+          ATTRACTOR_NODE_LOG_DIR=*) NDL="${1#ATTRACTOR_NODE_LOG_DIR=}" ;;
+        esac
+      fi
+      shift
+    done
+)";
+
+// Builds a full rate-limit mock script. new-window writes transcript.txt +
+// the initial done.json, and saves the NDL path to ndl_file.
+// send-keys Enter counts invocations (counter_file). When the count reaches
+// enter_threshold, it writes recovery_transcript_line to transcript.txt and
+// recovery_done_json to done.json.
+std::string make_rate_limit_script(const std::string& ndl_file,
+                                   const std::string& counter_file,
+                                   const std::string& initial_done_json,
+                                   int enter_threshold,
+                                   const std::string& recovery_transcript_line,
+                                   const std::string& recovery_done_json)
+{
+    return std::string{k_mock_preamble_no_sk} +
+        "    if [ -n \"$NDL\" ]; then\n"
+        "      mkdir -p \"$NDL\"\n"
+        "      printf '%s\\n' \"$NDL\" > '" + ndl_file + "'\n"
+        "      printf 'started\\n' > \"$NDL/transcript.txt\"\n"
+        "      printf '%s\\n' '" + initial_done_json + "' > \"$NDL/done.json\"\n"
+        "      printf '0' > '" + counter_file + "'\n"
+        "    fi\n"
+        "    exit 0\n"
+        "    ;;\n"
+        "  send-keys)\n"
+        "    if [ \"${@: -1}\" = \"Enter\" ]; then\n"
+        "      count=$(cat '" + counter_file + "' 2>/dev/null || printf '0')\n"
+        "      count=$((count + 1))\n"
+        "      printf '%s' \"$count\" > '" + counter_file + "'\n"
+        "      if [ \"$count\" -ge " + std::to_string(enter_threshold) + " ]; then\n"
+        "        ndl=$(cat '" + ndl_file + "')\n"
+        "        printf '%s\\n' '" + recovery_transcript_line + "' > \"$ndl/transcript.txt\"\n"
+        "        printf '%s\\n' '" + recovery_done_json + "' > \"$ndl/done.json\"\n"
+        "      fi\n"
+        "    fi\n"
+        "    exit 0\n"
+        "    ;;\n"
+        "esac\n"
+        "exit 1\n";
+}
+
+SNITCH_TEST_CASE("[claude_tmux] rate_limit followed by ok recovers cleanly -- rate-limit-U-001")
+{
+    auto script       = std::filesystem::temp_directory_path() / "att_tmux_rl_u001.sh";
+    auto counter_file = std::filesystem::temp_directory_path() / "att_tmux_rl_u001_count";
+    auto ndl_file     = std::filesystem::temp_directory_path() / "att_tmux_rl_u001_ndl";
+    TmpFile g_script{script};
+    TmpFile g_counter{counter_file};
+    TmpFile g_ndl{ndl_file};
+    TmpDir  logs_root{std::filesystem::temp_directory_path() / "att_logs_rl_u001"};
+
+    // new-window writes rate_limit; second Enter (retry restart) writes ok.
+    write_script(script, make_rate_limit_script(
+        ndl_file.string(), counter_file.string(),
+        R"json({"status":"error","error_type":"rate_limit","message":"session limit resets 12:00am (UTC)"})json",
+        2,
+        "restarted",
+        R"json({"status":"ok","message":"recovered"})json"));
+
+    std::chrono::seconds slept{0};
+    ClaudeCodeTmuxBackend backend{script.string(), logs_root.path, 0, 0,
+                                  [&slept](std::chrono::seconds d) { slept = d; }};
+    Node node{};
+    node.id = NodeId{"n_rl1"};
+    Context ctx;
+    SNITCH_CHECK(ctx.next_execution_counter() == 1);
+
+    auto result = backend.run(node, PromptText{"hello"}, ctx);
+
+    SNITCH_REQUIRE(result.has_value());
+    SNITCH_CHECK(type_safe::get(*result) == "recovered");
+    SNITCH_CHECK(slept.count() > 0);
+}
+
+SNITCH_TEST_CASE("[claude_tmux] rate_limit exhausts retries and returns fail -- rate-limit-U-002")
+{
+    auto script       = std::filesystem::temp_directory_path() / "att_tmux_rl_u002.sh";
+    auto counter_file = std::filesystem::temp_directory_path() / "att_tmux_rl_u002_count";
+    auto ndl_file     = std::filesystem::temp_directory_path() / "att_tmux_rl_u002_ndl";
+    TmpFile g_script{script};
+    TmpFile g_counter{counter_file};
+    TmpFile g_ndl{ndl_file};
+    TmpDir  logs_root{std::filesystem::temp_directory_path() / "att_logs_rl_u002"};
+
+    // Both the initial and retry done.json report rate_limit — retries exhausted.
+    write_script(script, make_rate_limit_script(
+        ndl_file.string(), counter_file.string(),
+        R"json({"status":"error","error_type":"rate_limit","message":"still limited"})json",
+        2,
+        "restarted",
+        R"json({"status":"error","error_type":"rate_limit","message":"still limited"})json"));
+
+    ClaudeCodeTmuxBackend backend{script.string(), logs_root.path, 0, 0,
+                                  [](std::chrono::seconds) {}};
+    Node node{};
+    node.id = NodeId{"n_rl2"};
+    Context ctx;
+    SNITCH_CHECK(ctx.next_execution_counter() == 1);
+
+    auto result = backend.run(node, PromptText{"hello"}, ctx);
+
+    SNITCH_REQUIRE_FALSE(result.has_value());
+    SNITCH_CHECK(result.error().status == StageStatus::fail);
+    const auto& reason = type_safe::get(result.error().failure_reason);
+    SNITCH_CHECK(reason.find("rate_limit") != std::string::npos);
 }

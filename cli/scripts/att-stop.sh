@@ -35,8 +35,8 @@ case "$EVENT" in
         write_done "$(jq -cn --arg m "$msg" '{"status":"ok","message":$m}')"
         ;;
     StopFailure)
-        etype="$(printf '%s' "$INPUT" | jq -r '.error_type // "unknown"')"
-        emsg="$(printf '%s' "$INPUT" | jq -r '.error_message // ""')"
+        etype="$(printf '%s' "$INPUT" | jq -r '.error // "unknown"')"
+        emsg="$(printf '%s' "$INPUT" | jq -r '.last_assistant_message // ""')"
         write_done "$(jq -cn --arg t "$etype" --arg m "$emsg" '{"status":"error","error_type":$t,"message":$m}')"
         ;;
 esac

@@ -7,7 +7,10 @@
 #include <cstdlib>
 #include <filesystem>
 #include <format>
+#include <optional>
+#include <regex>
 #include <string>
+#include <utility>
 
 namespace attractor {
 
@@ -36,6 +39,20 @@ namespace attractor {
         }
     }
     return std::string{ATTRACTOR_CLI_SCRIPTS_DIR};
+}
+
+// Parses "resets H:MMam (Timezone)" from a rate-limit message.
+// Returns {time_str, tz_str} or nullopt if not present.
+[[nodiscard]] inline auto parse_rate_limit_reset(const std::string& msg)
+    -> std::optional<std::pair<std::string, std::string>>
+{
+    static const std::regex k_re{R"(resets (\d+:\d+(?:am|pm)) \(([^)]+)\))",
+                                 std::regex_constants::icase};
+    std::smatch m;
+    if (!std::regex_search(msg, m, k_re)) {
+        return std::nullopt;
+    }
+    return std::make_pair(m[1].str(), m[2].str());
 }
 
 } // namespace attractor

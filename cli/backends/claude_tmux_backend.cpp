@@ -171,6 +171,53 @@ std::optional<std::string> extract_json_string(const std::string& json, const st
     return val;
 }
 
+// Returns how long to sleep before the named reset time, plus a 60-second buffer.
+// time_str is "H:MMam" or "H:MMpm"; tz_str is an IANA zone name e.g. "Europe/London".
+// Falls back to 1 hour if the zone is unknown or the time cannot be parsed.
+[[nodiscard]] auto compute_reset_sleep(const std::string& time_str, const std::string& tz_str)
+    -> std::chrono::seconds
+{
+    try {
+        // Parse "H:MMam" / "H:MMpm" into a 24-hour hour + minute.
+        const auto colon = time_str.find(':');
+        if (colon == std::string::npos) {
+            return std::chrono::seconds{3600};
+        }
+        const int hour = std::stoi(time_str.substr(0, colon));
+        std::size_t min_end = colon + 1;
+        while (min_end < time_str.size() && std::isdigit(static_cast<unsigned char>(time_str[min_end]))) {
+            ++min_end;
+        }
+        const int minute  = std::stoi(time_str.substr(colon + 1, min_end - colon - 1));
+        const std::string suffix = time_str.substr(min_end);
+
+        int hour24 = hour;
+        if (suffix == "pm" || suffix == "PM") {
+            if (hour != 12) { hour24 += 12; }
+        }
+        else {
+            if (hour == 12) { hour24 = 0; }
+        }
+
+        const auto* tz    = std::chrono::locate_zone(tz_str);
+        const auto now_sys  = std::chrono::system_clock::now();
+        const auto now_local = std::chrono::zoned_time{tz, now_sys}.get_local_time();
+        const auto today    = std::chrono::floor<std::chrono::days>(now_local);
+
+        auto target_local = today + std::chrono::hours{hour24} + std::chrono::minutes{minute};
+        if (target_local <= now_local) {
+            target_local += std::chrono::days{1};
+        }
+
+        const auto target_sys = std::chrono::zoned_time{tz, target_local}.get_sys_time();
+        const auto diff = std::chrono::duration_cast<std::chrono::seconds>(target_sys - now_sys);
+        return diff + std::chrono::seconds{60};
+    }
+    catch (...) {
+        return std::chrono::seconds{3600};
+    }
+}
+
 }  // namespace
 
 namespace attractor {
@@ -206,13 +253,15 @@ struct TmuxWindow {
 };
 
 ClaudeCodeTmuxBackend::ClaudeCodeTmuxBackend(std::string tmux_bin, std::filesystem::path logs_root,
-                                             uint64_t ceiling_tokens, int max_ceiling_handoffs)
+                                             uint64_t ceiling_tokens, int max_ceiling_handoffs,
+                                             std::function<void(std::chrono::seconds)> sleep_fn)
     : m_tmux_bin{std::move(tmux_bin)}
     , m_session_id{logs_root.filename().string()}
     , m_logs_root{std::move(logs_root)}
     , m_scripts_dir{resolve_scripts_dir()}
     , m_ceiling_tokens{ceiling_tokens}
     , m_max_ceiling_handoffs{max_ceiling_handoffs}
+    , m_sleep_fn{std::move(sleep_fn)}
 {
     assert(!m_session_id.empty() && "logs_root must not be empty or end with a path separator");
     // Session name is derived from logs_root.filename() (the run_id)
@@ -310,6 +359,8 @@ auto ClaudeCodeTmuxBackend::run(const Node& node, const PromptText& prompt, Cont
     uint64_t accumulated_tokens = 0;
     std::size_t jsonl_offset = 0;
     int handoff_count = 0;
+    int rate_limit_retries = 0;
+    constexpr int k_max_rate_limit_retries = 1;
 
     while (true) {
         if (std::chrono::steady_clock::now() >= deadline) {
@@ -406,7 +457,46 @@ auto ClaudeCodeTmuxBackend::run(const Node& node, const PromptText& prompt, Cont
         }
         if (*status == "error") {
             auto etype = extract_json_string(content, "error_type").value_or(std::string{"unknown"});
-            auto emsg = extract_json_string(content, "message").value_or(std::string{});
+            auto emsg  = extract_json_string(content, "message").value_or(std::string{});
+
+            if (etype == "rate_limit" && rate_limit_retries < k_max_rate_limit_retries) {
+                ++rate_limit_retries;
+                std::println(stderr, "[attractor] rate limit: {}", emsg);
+
+                auto sleep_dur = std::chrono::seconds{3600};
+                if (auto parsed = parse_rate_limit_reset(emsg)) {
+                    sleep_dur = compute_reset_sleep(parsed->first, parsed->second);
+                    std::println(stderr, "[attractor] waiting until {} ({}) then resuming...",
+                                 parsed->first, parsed->second);
+                }
+                else {
+                    std::println(stderr, "[attractor] could not parse reset time, sleeping 1 hour");
+                }
+
+                // Shift the deadline forward by the sleep so the same budget remains after resuming.
+                deadline += sleep_dur;
+
+                std::error_code ec;
+                std::filesystem::remove(done_file, ec);
+                std::filesystem::remove(transcript_txt, ec);
+
+                if (m_sleep_fn) { m_sleep_fn(sleep_dur); }
+                else { std::this_thread::sleep_for(sleep_dur); }
+
+                if (tmux_system(send_text) != 0 || tmux_system(send_enter) != 0) {
+                    return std::unexpected(Outcome::fail(
+                        DiagnosticMessage{"tmux: rate limit retry: send-keys failed for " + window_name}));
+                }
+                auto new_jsonl = poll_transcript();
+                if (!new_jsonl) {
+                    return std::unexpected(new_jsonl.error());
+                }
+                jsonl_path     = std::move(*new_jsonl);
+                accumulated_tokens = 0;
+                jsonl_offset   = 0;
+                continue;
+            }
+
             return std::unexpected(Outcome::fail(DiagnosticMessage{"tmux: API error [" + etype + "]: " + emsg}));
         }
     }
