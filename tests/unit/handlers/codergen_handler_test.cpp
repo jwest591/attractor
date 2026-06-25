@@ -113,6 +113,7 @@ SNITCH_TEST_CASE("[codergen_handler] execute with NoOpBackend returns SUCCESS --
     CodergenNode n = make_codergen_node("plan", "Analyze this");
     RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
 
+    (void)ctx.next_execution_counter();
     auto outcome = h.execute(n, ctx, g, rc);
 
     SNITCH_CHECK(outcome.status == StageStatus::success);
@@ -128,9 +129,10 @@ SNITCH_TEST_CASE("[codergen_handler] execute expands $goal in prompt")
     CodergenNode n = make_codergen_node("plan", "Plan how to: $goal");
     RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
 
+    (void)ctx.next_execution_counter();
     (void)h.execute(n, ctx, g, rc);
 
-    const auto prompt_file = tmp.path / "plan" / "prompt.md";
+    const auto prompt_file = tmp.path / "001-plan" / "prompt.md";
     SNITCH_REQUIRE(std::filesystem::exists(prompt_file));
     SNITCH_CHECK(read_file(prompt_file) == "Plan how to: Write tests");
 }
@@ -145,9 +147,10 @@ SNITCH_TEST_CASE("[codergen_handler] execute writes prompt.md to stage directory
     CodergenNode n = make_codergen_node("my_stage", "Analyze requirements");
     RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
 
+    (void)ctx.next_execution_counter();
     (void)h.execute(n, ctx, g, rc);
 
-    SNITCH_CHECK(std::filesystem::exists(tmp.path / "my_stage" / "prompt.md"));
+    SNITCH_CHECK(std::filesystem::exists(tmp.path / "001-my_stage" / "prompt.md"));
 }
 
 SNITCH_TEST_CASE("[codergen_handler] execute sets last_response in context_updates")
@@ -160,6 +163,7 @@ SNITCH_TEST_CASE("[codergen_handler] execute sets last_response in context_updat
     CodergenNode n = make_codergen_node("work", "Do something");
     RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
 
+    (void)ctx.next_execution_counter();
     auto outcome = h.execute(n, ctx, g, rc);
 
     SNITCH_REQUIRE(outcome.context_updates.contains("last_response"));
@@ -175,6 +179,7 @@ SNITCH_TEST_CASE("[codergen_handler] execute sets last_stage in context_updates"
     CodergenNode n = make_codergen_node("my_work", "Do work");
     RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
 
+    (void)ctx.next_execution_counter();
     auto outcome = h.execute(n, ctx, g, rc);
 
     SNITCH_REQUIRE(outcome.context_updates.contains("last_stage"));
@@ -190,6 +195,7 @@ SNITCH_TEST_CASE("[codergen_handler] null backend uses simulation mode")
     CodergenNode n = make_codergen_node("sim_node", "Do work");
     RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
 
+    (void)ctx.next_execution_counter();
     auto outcome = h.execute(n, ctx, g, rc);
 
     SNITCH_CHECK(outcome.status == StageStatus::success);
@@ -210,9 +216,10 @@ SNITCH_TEST_CASE("[codergen_handler] empty prompt falls back to node label")
     // n.prompt is empty (default PromptText{})
     RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
 
+    (void)ctx.next_execution_counter();
     (void)h.execute(n, ctx, g, rc);
 
-    const auto prompt_file = tmp.path / "labeled_node" / "prompt.md";
+    const auto prompt_file = tmp.path / "001-labeled_node" / "prompt.md";
     SNITCH_REQUIRE(std::filesystem::exists(prompt_file));
     SNITCH_CHECK(read_file(prompt_file) == "My fallback label");
 }
@@ -226,9 +233,10 @@ SNITCH_TEST_CASE("[codergen_handler] multiple $goal occurrences all expanded")
     CodergenNode n = make_codergen_node("node1", "First: $goal. Second: $goal.");
     RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
 
+    (void)ctx.next_execution_counter();
     (void)h.execute(n, ctx, g, rc);
 
-    const auto content = read_file(tmp.path / "node1" / "prompt.md");
+    const auto content = read_file(tmp.path / "001-node1" / "prompt.md");
     SNITCH_CHECK(content == "First: build app. Second: build app.");
 }
 
@@ -242,6 +250,7 @@ SNITCH_TEST_CASE("[codergen_handler] backend failure propagates as Outcome::fail
     CodergenNode n = make_codergen_node("fail_node", "Do work");
     RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
 
+    (void)ctx.next_execution_counter();
     auto outcome = h.execute(n, ctx, g, rc);
 
     SNITCH_CHECK(outcome.status == StageStatus::fail);

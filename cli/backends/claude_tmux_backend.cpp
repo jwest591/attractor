@@ -227,7 +227,7 @@ ClaudeCodeTmuxBackend::~ClaudeCodeTmuxBackend()
 auto ClaudeCodeTmuxBackend::run(const Node& node, const PromptText& prompt, Context& ctx) const
     -> std::expected<LlmResponse, Outcome>
 {
-    // HandoffAwareBackend already called ctx.next_execution_counter(); read current value
+    // Engine calls ctx.next_execution_counter() before dispatch; read current value here.
     int counter = ctx.current_execution_counter();
 
     auto node_log_dir = derive_node_log_dir(m_logs_root, node.id, counter);
@@ -241,13 +241,21 @@ auto ClaudeCodeTmuxBackend::run(const Node& node, const PromptText& prompt, Cont
         }
     }
 
+    // When wrapped by HandoffAwareBackend, it sets internal.handoff_subdir to the per-attempt
+    // subdir it created (e.g. node_dir/001/). Use that as the session working directory so
+    // Claude writes transcript.txt, done.json, ctx-usage.json, and handoff.md there.
+    const nlohmann::json subdir_j = ctx.get(ContextKey{"internal.handoff_subdir"});
+    const std::string session_dir = (subdir_j.is_string() && !subdir_j.get<std::string>().empty())
+                                        ? subdir_j.get<std::string>()
+                                        : node_log_dir.string();
+
     auto now = std::chrono::steady_clock::now();
     auto deadline = node.timeout ? now + node.timeout->get_value() : now + k_default_node_deadline;
 
-    const std::string window_name = type_safe::get(node.id) + "-" + std::to_string(counter);
+    const std::string window_name = std::format("{:03d}-{}", counter, type_safe::get(node.id));
 
     // RAII: destructor kills window on all exit paths
-    TmuxWindow window{m_tmux_bin, m_session_id, window_name, node_log_dir.string(), m_context_critical_pct};
+    TmuxWindow window{m_tmux_bin, m_session_id, window_name, session_dir, m_context_critical_pct};
 
     const std::string settings_path = m_scripts_dir + "/att-tmux-backend.settings.json";
     const std::string claude_cmd = "claude " + shell_escape(type_safe::get(prompt)) + " --settings " +
@@ -261,7 +269,7 @@ auto ClaudeCodeTmuxBackend::run(const Node& node, const PromptText& prompt, Cont
         return std::unexpected(Outcome::fail(DiagnosticMessage{"tmux: send-keys failed for " + window_name}));
     }
 
-    const auto transcript_txt = node_log_dir / "transcript.txt";
+    const auto transcript_txt = std::filesystem::path{session_dir} / "transcript.txt";
 
     // Poll for transcript.txt (written by SessionStart hook) to confirm the session started.
     // 10s hard cap or overall deadline, whichever is sooner.
@@ -298,7 +306,7 @@ auto ClaudeCodeTmuxBackend::run(const Node& node, const PromptText& prompt, Cont
     // Poll for done.json written atomically by the Stop/StopFailure hook once all background
     // agents have completed. Format: {"status":"ok","message":"..."} or
     // {"status":"error","error_type":"...","message":"..."}.
-    const auto done_file = node_log_dir / "done.json";
+    const auto done_file = std::filesystem::path{session_dir} / "done.json";
     uint64_t accumulated_tokens = 0;
     std::size_t jsonl_offset = 0;
     int handoff_count = 0;
@@ -337,7 +345,7 @@ auto ClaudeCodeTmuxBackend::run(const Node& node, const PromptText& prompt, Cont
                 return std::unexpected(Outcome::fail(
                     DiagnosticMessage{"tmux: handoff failed: cannot remove transcript.txt: " + ec.message()}));
             }
-            std::filesystem::remove(node_log_dir / "ctx-usage.json", ec);
+            std::filesystem::remove(std::filesystem::path{session_dir} / "ctx-usage.json", ec);
 
             // Send /clear to the current tmux window (literal, not shell-escaped).
             const std::string clear_text =

@@ -104,3 +104,18 @@ SNITCH_TEST_CASE("[checkpoint] save_checkpoint uses pid-unique temp filename -- 
     SNITCH_CHECK(!std::filesystem::exists(
         logs.path() / ("checkpoint.json.tmp." + std::to_string(getpid()))));
 }
+
+SNITCH_TEST_CASE("[checkpoint] execution_counter round-trips through save and load -- 7.20-U-001")
+{
+    TempLogsDir logs;
+
+    CheckpointData data;
+    data.current_node = NodeId{"nodeX"};
+    data.execution_counter = 7;
+
+    SNITCH_REQUIRE(save_checkpoint(logs.logs_root(), data).has_value());
+
+    auto loaded = load_checkpoint(logs.logs_root());
+    SNITCH_REQUIRE(loaded.has_value());
+    SNITCH_CHECK(loaded->execution_counter == 7);
+}

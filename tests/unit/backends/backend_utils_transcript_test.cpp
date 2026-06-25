@@ -8,7 +8,7 @@
 
 using namespace attractor;
 
-SNITCH_TEST_CASE("[backend_utils] derive_node_log_dir returns logs_root/node_id-counter -- 7.19-U-BU-001")
+SNITCH_TEST_CASE("[backend_utils] derive_node_log_dir returns logs_root/NNN-node_id -- 7.20-U-BU-001")
 {
     const std::filesystem::path logs_root{"/tmp/att-test-logs"};
     const NodeId node_id{"my-node"};
@@ -16,16 +16,16 @@ SNITCH_TEST_CASE("[backend_utils] derive_node_log_dir returns logs_root/node_id-
 
     const auto result = derive_node_log_dir(logs_root, node_id, counter);
 
-    SNITCH_CHECK(result == logs_root / "my-node-3");
+    SNITCH_CHECK(result == logs_root / "003-my-node");
 }
 
-SNITCH_TEST_CASE("[backend_utils] derive_node_log_dir counter 1 produces expected name -- 7.19-U-BU-002")
+SNITCH_TEST_CASE("[backend_utils] derive_node_log_dir counter 1 zero-pads to 001 -- 7.20-U-BU-002")
 {
     const std::filesystem::path logs_root{"/runs/abc"};
     const NodeId node_id{"step-a"};
 
     const auto result = derive_node_log_dir(logs_root, node_id, 1);
 
-    SNITCH_CHECK(result.filename().string() == "step-a-1");
+    SNITCH_CHECK(result.filename().string() == "001-step-a");
     SNITCH_CHECK(result.parent_path() == logs_root);
 }

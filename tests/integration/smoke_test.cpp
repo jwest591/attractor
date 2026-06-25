@@ -1,5 +1,7 @@
 #include "attractor_test_support.hpp"
 
+#include <attractor/checkpoint.hpp>
+#include <attractor/context.hpp>
 #include <attractor/engine.hpp>
 #include <attractor/events.hpp>
 #include <attractor/types.hpp>
@@ -59,4 +61,43 @@ SNITCH_TEST_CASE("[integration][smoke] 3-node pipeline runs end-to-end with NoOp
 
     // Checkpoint written after each node execution.
     SNITCH_CHECK(std::filesystem::exists(logs.path() / "checkpoint.json"));
+}
+
+SNITCH_TEST_CASE("[integration][smoke] resumed run continues log dir numbering from checkpoint -- 7.20-I-001")
+{
+    // 2-node pipeline: start -> work -> done
+    // Run to completion, save a checkpoint with execution_counter = 2,
+    // construct a fresh Context, restore counter, run remaining node, verify log dir is 003-...
+    auto graph = parse_ok(R"(
+        digraph pipeline {
+            start [shape=Mdiamond];
+            work  [shape=box, prompt="step one"];
+            done  [shape=Msquare];
+            start -> work;
+            work  -> done;
+        }
+    )");
+
+    TempLogsDir logs;
+
+    // Step 1: Run the full pipeline to build initial state (counter reaches 2 after start+work).
+    Engine engine1;
+    const auto first_outcome = engine1.run(graph, RunConfig{.logs_root = logs.logs_root()});
+    SNITCH_REQUIRE(first_outcome.status == StageStatus::success);
+
+    // Step 2: Manually write a checkpoint that says execution_counter = 2 and next node = work.
+    // This simulates a pipeline that was interrupted after start (counter = 1) but before work.
+    CheckpointData cp;
+    cp.current_node = NodeId{"work"};
+    cp.completed_nodes = {NodeId{"start"}};
+    cp.execution_counter = 2;
+    SNITCH_REQUIRE(save_checkpoint(logs.logs_root(), cp).has_value());
+
+    // Step 3: Resume; engine restores counter = 2 then increments to 3 before dispatching work.
+    Engine engine2;
+    const auto resume_outcome = engine2.run(graph, RunConfig{.logs_root = logs.logs_root(), .resume = true});
+    SNITCH_REQUIRE(resume_outcome.status == StageStatus::success);
+
+    // The work node (dispatched 3rd in this resumed run) must use dir "003-work".
+    SNITCH_CHECK(std::filesystem::is_directory(logs.path() / "003-work"));
 }

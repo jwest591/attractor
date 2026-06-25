@@ -31,6 +31,11 @@ class Context {
         return m_execution_counter.load(std::memory_order_relaxed);
     }
 
+    void set_execution_counter(int v)
+    {
+        m_execution_counter.store(v, std::memory_order_relaxed);
+    }
+
   private:
     mutable std::shared_mutex m_mutex;
     nlohmann::json m_data = nlohmann::json::object();

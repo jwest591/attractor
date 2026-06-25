@@ -1,12 +1,10 @@
 #include <attractor/handlers/tool_handler.hpp>
 
-#include <algorithm>
 #include <array>
 #include <attractor/context.hpp>
 #include <attractor/graph.hpp>
 #include <attractor/handler.hpp>
 #include <attractor/types.hpp>
-#include <cctype>
 #include <cstdio>
 #include <filesystem>
 #include <format>
@@ -22,24 +20,6 @@
 namespace attractor {
 
 namespace {
-
-// Returns node_dir/NNN where NNN is one past the highest existing 3-digit invocation subdir.
-std::filesystem::path next_invocation_dir(const std::filesystem::path& node_dir)
-{
-    unsigned int next = 1;
-    std::error_code ec;
-    for (const auto& entry : std::filesystem::directory_iterator(node_dir, ec)) {
-        if (!entry.is_directory()) continue;
-        const auto name = entry.path().filename().string();
-        if (name.size() == 3 &&
-            std::all_of(name.begin(), name.end(), [](unsigned char c) { return std::isdigit(c) != 0; })) {
-            if (const unsigned int n = static_cast<unsigned int>(std::stoul(name)); n >= next) {
-                next = n + 1;
-            }
-        }
-    }
-    return node_dir / std::format("{:03d}", next);
-}
 
 // Runs cmd in a shell, capturing stdout. stderr is redirected to stage_dir/stderr.txt.
 // stage_dir must already exist. Throws on popen failure, read error, or non-zero exit.
@@ -99,7 +79,7 @@ void write_status(const std::filesystem::path& stage_dir, const Outcome& outcome
 
 ToolHandler::ToolHandler(CommandRunner runner) : m_runner{std::move(runner)} {}
 
-auto ToolHandler::execute(const Node& node, Context& /*ctx*/, const Graph& graph, const RunConfig& run_config) const
+auto ToolHandler::execute(const Node& node, Context& ctx, const Graph& graph, const RunConfig& run_config) const
     -> Outcome
 {
     const std::string& id_str = type_safe::get(node.id);
@@ -107,8 +87,9 @@ auto ToolHandler::execute(const Node& node, Context& /*ctx*/, const Graph& graph
         return Outcome::fail(DiagnosticMessage{"node.id contains path-unsafe characters: " + id_str});
     }
 
-    const auto node_dir = std::filesystem::path(type_safe::get(run_config.logs_root)) / id_str;
-    const auto stage_dir = next_invocation_dir(node_dir);
+    const auto node_dir = std::filesystem::path(type_safe::get(run_config.logs_root)) /
+                          std::format("{:03d}-{}", ctx.current_execution_counter(), id_str);
+    const auto& stage_dir = node_dir;
     std::error_code ec;
     std::filesystem::create_directories(stage_dir, ec);
     if (ec) {

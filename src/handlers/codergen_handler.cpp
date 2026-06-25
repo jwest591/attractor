@@ -4,6 +4,7 @@
 #include <attractor/graph.hpp>
 #include <attractor/types.hpp>
 #include <filesystem>
+#include <format>
 #include <fstream>
 #include <nlohmann/json.hpp>
 #include <string>
@@ -68,7 +69,8 @@ auto CodergenHandler::execute(const Node& node, Context& ctx, const Graph& graph
             "codergen node '" + id_str + "' has no prompt and no label"});
     }
 
-    const auto stage_dir = std::filesystem::path(type_safe::get(run_config.logs_root)) / id_str;
+    const auto stage_dir = std::filesystem::path(type_safe::get(run_config.logs_root)) /
+                           std::format("{:03d}-{}", ctx.current_execution_counter(), id_str);
     std::error_code ec;
     std::filesystem::create_directories(stage_dir, ec);
     if (ec) {

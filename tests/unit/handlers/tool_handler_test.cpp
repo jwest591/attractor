@@ -66,6 +66,7 @@ SNITCH_TEST_CASE("[tool_handler] injected runner returns output -- 2.8-U-001")
     Graph g;
     RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
 
+    (void)ctx.next_execution_counter();
     auto outcome = h.execute(make_tool_node("my_tool", "echo hello"), ctx, g, rc);
 
     SNITCH_CHECK(outcome.status == StageStatus::success);
@@ -81,6 +82,7 @@ SNITCH_TEST_CASE("[tool_handler] empty tool_command returns FAIL -- 2.8-U-002")
     Graph g;
     RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
 
+    (void)ctx.next_execution_counter();
     auto outcome = h.execute(make_tool_node("bad_tool", ""), ctx, g, rc);
 
     SNITCH_CHECK(outcome.status == StageStatus::fail);
@@ -103,13 +105,14 @@ SNITCH_TEST_CASE("[tool_handler] injected runner called with correct command -- 
     Graph g;
     RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
 
+    (void)ctx.next_execution_counter();
     (void)h.execute(make_tool_node("tool", "ls -la"), ctx, g, rc);
 
     SNITCH_CHECK(call_count == 1);
     SNITCH_CHECK(captured_cmd == "ls -la");
 }
 
-SNITCH_TEST_CASE("[tool_handler] creates invocation subdirectory on success")
+SNITCH_TEST_CASE("[tool_handler] creates numbered node dir on success")
 {
     ScopedTempDir tmp;
     ToolHandler h{[](std::string_view) { return "out"; }};
@@ -117,12 +120,13 @@ SNITCH_TEST_CASE("[tool_handler] creates invocation subdirectory on success")
     Graph g;
     RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
 
+    (void)ctx.next_execution_counter();
     (void)h.execute(make_tool_node("my_tool", "cmd"), ctx, g, rc);
 
-    SNITCH_CHECK(std::filesystem::is_directory(tmp.path / "my_tool" / "001"));
+    SNITCH_CHECK(std::filesystem::is_directory(tmp.path / "001-my_tool"));
 }
 
-SNITCH_TEST_CASE("[tool_handler] second invocation creates 002 subdirectory")
+SNITCH_TEST_CASE("[tool_handler] second invocation uses next counter")
 {
     ScopedTempDir tmp;
     ToolHandler h{[](std::string_view) { return "out"; }};
@@ -130,11 +134,13 @@ SNITCH_TEST_CASE("[tool_handler] second invocation creates 002 subdirectory")
     Graph g;
     RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
 
+    (void)ctx.next_execution_counter();
     (void)h.execute(make_tool_node("my_tool", "cmd"), ctx, g, rc);
+    (void)ctx.next_execution_counter();
     (void)h.execute(make_tool_node("my_tool", "cmd"), ctx, g, rc);
 
-    SNITCH_CHECK(std::filesystem::is_directory(tmp.path / "my_tool" / "001"));
-    SNITCH_CHECK(std::filesystem::is_directory(tmp.path / "my_tool" / "002"));
+    SNITCH_CHECK(std::filesystem::is_directory(tmp.path / "001-my_tool"));
+    SNITCH_CHECK(std::filesystem::is_directory(tmp.path / "002-my_tool"));
 }
 
 SNITCH_TEST_CASE("[tool_handler] writes command.txt with expanded command")
@@ -146,9 +152,10 @@ SNITCH_TEST_CASE("[tool_handler] writes command.txt with expanded command")
     g.goal = GoalText{"7.12"};
     RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
 
+    (void)ctx.next_execution_counter();
     (void)h.execute(make_tool_node("run_tests", "status.sh $goal"), ctx, g, rc);
 
-    const auto cmd_file = tmp.path / "run_tests" / "001" / "command.txt";
+    const auto cmd_file = tmp.path / "001-run_tests" / "command.txt";
     SNITCH_REQUIRE(std::filesystem::exists(cmd_file));
     SNITCH_CHECK(read_file(cmd_file) == "status.sh 7.12");
 }
@@ -161,9 +168,10 @@ SNITCH_TEST_CASE("[tool_handler] writes command.txt on empty-command failure")
     Graph g;
     RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
 
+    (void)ctx.next_execution_counter();
     (void)h.execute(make_tool_node("bad_tool", ""), ctx, g, rc);
 
-    const auto cmd_file = tmp.path / "bad_tool" / "001" / "command.txt";
+    const auto cmd_file = tmp.path / "001-bad_tool" / "command.txt";
     SNITCH_REQUIRE(std::filesystem::exists(cmd_file));
     SNITCH_CHECK(read_file(cmd_file).empty());
 }
@@ -176,9 +184,10 @@ SNITCH_TEST_CASE("[tool_handler] writes output.txt with command stdout")
     Graph g;
     RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
 
+    (void)ctx.next_execution_counter();
     (void)h.execute(make_tool_node("run_tests", "cmd"), ctx, g, rc);
 
-    const auto out_file = tmp.path / "run_tests" / "001" / "output.txt";
+    const auto out_file = tmp.path / "001-run_tests" / "output.txt";
     SNITCH_REQUIRE(std::filesystem::exists(out_file));
     SNITCH_CHECK(read_file(out_file) == "line1\nline2\n");
 }
@@ -191,9 +200,10 @@ SNITCH_TEST_CASE("[tool_handler] writes status.json with success outcome")
     Graph g;
     RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
 
+    (void)ctx.next_execution_counter();
     (void)h.execute(make_tool_node("deploy", "cmd"), ctx, g, rc);
 
-    const auto status_file = tmp.path / "deploy" / "001" / "status.json";
+    const auto status_file = tmp.path / "001-deploy" / "status.json";
     SNITCH_REQUIRE(std::filesystem::exists(status_file));
 
     const auto j = nlohmann::json::parse(read_file(status_file));
@@ -209,9 +219,10 @@ SNITCH_TEST_CASE("[tool_handler] writes status.json on empty-command failure")
     Graph g;
     RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
 
+    (void)ctx.next_execution_counter();
     (void)h.execute(make_tool_node("bad_tool", ""), ctx, g, rc);
 
-    const auto status_file = tmp.path / "bad_tool" / "001" / "status.json";
+    const auto status_file = tmp.path / "001-bad_tool" / "status.json";
     SNITCH_REQUIRE(std::filesystem::exists(status_file));
 
     const auto j = nlohmann::json::parse(read_file(status_file));
@@ -227,6 +238,7 @@ SNITCH_TEST_CASE("[tool_handler] trailing newlines stripped from context output"
     Graph g;
     RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
 
+    (void)ctx.next_execution_counter();
     auto outcome = h.execute(make_tool_node("check", "cmd"), ctx, g, rc);
 
     SNITCH_REQUIRE(outcome.context_updates.contains("tool"));
@@ -241,9 +253,10 @@ SNITCH_TEST_CASE("[tool_handler] output.txt preserves raw bytes including newlin
     Graph g;
     RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
 
+    (void)ctx.next_execution_counter();
     (void)h.execute(make_tool_node("check", "cmd"), ctx, g, rc);
 
-    SNITCH_CHECK(read_file(tmp.path / "check" / "001" / "output.txt") == "done\n");
+    SNITCH_CHECK(read_file(tmp.path / "001-check" / "output.txt") == "done\n");
 }
 
 SNITCH_TEST_CASE("[tool_handler] $goal in tool_command is expanded")
@@ -260,6 +273,7 @@ SNITCH_TEST_CASE("[tool_handler] $goal in tool_command is expanded")
     RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
 
     ToolNode n = make_tool_node("check", "status.sh $goal --config cfg.yaml");
+    (void)ctx.next_execution_counter();
     (void)h.execute(n, ctx, g, rc);
 
     SNITCH_CHECK(captured_cmd == "status.sh 7.11 --config cfg.yaml");
@@ -273,6 +287,7 @@ SNITCH_TEST_CASE("[tool_handler] node.id with path separator returns FAIL")
     Graph g;
     RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
 
+    (void)ctx.next_execution_counter();
     auto outcome = h.execute(make_tool_node("../escape", "cmd"), ctx, g, rc);
 
     SNITCH_CHECK(outcome.status == StageStatus::fail);
@@ -288,9 +303,10 @@ SNITCH_TEST_CASE("[tool_handler] real popen: stderr is captured to stderr.txt")
     RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
 
     // Command writes distinct strings to stdout and stderr.
+    (void)ctx.next_execution_counter();
     auto outcome = h.execute(make_tool_node("real_run", "printf 'out' && printf 'err' >&2"), ctx, g, rc);
 
     SNITCH_CHECK(outcome.status == StageStatus::success);
-    SNITCH_CHECK(read_file(tmp.path / "real_run" / "001" / "output.txt") == "out");
-    SNITCH_CHECK(read_file(tmp.path / "real_run" / "001" / "stderr.txt") == "err");
+    SNITCH_CHECK(read_file(tmp.path / "001-real_run" / "output.txt") == "out");
+    SNITCH_CHECK(read_file(tmp.path / "001-real_run" / "stderr.txt") == "err");
 }

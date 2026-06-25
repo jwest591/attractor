@@ -6,6 +6,7 @@
 
 #include <cstdlib>
 #include <filesystem>
+#include <format>
 #include <string>
 
 namespace attractor {
@@ -14,7 +15,7 @@ namespace attractor {
                                               const NodeId& node_id,
                                               int counter) -> std::filesystem::path
 {
-    return logs_root / (type_safe::get(node_id) + "-" + std::to_string(counter));
+    return logs_root / std::format("{:03d}-{}", counter, type_safe::get(node_id));
 }
 
 [[nodiscard]] inline std::string resolve_scripts_dir()

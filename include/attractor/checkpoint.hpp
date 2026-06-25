@@ -17,6 +17,7 @@ struct CheckpointData {
     std::map<std::string, int> node_retries;
     nlohmann::json context = nlohmann::json::object();
     std::vector<std::string> logs;
+    int execution_counter{0};
 };
 
 // Write checkpoint atomically to {logs_root}/checkpoint.json (temp + rename).

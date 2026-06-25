@@ -163,8 +163,9 @@ SNITCH_TEST_CASE("[events] codergen node writes prompt.md response.md status.jso
 
     SNITCH_REQUIRE(outcome.status == StageStatus::success);
 
-    // DoD S11.7-6: per-node artifacts written to {logs_root}/{node_id}/
-    SNITCH_CHECK(std::filesystem::exists(logs.path() / "gen" / "prompt.md"));
-    SNITCH_CHECK(std::filesystem::exists(logs.path() / "gen" / "response.md"));
-    SNITCH_CHECK(std::filesystem::exists(logs.path() / "gen" / "status.json"));
+    // DoD S11.7-6: per-node artifacts written to {logs_root}/{NNN}-{node_id}/
+    // start=001, gen=002 in this 3-node pipeline
+    SNITCH_CHECK(std::filesystem::exists(logs.path() / "002-gen" / "prompt.md"));
+    SNITCH_CHECK(std::filesystem::exists(logs.path() / "002-gen" / "response.md"));
+    SNITCH_CHECK(std::filesystem::exists(logs.path() / "002-gen" / "status.json"));
 }

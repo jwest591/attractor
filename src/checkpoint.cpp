@@ -42,6 +42,7 @@ auto save_checkpoint(const LogsRoot& logs_root, const CheckpointData& data)
         j["node_retries"] = data.node_retries;
         j["context"] = data.context;
         j["logs"] = data.logs;
+        j["execution_counter"] = data.execution_counter;
 
         const auto final_path = dir / "checkpoint.json";
         const auto temp_path = dir / ("checkpoint.json.tmp." + std::to_string(getpid()));
@@ -111,6 +112,8 @@ auto load_checkpoint(const LogsRoot& logs_root) -> std::expected<CheckpointData,
                 data.logs.push_back(entry.get<std::string>());
             }
         }
+
+        data.execution_counter = j.value("execution_counter", 0);
 
         return data;
     }

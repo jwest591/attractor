@@ -9,6 +9,7 @@
 
 #include <cassert>
 #include <filesystem>
+#include <format>
 #include <fstream>
 #include <iterator>
 #include <string>
@@ -29,15 +30,26 @@ auto HandoffAwareBackend::run(const Node& node, const PromptText& prompt,
 {
     PromptText current_prompt = prompt;
 
-    for (int attempt = 0; attempt <= m_max_handoffs; ++attempt) {
-        int counter = ctx.next_execution_counter();
-        auto node_log_dir = derive_node_log_dir(m_logs_root, node.id, counter);
+    const auto node_dir = derive_node_log_dir(m_logs_root, node.id, ctx.current_execution_counter());
+    int handoff_idx = 1;
 
+    for (int attempt = 0; attempt <= m_max_handoffs; ++attempt) {
+        const auto handoff_subdir = node_dir / std::format("{:03d}", handoff_idx);
+        {
+            std::error_code ec;
+            std::filesystem::create_directories(handoff_subdir, ec);
+            if (ec) {
+                return std::unexpected(Outcome::fail(
+                    DiagnosticMessage{"handoff: cannot create handoff_subdir: " + ec.message()}));
+            }
+        }
+
+        (void)ctx.set(ContextKey{"internal.handoff_subdir"}, handoff_subdir.string());
         auto result = m_inner->run(node, current_prompt, ctx);
 
         if (!result) return result;
 
-        const auto handoff_file = node_log_dir / "handoff.md";
+        const auto handoff_file = handoff_subdir / "handoff.md";
         std::error_code exists_ec;
         const bool handoff_exists = std::filesystem::exists(handoff_file, exists_ec);
         if (exists_ec) {
@@ -71,6 +83,7 @@ auto HandoffAwareBackend::run(const Node& node, const PromptText& prompt,
         std::filesystem::remove(handoff_file, ec);
 
         current_prompt = PromptText{content};
+        ++handoff_idx;
     }
 
     return std::unexpected(Outcome::fail(DiagnosticMessage{"handoff: internal loop error"}));

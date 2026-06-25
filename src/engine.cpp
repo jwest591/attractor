@@ -445,6 +445,7 @@ auto Engine::run_from(const Graph& graph, const NodeId& start_id, const RunConfi
         if (!cp->current_node.empty()) {
             current_id = cp->current_node;
         }
+        ctx.set_execution_counter(cp->execution_counter);
     }
 
     while (true) {
@@ -525,6 +526,8 @@ auto Engine::run_from(const Graph& graph, const NodeId& start_id, const RunConfi
 
         // 0-based index = count of already-completed nodes before this one.
         const int node_index = static_cast<int>(completed_nodes.size());
+
+        (void)ctx.next_execution_counter();
 
         if (m_on_event) {
             m_on_event(Event{
@@ -629,6 +632,7 @@ auto Engine::run_from(const Graph& graph, const NodeId& start_id, const RunConfi
             cp.completed_nodes = completed_nodes;
             cp.context = context_snapshot;
             cp.node_retries = node_retries_map;
+            cp.execution_counter = ctx.current_execution_counter();
             (void)save_checkpoint(config.logs_root, cp);
         }
     }

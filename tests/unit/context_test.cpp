@@ -99,6 +99,15 @@ SNITCH_TEST_CASE("[context] current_execution_counter reads without incrementing
     SNITCH_CHECK(ctx.current_execution_counter() == 1);
 }
 
+SNITCH_TEST_CASE("[context] set_execution_counter establishes counter for resume -- 7.20-C-001")
+{
+    Context ctx;
+    ctx.set_execution_counter(5);
+    SNITCH_CHECK(ctx.current_execution_counter() == 5);
+    SNITCH_CHECK(ctx.next_execution_counter() == 6);
+    SNITCH_CHECK(ctx.current_execution_counter() == 6);
+}
+
 SNITCH_TEST_CASE("[context] concurrent set and get do not data-race -- 2.6-C-008")
 {
     // Two threads: one writes, one reads; no undefined behavior.

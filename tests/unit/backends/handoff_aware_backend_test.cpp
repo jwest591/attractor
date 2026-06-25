@@ -9,6 +9,7 @@
 
 #include <expected>
 #include <filesystem>
+#include <format>
 #include <fstream>
 #include <functional>
 #include <memory>
@@ -66,9 +67,9 @@ Node make_node(const std::string& id_val)
 
 }  // namespace
 
-SNITCH_TEST_CASE("[handoff_aware] counter increments before each inner call -- 7.19-U-005")
+SNITCH_TEST_CASE("[handoff_aware] engine counter is read (not incremented) by backend -- 7.20-U-005")
 {
-    TmpDir logs_root{std::filesystem::temp_directory_path() / "att_hab_7_19_005"};
+    TmpDir logs_root{std::filesystem::temp_directory_path() / "att_hab_7_20_005"};
     const Node node = make_node("n005");
 
     auto mock = std::make_unique<MockBackend>(
@@ -80,27 +81,32 @@ SNITCH_TEST_CASE("[handoff_aware] counter increments before each inner call -- 7
 
     HandoffAwareBackend backend{std::move(mock), logs_root.path};
     Context ctx;
+    (void)ctx.next_execution_counter();  // simulate engine increment
     auto result = backend.run(node, PromptText{"hello"}, ctx);
 
     SNITCH_REQUIRE(result.has_value());
     SNITCH_REQUIRE(mock_ptr->observed_counters.size() == 1u);
     SNITCH_CHECK(mock_ptr->observed_counters[0] == 1);
+    SNITCH_CHECK(ctx.current_execution_counter() == 1);  // HAB must not change the counter
 }
 
-SNITCH_TEST_CASE("[handoff_aware] handoff.md triggers second call with file content -- 7.19-U-006")
+SNITCH_TEST_CASE("[handoff_aware] handoff.md in 001/ triggers second call with file content -- 7.20-U-006")
 {
-    TmpDir logs_root{std::filesystem::temp_directory_path() / "att_hab_7_19_006"};
+    TmpDir logs_root{std::filesystem::temp_directory_path() / "att_hab_7_20_006"};
     const Node node = make_node("n006");
 
+    int call_count = 0;
     auto mock = std::make_unique<MockBackend>(
-        [&logs_root](const Node& n, const PromptText&, Context& ctx)
+        [&call_count, &logs_root](const Node& n, const PromptText&, Context& ctx)
             -> std::expected<LlmResponse, Outcome> {
-            int counter = ctx.current_execution_counter();
-            if (counter == 1) {
-                auto nld = logs_root.path /
-                    (type_safe::get(n.id) + "-" + std::to_string(counter));
-                std::filesystem::create_directories(nld);
-                std::ofstream{nld / "handoff.md"} << "next prompt content";
+            ++call_count;
+            if (call_count == 1) {
+                const int counter = ctx.current_execution_counter();
+                const auto node_dir = logs_root.path /
+                    std::format("{:03d}-{}", counter, type_safe::get(n.id));
+                const auto handoff_subdir = node_dir / "001";
+                std::filesystem::create_directories(handoff_subdir);
+                std::ofstream{handoff_subdir / "handoff.md"} << "next prompt content";
                 return LlmResponse{"wrote handoff"};
             }
             return LlmResponse{"final"};
@@ -109,6 +115,7 @@ SNITCH_TEST_CASE("[handoff_aware] handoff.md triggers second call with file cont
 
     HandoffAwareBackend backend{std::move(mock), logs_root.path};
     Context ctx;
+    (void)ctx.next_execution_counter();  // simulate engine increment
     auto result = backend.run(node, PromptText{"initial"}, ctx);
 
     SNITCH_REQUIRE(result.has_value());
@@ -117,27 +124,29 @@ SNITCH_TEST_CASE("[handoff_aware] handoff.md triggers second call with file cont
     SNITCH_CHECK(mock_ptr->received_prompts[1] == "next prompt content");
     SNITCH_REQUIRE(mock_ptr->observed_counters.size() == 2u);
     SNITCH_CHECK(mock_ptr->observed_counters[0] == 1);
-    SNITCH_CHECK(mock_ptr->observed_counters[1] == 2);
+    SNITCH_CHECK(mock_ptr->observed_counters[1] == 1);  // counter unchanged by HAB
 }
 
-SNITCH_TEST_CASE("[handoff_aware] empty handoff.md returns fail -- 7.19-U-007")
+SNITCH_TEST_CASE("[handoff_aware] empty handoff.md in 001/ returns fail -- 7.20-U-007")
 {
-    TmpDir logs_root{std::filesystem::temp_directory_path() / "att_hab_7_19_007"};
+    TmpDir logs_root{std::filesystem::temp_directory_path() / "att_hab_7_20_007"};
     const Node node = make_node("n007");
 
     auto mock = std::make_unique<MockBackend>(
         [&logs_root](const Node& n, const PromptText&, Context& ctx)
             -> std::expected<LlmResponse, Outcome> {
-            int counter = ctx.current_execution_counter();
-            auto nld = logs_root.path /
-                (type_safe::get(n.id) + "-" + std::to_string(counter));
-            std::filesystem::create_directories(nld);
-            std::ofstream{nld / "handoff.md"};  // empty file
+            const int counter = ctx.current_execution_counter();
+            const auto node_dir = logs_root.path /
+                std::format("{:03d}-{}", counter, type_safe::get(n.id));
+            const auto handoff_subdir = node_dir / "001";
+            std::filesystem::create_directories(handoff_subdir);
+            std::ofstream{handoff_subdir / "handoff.md"};  // empty file
             return LlmResponse{"wrote empty handoff"};
         });
 
     HandoffAwareBackend backend{std::move(mock), logs_root.path};
     Context ctx;
+    (void)ctx.next_execution_counter();
     auto result = backend.run(node, PromptText{"hello"}, ctx);
 
     SNITCH_REQUIRE_FALSE(result.has_value());
@@ -145,25 +154,29 @@ SNITCH_TEST_CASE("[handoff_aware] empty handoff.md returns fail -- 7.19-U-007")
     SNITCH_CHECK(reason.find("empty") != std::string::npos);
 }
 
-SNITCH_TEST_CASE("[handoff_aware] max_handoffs=1 exhausted returns fail -- 7.19-U-008")
+SNITCH_TEST_CASE("[handoff_aware] max_handoffs=1 exhausted returns fail -- 7.20-U-008")
 {
-    TmpDir logs_root{std::filesystem::temp_directory_path() / "att_hab_7_19_008"};
+    TmpDir logs_root{std::filesystem::temp_directory_path() / "att_hab_7_20_008"};
     const Node node = make_node("n008");
 
+    int call_count = 0;
     auto mock = std::make_unique<MockBackend>(
-        [&logs_root](const Node& n, const PromptText&, Context& ctx)
+        [&call_count, &logs_root](const Node& n, const PromptText&, Context& ctx)
             -> std::expected<LlmResponse, Outcome> {
-            int counter = ctx.current_execution_counter();
-            auto nld = logs_root.path /
-                (type_safe::get(n.id) + "-" + std::to_string(counter));
-            std::filesystem::create_directories(nld);
-            std::ofstream{nld / "handoff.md"} << "handoff content";
+            const int idx = ++call_count;
+            const int counter = ctx.current_execution_counter();
+            const auto node_dir = logs_root.path /
+                std::format("{:03d}-{}", counter, type_safe::get(n.id));
+            const auto handoff_subdir = node_dir / std::format("{:03d}", idx);
+            std::filesystem::create_directories(handoff_subdir);
+            std::ofstream{handoff_subdir / "handoff.md"} << "handoff content";
             return LlmResponse{"wrote handoff"};
         });
     MockBackend* mock_ptr = mock.get();
 
     HandoffAwareBackend backend{std::move(mock), logs_root.path, /*max_handoffs=*/1};
     Context ctx;
+    (void)ctx.next_execution_counter();
     auto result = backend.run(node, PromptText{"initial"}, ctx);
 
     SNITCH_REQUIRE_FALSE(result.has_value());
@@ -180,17 +193,19 @@ SNITCH_TEST_CASE("[handoff_aware] max_handoffs=0 inner called once; handoff trig
     auto mock = std::make_unique<MockBackend>(
         [&logs_root](const Node& n, const PromptText&, Context& ctx)
             -> std::expected<LlmResponse, Outcome> {
-            int counter = ctx.current_execution_counter();
-            auto nld = logs_root.path /
-                (type_safe::get(n.id) + "-" + std::to_string(counter));
-            std::filesystem::create_directories(nld);
-            std::ofstream{nld / "handoff.md"} << "handoff content";
+            const int counter = ctx.current_execution_counter();
+            const auto node_dir = logs_root.path /
+                std::format("{:03d}-{}", counter, type_safe::get(n.id));
+            const auto handoff_subdir = node_dir / "001";
+            std::filesystem::create_directories(handoff_subdir);
+            std::ofstream{handoff_subdir / "handoff.md"} << "handoff content";
             return LlmResponse{"wrote handoff"};
         });
     MockBackend* mock_ptr = mock.get();
 
     HandoffAwareBackend backend{std::move(mock), logs_root.path, /*max_handoffs=*/0};
     Context ctx;
+    (void)ctx.next_execution_counter();
     auto result = backend.run(node, PromptText{"initial"}, ctx);
 
     SNITCH_REQUIRE_FALSE(result.has_value());
@@ -213,6 +228,7 @@ SNITCH_TEST_CASE("[handoff_aware] max_handoffs=0 no handoff file returns success
 
     HandoffAwareBackend backend{std::move(mock), logs_root.path, /*max_handoffs=*/0};
     Context ctx;
+    (void)ctx.next_execution_counter();
     auto result = backend.run(node, PromptText{"initial"}, ctx);
 
     SNITCH_REQUIRE(result.has_value());
