@@ -913,6 +913,9 @@ static auto apply_attrs_to_graph(Graph& graph, const std::unordered_map<std::str
             }
             graph.default_fidelity = f;
         }
+        else if (key == "default_thread_id") {
+            graph.default_thread_id = ThreadId{val};
+        }
         else if (key == "retry_target") {
             graph.retry_target = NodeId{val};
         }

@@ -489,3 +489,20 @@ SNITCH_TEST_CASE("[dot_parser] subgraph stamps enclosing_subgraph on contained n
     SNITCH_REQUIRE(base.enclosing_subgraph.has_value());
     SNITCH_CHECK(!base.enclosing_subgraph->empty());
 }
+
+// -- default_thread_id graph attribute (Story 7.4 revised: resolve_thread_key Correctness) --
+
+SNITCH_TEST_CASE("[dot_parser] default_thread_id graph attribute parsed correctly -- 7.4-U-007")
+{
+    const auto result = parse_ok(R"(
+        digraph g {
+            graph [default_thread_id="shared-loop"]
+            start [shape=Mdiamond]
+            work [shape=box]
+            exit [shape=Msquare]
+            start -> work -> exit
+        }
+    )");
+    SNITCH_REQUIRE(result.default_thread_id.has_value());
+    SNITCH_CHECK(type_safe::get(*result.default_thread_id) == "shared-loop");
+}

@@ -93,6 +93,7 @@ struct Graph {
     StylesheetId model_stylesheet;
     MaxRetries default_max_retries{0};
     std::optional<FidelityMode> default_fidelity;
+    std::optional<ThreadId> default_thread_id;
     NodeId retry_target;
     NodeId fallback_retry_target;
     DotfilePath stack_child_dotfile;

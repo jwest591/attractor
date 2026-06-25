@@ -297,6 +297,7 @@ void to_json(nlohmann::json& j, const Graph& g)
     j["default_max_retries"] = nlohmann::json{};
     to_json(j["default_max_retries"], g.default_max_retries);
     opt_to_json(j, "default_fidelity", g.default_fidelity);
+    opt_to_json(j, "default_thread_id", g.default_thread_id);
     j["retry_target"] = nlohmann::json{};
     to_json(j["retry_target"], g.retry_target);
     j["fallback_retry_target"] = nlohmann::json{};
@@ -331,6 +332,14 @@ void from_json(const nlohmann::json& j, Graph& g)
     from_json(j.at("model_stylesheet"), g.model_stylesheet);
     from_json(j.at("default_max_retries"), g.default_max_retries);
     opt_fidelity_from_json(j, "default_fidelity", g.default_fidelity);
+    if (j.contains("default_thread_id") && !j.at("default_thread_id").is_null()) {
+        ThreadId tid{""};
+        from_json(j.at("default_thread_id"), tid);
+        g.default_thread_id = tid;
+    }
+    else {
+        g.default_thread_id = std::nullopt;
+    }
     from_json(j.at("retry_target"), g.retry_target);
     from_json(j.at("fallback_retry_target"), g.fallback_retry_target);
     from_json(j.at("stack_child_dotfile"), g.stack_child_dotfile);

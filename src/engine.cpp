@@ -357,15 +357,16 @@ auto resolve_fidelity(const Node& node, const Edge* incoming_edge, const Graph& 
     return FidelityMode::compact;
 }
 
-auto resolve_thread_key(const Node& node, const Edge* incoming_edge, const Graph& graph) -> ThreadId
+auto resolve_thread_key(const Node& node, const Edge* incoming_edge,
+                        const Graph& graph, const NodeId& previous_node_id) -> ThreadId
 {
-    (void)graph;
-    if (node.thread_id.has_value()) {
-        return *node.thread_id;
+    if (node.thread_id.has_value()) { return *node.thread_id; }
+    if (incoming_edge && incoming_edge->thread_id.has_value()) { return *incoming_edge->thread_id; }
+    if (graph.default_thread_id.has_value()) { return *graph.default_thread_id; }
+    if (node.enclosing_subgraph.has_value()) {
+        return ThreadId{type_safe::get(*node.enclosing_subgraph)};
     }
-    if (incoming_edge && incoming_edge->thread_id.has_value()) {
-        return *incoming_edge->thread_id;
-    }
+    if (!previous_node_id.empty()) { return ThreadId{type_safe::get(previous_node_id)}; }
     return ThreadId{type_safe::get(node.id)};
 }
 

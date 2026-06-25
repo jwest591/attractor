@@ -121,3 +121,25 @@ SNITCH_TEST_CASE("[graph_model] TimeoutDuration storage and retrieval")
     SNITCH_REQUIRE(n.timeout.has_value());
     SNITCH_CHECK(n.timeout->get_value() == milliseconds{900'000});
 }
+
+SNITCH_TEST_CASE("[graph_model] Graph::default_thread_id JSON round-trip with value -- 7.4-U-008")
+{
+    Graph g;
+    g.default_thread_id = ThreadId{"my-thread"};
+    nlohmann::json j;
+    to_json(j, g);
+    Graph restored;
+    from_json(j, restored);
+    SNITCH_REQUIRE(restored.default_thread_id.has_value());
+    SNITCH_CHECK(type_safe::get(*restored.default_thread_id) == "my-thread");
+}
+
+SNITCH_TEST_CASE("[graph_model] Graph::default_thread_id JSON round-trip absent yields nullopt -- 7.4-U-009")
+{
+    Graph g;
+    nlohmann::json j;
+    to_json(j, g);
+    Graph restored;
+    from_json(j, restored);
+    SNITCH_CHECK(!restored.default_thread_id.has_value());
+}

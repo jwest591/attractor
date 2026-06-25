@@ -52,7 +52,8 @@ class Engine {
                                      const Graph& graph) -> FidelityMode;
 
 [[nodiscard]] auto resolve_thread_key(const Node& node, const Edge* incoming_edge,
-                                       const Graph& graph) -> ThreadId;
+                                       const Graph& graph,
+                                       const NodeId& previous_node_id) -> ThreadId;
 
 }  // namespace attractor
 

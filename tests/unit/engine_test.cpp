@@ -453,8 +453,8 @@ SNITCH_TEST_CASE("[engine] resolve_thread_key: shared thread_id maps to same ses
     Node n2;
     n2.id        = NodeId{"implement"};
     n2.thread_id = ThreadId{"loop-a"};
-    const auto key1 = resolve_thread_key(n1, nullptr, g);
-    const auto key2 = resolve_thread_key(n2, nullptr, g);
+    const auto key1 = resolve_thread_key(n1, nullptr, g, NodeId{});
+    const auto key2 = resolve_thread_key(n2, nullptr, g, NodeId{});
     SNITCH_CHECK(type_safe::get(key1) == "loop-a");
     SNITCH_CHECK(type_safe::get(key2) == "loop-a");
     SNITCH_CHECK(type_safe::get(key1) == type_safe::get(key2));
@@ -482,8 +482,81 @@ SNITCH_TEST_CASE("[engine] resolve_thread_key: edge thread_id used when node has
     e.from      = NodeId{"prev"};
     e.to        = NodeId{"work"};
     e.thread_id = ThreadId{"edge-thread"};
-    const auto key = resolve_thread_key(n, &e, g);
+    const auto key = resolve_thread_key(n, &e, g, NodeId{});
     SNITCH_CHECK(type_safe::get(key) == "edge-thread");
+}
+
+// -- resolve_thread_key steps 3-5 (Story 7.4 revised: resolve_thread_key Correctness) --
+
+SNITCH_TEST_CASE("[engine] resolve_thread_key: graph default_thread_id used when node and edge lack thread_id -- 7.4-U-001")
+{
+    Graph g;
+    g.default_thread_id = ThreadId{"graph-default"};
+    Node n;
+    n.id = NodeId{"work"};
+    const auto key = resolve_thread_key(n, nullptr, g, NodeId{});
+    SNITCH_CHECK(type_safe::get(key) == "graph-default");
+}
+
+SNITCH_TEST_CASE("[engine] resolve_thread_key: enclosing_subgraph used when no graph default -- 7.4-U-002")
+{
+    Graph g;
+    Node n;
+    n.id = NodeId{"work"};
+    n.enclosing_subgraph = SubgraphId{"cluster_loop"};
+    const auto key = resolve_thread_key(n, nullptr, g, NodeId{});
+    SNITCH_CHECK(type_safe::get(key) == "cluster_loop");
+}
+
+SNITCH_TEST_CASE("[engine] resolve_thread_key: previous_node_id used as fallback when all others absent -- 7.4-U-003")
+{
+    Graph g;
+    Node n;
+    n.id = NodeId{"work"};
+    const auto key = resolve_thread_key(n, nullptr, g, NodeId{"prev_node"});
+    SNITCH_CHECK(type_safe::get(key) == "prev_node");
+}
+
+SNITCH_TEST_CASE("[engine] resolve_thread_key: node.id used as fallback when previous_node_id is empty (start node) -- 7.4-U-004")
+{
+    Graph g;
+    Node n;
+    n.id = NodeId{"start_node"};
+    const auto key = resolve_thread_key(n, nullptr, g, NodeId{});
+    SNITCH_CHECK(type_safe::get(key) == "start_node");
+}
+
+SNITCH_TEST_CASE("[engine] resolve_thread_key: node thread_id beats graph default_thread_id -- 7.4-U-005")
+{
+    Graph g;
+    g.default_thread_id = ThreadId{"graph-default"};
+    Node n;
+    n.id        = NodeId{"work"};
+    n.thread_id = ThreadId{"node-explicit"};
+    const auto key = resolve_thread_key(n, nullptr, g, NodeId{});
+    SNITCH_CHECK(type_safe::get(key) == "node-explicit");
+}
+
+SNITCH_TEST_CASE("[engine] resolve_thread_key: edge thread_id beats graph default_thread_id -- 7.4-U-NEW")
+{
+    Graph g;
+    g.default_thread_id = ThreadId{"graph-default"};
+    Node n;
+    n.id = NodeId{"work"};
+    Edge e;
+    e.thread_id = ThreadId{"edge-explicit"};
+    const auto key = resolve_thread_key(n, &e, g, NodeId{});
+    SNITCH_CHECK(type_safe::get(key) == "edge-explicit");
+}
+
+SNITCH_TEST_CASE("[engine] resolve_thread_key: enclosing_subgraph beats previous_node_id fallback -- 7.4-U-006")
+{
+    Graph g;
+    Node n;
+    n.id = NodeId{"work"};
+    n.enclosing_subgraph = SubgraphId{"cluster_a"};
+    const auto key = resolve_thread_key(n, nullptr, g, NodeId{"prev"});
+    SNITCH_CHECK(type_safe::get(key) == "cluster_a");
 }
 
 // -- Engine(backend, observer) wiring (Story 5.1) --
