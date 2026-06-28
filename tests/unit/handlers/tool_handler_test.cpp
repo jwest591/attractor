@@ -279,6 +279,82 @@ SNITCH_TEST_CASE("[tool_handler] $goal in tool_command is expanded")
     SNITCH_CHECK(captured_cmd == "status.sh 7.11 --config cfg.yaml");
 }
 
+SNITCH_TEST_CASE("[tool_handler] $context.key.field in tool_command is expanded from context")
+{
+    ScopedTempDir tmp;
+    std::string captured_cmd;
+    ToolHandler h{[&](std::string_view cmd) -> std::string {
+        captured_cmd = std::string(cmd);
+        return "done";
+    }};
+    Context ctx;
+    ctx.merge_updates(nlohmann::json::parse(R"({"tool":{"output":"hello world"}})"));
+    Graph g;
+    RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
+
+    (void)ctx.next_execution_counter();
+    (void)h.execute(make_tool_node("check", "process $context.tool.output --flag"), ctx, g, rc);
+
+    SNITCH_CHECK(captured_cmd == "process hello world --flag");
+}
+
+SNITCH_TEST_CASE("[tool_handler] $context expansion with missing key produces empty string")
+{
+    ScopedTempDir tmp;
+    std::string captured_cmd;
+    ToolHandler h{[&](std::string_view cmd) -> std::string {
+        captured_cmd = std::string(cmd);
+        return "done";
+    }};
+    Context ctx;
+    Graph g;
+    RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
+
+    (void)ctx.next_execution_counter();
+    (void)h.execute(make_tool_node("check", "run $context.missing.key"), ctx, g, rc);
+
+    SNITCH_CHECK(captured_cmd == "run ");
+}
+
+SNITCH_TEST_CASE("[tool_handler] $context expansion with non-string value uses JSON representation")
+{
+    ScopedTempDir tmp;
+    std::string captured_cmd;
+    ToolHandler h{[&](std::string_view cmd) -> std::string {
+        captured_cmd = std::string(cmd);
+        return "done";
+    }};
+    Context ctx;
+    ctx.merge_updates(nlohmann::json::parse(R"({"stats":{"count":42}})"));
+    Graph g;
+    RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
+
+    (void)ctx.next_execution_counter();
+    (void)h.execute(make_tool_node("check", "report $context.stats.count"), ctx, g, rc);
+
+    SNITCH_CHECK(captured_cmd == "report 42");
+}
+
+SNITCH_TEST_CASE("[tool_handler] $context and $goal can both appear in same command")
+{
+    ScopedTempDir tmp;
+    std::string captured_cmd;
+    ToolHandler h{[&](std::string_view cmd) -> std::string {
+        captured_cmd = std::string(cmd);
+        return "done";
+    }};
+    Context ctx;
+    ctx.merge_updates(nlohmann::json::parse(R"({"tool":{"output":"result.txt"}})"));
+    Graph g;
+    g.goal = GoalText{"7.20"};
+    RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
+
+    (void)ctx.next_execution_counter();
+    (void)h.execute(make_tool_node("check", "publish $context.tool.output --story $goal"), ctx, g, rc);
+
+    SNITCH_CHECK(captured_cmd == "publish result.txt --story 7.20");
+}
+
 SNITCH_TEST_CASE("[tool_handler] node.id with path separator returns FAIL")
 {
     ScopedTempDir tmp;

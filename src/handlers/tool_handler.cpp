@@ -5,6 +5,7 @@
 #include <attractor/graph.hpp>
 #include <attractor/handler.hpp>
 #include <attractor/types.hpp>
+#include <cctype>
 #include <cstdio>
 #include <filesystem>
 #include <format>
@@ -16,6 +17,7 @@
 #include <string_view>
 #include <system_error>
 #include <type_safe/strong_typedef.hpp>
+#include <vector>
 
 namespace attractor {
 
@@ -60,6 +62,56 @@ std::string expand_goal(std::string s, const GoalText& goal)
     return s;
 }
 
+std::string expand_context(std::string s, const Context& ctx)
+{
+    const std::string_view prefix = "$context.";
+    std::string::size_type pos = 0;
+    while ((pos = s.find(prefix, pos)) != std::string::npos) {
+        auto end = pos + prefix.size();
+        while (end < s.size() &&
+               (std::isalnum(static_cast<unsigned char>(s[end])) || s[end] == '.' ||
+                s[end] == '_' || s[end] == '-')) {
+            ++end;
+        }
+        const std::string path = s.substr(pos + prefix.size(), end - (pos + prefix.size()));
+        if (path.empty()) {
+            ++pos;
+            continue;
+        }
+
+        // Split dot-separated path; first segment is the ContextKey.
+        std::vector<std::string> parts;
+        std::string::size_type seg_start = 0;
+        std::string::size_type dot;
+        while ((dot = path.find('.', seg_start)) != std::string::npos) {
+            parts.push_back(path.substr(seg_start, dot - seg_start));
+            seg_start = dot + 1;
+        }
+        parts.push_back(path.substr(seg_start));
+
+        nlohmann::json val = ctx.get(ContextKey{parts[0]});
+        for (std::size_t i = 1; i < parts.size(); ++i) {
+            if (val.is_object() && val.contains(parts[i])) {
+                val = val[parts[i]];
+            } else {
+                val = nlohmann::json{};
+                break;
+            }
+        }
+
+        std::string replacement;
+        if (val.is_string()) {
+            replacement = val.get<std::string>();
+        } else if (!val.is_null() && !val.is_discarded()) {
+            replacement = val.dump();
+        }
+
+        s.replace(pos, end - pos, replacement);
+        pos += replacement.size();
+    }
+    return s;
+}
+
 void write_status(const std::filesystem::path& stage_dir, const Outcome& outcome)
 {
     nlohmann::json j;
@@ -97,7 +149,8 @@ auto ToolHandler::execute(const Node& node, Context& ctx, const Graph& graph, co
     }
 
     // safe: engine dispatches ToolHandler only for ToolNode
-    const std::string cmd = expand_goal(type_safe::get(static_cast<const ToolNode&>(node).tool_command), graph.goal);
+    const std::string cmd = expand_context(
+        expand_goal(type_safe::get(static_cast<const ToolNode&>(node).tool_command), graph.goal), ctx);
     std::ofstream{stage_dir / "command.txt"} << cmd;
 
     if (cmd.empty()) {
