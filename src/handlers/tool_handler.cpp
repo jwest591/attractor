@@ -171,6 +171,15 @@ auto ToolHandler::execute(const Node& node, Context& ctx, const Graph& graph, co
         const std::string trimmed = (last == std::string::npos) ? "" : output.substr(0, last + 1);
 
         Outcome out;
+        try {
+            auto parsed = nlohmann::json::parse(trimmed);
+            if (parsed.is_object()) {
+                for (auto& [k, v] : parsed.items()) {
+                    out.context_updates[k] = std::move(v);
+                }
+            }
+        }
+        catch (const nlohmann::json::parse_error&) {}
         out.context_updates["tool"]["output"] = trimmed;
         out.notes = HandlerNote{"Tool completed: " + cmd};
         write_status(stage_dir, out);

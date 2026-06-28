@@ -386,3 +386,69 @@ SNITCH_TEST_CASE("[tool_handler] real popen: stderr is captured to stderr.txt")
     SNITCH_CHECK(read_file(tmp.path / "001-real_run" / "output.txt") == "out");
     SNITCH_CHECK(read_file(tmp.path / "001-real_run" / "stderr.txt") == "err");
 }
+
+SNITCH_TEST_CASE("[tool_handler] JSON object output merges keys into context_updates")
+{
+    ScopedTempDir tmp;
+    ToolHandler h{[](std::string_view) { return R"({"story":"7-5","status":"backlog"})"; }};
+    Context ctx;
+    Graph g;
+    RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
+
+    (void)ctx.next_execution_counter();
+    auto outcome = h.execute(make_tool_node("next_story", "next-story.sh 7 sprint.yaml"), ctx, g, rc);
+
+    SNITCH_CHECK(outcome.status == StageStatus::success);
+    SNITCH_REQUIRE(outcome.context_updates.contains("story"));
+    SNITCH_CHECK(outcome.context_updates["story"].get<std::string>() == "7-5");
+    SNITCH_REQUIRE(outcome.context_updates.contains("status"));
+    SNITCH_CHECK(outcome.context_updates["status"].get<std::string>() == "backlog");
+}
+
+SNITCH_TEST_CASE("[tool_handler] JSON object output still sets tool.output to raw string")
+{
+    ScopedTempDir tmp;
+    const std::string json_out = R"({"story":"7-5"})";
+    ToolHandler h{[&](std::string_view) { return json_out; }};
+    Context ctx;
+    Graph g;
+    RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
+
+    (void)ctx.next_execution_counter();
+    auto outcome = h.execute(make_tool_node("next_story", "cmd"), ctx, g, rc);
+
+    SNITCH_REQUIRE(outcome.context_updates.contains("tool"));
+    SNITCH_CHECK(outcome.context_updates["tool"]["output"].get<std::string>() == json_out);
+}
+
+SNITCH_TEST_CASE("[tool_handler] non-JSON plain text output is not merged -- only tool.output set")
+{
+    ScopedTempDir tmp;
+    ToolHandler h{[](std::string_view) { return "backlog\n"; }};
+    Context ctx;
+    Graph g;
+    RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
+
+    (void)ctx.next_execution_counter();
+    auto outcome = h.execute(make_tool_node("check", "cmd"), ctx, g, rc);
+
+    SNITCH_CHECK(outcome.status == StageStatus::success);
+    SNITCH_CHECK(outcome.context_updates.size() == 1);
+    SNITCH_CHECK(outcome.context_updates["tool"]["output"].get<std::string>() == "backlog");
+}
+
+SNITCH_TEST_CASE("[tool_handler] JSON array output is not merged -- only tool.output set")
+{
+    ScopedTempDir tmp;
+    ToolHandler h{[](std::string_view) { return R"(["a","b"])"; }};
+    Context ctx;
+    Graph g;
+    RunConfig rc{.logs_root = LogsRoot{tmp.path.string()}};
+
+    (void)ctx.next_execution_counter();
+    auto outcome = h.execute(make_tool_node("check", "cmd"), ctx, g, rc);
+
+    SNITCH_CHECK(outcome.status == StageStatus::success);
+    SNITCH_CHECK(outcome.context_updates.size() == 1);
+    SNITCH_CHECK(outcome.context_updates["tool"]["output"].get<std::string>() == R"(["a","b"])");
+}

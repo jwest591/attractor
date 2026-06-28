@@ -74,8 +74,7 @@ result=$(awk -v epic="$EPIC" '
 ' "$SPRINT_FILE")
 
 if [ -z "$result" ]; then
-    echo "UNKNOWN"
     exit 1
 fi
 
-echo "$result"
+jq -n --arg story "$result" '{"story":$story}'
