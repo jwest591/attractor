@@ -3,10 +3,15 @@
 #
 # Usage: story-status.sh <story-id> <sprint-status-file>
 #
-# Matches any key under development_status whose name equals <story-id> or
-# starts with <story-id>- (e.g. "7-4" matches both "7-4-engine-correctness-
-# hardening" and "7-4-resolve-thread-key"). If the id appears multiple times,
-# returns the first status that is not "done", or "done" if all are "done".
+# Accepts both short and long form story ids:
+#   short: "1-3"
+#   long:  "1-3-zustand-stores"
+#
+# Both forms match any YAML key that equals the short prefix or starts with
+# the short prefix followed by "-" (e.g. "1-3" and "1-3-zustand-stores" both
+# match "1-3", "1-3-zustand-stores", and "1-3-engine-correctness-hardening").
+# If the id appears multiple times, returns the first status that is not
+# "done", or "done" if all are "done".
 #
 # Exit codes:
 #   0  status printed to stdout
@@ -28,9 +33,13 @@ if [ ! -f "$SPRINT_FILE" ]; then
     exit 2
 fi
 
-# Extract statuses for all keys that equal story-id or start with story-id-.
+# Normalize to short form: extract the leading "<epic>-<story>" numeric prefix.
+# "1-3-zustand-stores" -> "1-3";  "1-3" -> "1-3" (unchanged).
+MATCH_ID=$(printf '%s' "$STORY_ID" | sed 's/^\([0-9][0-9]*-[0-9][0-9]*\).*/\1/')
+
+# Extract statuses for all keys that equal match-id or start with match-id-.
 # Lines look like: "  key: value  # optional comment"
-statuses=$(awk -v id="$STORY_ID" '
+statuses=$(awk -v id="$MATCH_ID" '
     {
         line = $0
         # Skip blank lines and comment-only lines
@@ -60,7 +69,7 @@ statuses=$(awk -v id="$STORY_ID" '
 ' "$SPRINT_FILE")
 
 if [ -z "$statuses" ]; then
-    echo "not found: $STORY_ID" >&2
+    echo "not found: $STORY_ID (matched as: $MATCH_ID)" >&2
     exit 1
 fi
 
