@@ -40,6 +40,11 @@ Context ceiling is also enforced by a separate PreToolUse hook. If you cross
 the hard critical threshold (default 90%), all tool calls will be denied — at
 that point write a handoff summary following the hook prompt instructions and stop, 
 do not retry.
+
+This session operates as part of a pipeline.  Current pipeline status can be read 
+from "$ATTRACTOR_NODE_LOG_DIR/../checkpoint.json".  In particular, there is a "context"
+object in this json file which may be referenced from your prompt 
+e.g. "checkpoint.json:context.tool.output"
 </system-reminder>
 EOF
 
