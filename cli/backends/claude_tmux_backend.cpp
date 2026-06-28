@@ -362,6 +362,8 @@ auto ClaudeCodeTmuxBackend::run(const Node& node, const PromptText& prompt, Cont
     int handoff_count = 0;
     int rate_limit_retries = 0;
     constexpr int k_max_rate_limit_retries = 1;
+    int session_limit_retries = 0;
+    constexpr int k_max_session_limit_retries = 1;
 
     while (true) {
         if (std::chrono::steady_clock::now() >= deadline) {
@@ -495,6 +497,52 @@ auto ClaudeCodeTmuxBackend::run(const Node& node, const PromptText& prompt, Cont
                 jsonl_path     = std::move(*new_jsonl);
                 accumulated_tokens = 0;
                 jsonl_offset   = 0;
+                continue;
+            }
+
+            if (etype == "session_limit" && session_limit_retries < k_max_session_limit_retries) {
+                ++session_limit_retries;
+                std::println(stderr, "[attractor] session limit: {}", emsg);
+
+                auto sleep_dur = std::chrono::seconds{3600};
+                if (auto parsed = parse_rate_limit_reset(emsg)) {
+                    sleep_dur = compute_reset_sleep(parsed->first, parsed->second);
+                    std::println(stderr, "[attractor] waiting until {} ({}) then resuming in same session...",
+                                 parsed->first, parsed->second);
+                }
+                else {
+                    std::println(stderr, "[attractor] could not parse reset time, sleeping 1 hour");
+                }
+
+                deadline += sleep_dur;
+
+                std::error_code ec;
+                std::filesystem::remove(done_file, ec);
+                // Do NOT remove transcript_txt -- same Claude session, full context preserved.
+
+                // Press Enter immediately to dismiss the session-limit prompt before sleeping.
+                const std::string sl_enter =
+                    std::format("{} send-keys -t {}:{} Enter", m_tmux_bin, m_session_id, window_name);
+                if (tmux_system(sl_enter) != 0) {
+                    return std::unexpected(Outcome::fail(
+                        DiagnosticMessage{"tmux: session limit resume: Enter send-keys failed for " + window_name}));
+                }
+
+                if (m_sleep_fn) { m_sleep_fn(sleep_dur); }
+                else { std::this_thread::sleep_for(sleep_dur); }
+
+                // Send "continue" to tell Claude to pick up where it left off.
+                const std::string sl_continue_text =
+                    std::format("{} send-keys -t {}:{} -l {}", m_tmux_bin, m_session_id, window_name,
+                                shell_escape("continue"));
+                const std::string sl_continue_enter =
+                    std::format("{} send-keys -t {}:{} Enter", m_tmux_bin, m_session_id, window_name);
+                if (tmux_system(sl_continue_text) != 0 || tmux_system(sl_continue_enter) != 0) {
+                    return std::unexpected(Outcome::fail(
+                        DiagnosticMessage{"tmux: session limit resume: continue send-keys failed for " + window_name}));
+                }
+
+                accumulated_tokens = 0;
                 continue;
             }
 

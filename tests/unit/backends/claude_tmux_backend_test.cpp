@@ -383,6 +383,42 @@ std::string make_rate_limit_script(const std::string& ndl_file,
         "exit 1\n";
 }
 
+// Builds a session_limit mock script. new-window writes transcript.txt + the initial done.json,
+// saves NDL to ndl_file. send-keys Enter counts invocations (counter_file). When the count
+// reaches enter_threshold, it overwrites done.json with recovery_done_json -- transcript.txt is
+// intentionally left unchanged because the session resumes in place.
+std::string make_session_limit_script(const std::string& ndl_file,
+                                      const std::string& counter_file,
+                                      const std::string& initial_done_json,
+                                      int enter_threshold,
+                                      const std::string& recovery_done_json)
+{
+    return std::string{k_mock_preamble_no_sk} +
+        "    if [ -n \"$NDL\" ]; then\n"
+        "      mkdir -p \"$NDL\"\n"
+        "      printf '%s\\n' \"$NDL\" > '" + ndl_file + "'\n"
+        "      printf 'started\\n' > \"$NDL/transcript.txt\"\n"
+        "      printf '%s\\n' '" + initial_done_json + "' > \"$NDL/done.json\"\n"
+        "      printf '0' > '" + counter_file + "'\n"
+        "    fi\n"
+        "    exit 0\n"
+        "    ;;\n"
+        "  send-keys)\n"
+        "    if [ \"${@: -1}\" = \"Enter\" ]; then\n"
+        "      count=$(cat '" + counter_file + "' 2>/dev/null || printf '0')\n"
+        "      count=$((count + 1))\n"
+        "      printf '%s' \"$count\" > '" + counter_file + "'\n"
+        "      if [ \"$count\" -ge " + std::to_string(enter_threshold) + " ]; then\n"
+        "        ndl=$(cat '" + ndl_file + "')\n"
+        "        printf '%s\\n' '" + recovery_done_json + "' > \"$ndl/done.json\"\n"
+        "      fi\n"
+        "    fi\n"
+        "    exit 0\n"
+        "    ;;\n"
+        "esac\n"
+        "exit 1\n";
+}
+
 SNITCH_TEST_CASE("[claude_tmux] rate_limit followed by ok recovers cleanly -- rate-limit-U-001")
 {
     auto script       = std::filesystem::temp_directory_path() / "att_tmux_rl_u001.sh";
@@ -447,4 +483,77 @@ SNITCH_TEST_CASE("[claude_tmux] rate_limit exhausts retries and returns fail -- 
     SNITCH_CHECK(result.error().status == StageStatus::fail);
     const auto& reason = type_safe::get(result.error().failure_reason);
     SNITCH_CHECK(reason.find("rate_limit") != std::string::npos);
+}
+
+// ---------------------------------------------------------------------------
+// Session limit recovery / exhaustion behavior tests
+//
+// Enter count breakdown: initial send_enter=1, clear_enter=2, continue_enter=3.
+// Recovery triggers at enter_threshold=3 (after the "continue" Enter is sent).
+// transcript.txt is NOT replaced -- the mock only rewrites done.json.
+// ---------------------------------------------------------------------------
+
+SNITCH_TEST_CASE("[claude_tmux] session_limit followed by ok recovers with Enter+continue -- session-limit-U-001")
+{
+    auto script       = std::filesystem::temp_directory_path() / "att_tmux_sl_u001.sh";
+    auto counter_file = std::filesystem::temp_directory_path() / "att_tmux_sl_u001_count";
+    auto ndl_file     = std::filesystem::temp_directory_path() / "att_tmux_sl_u001_ndl";
+    TmpFile g_script{script};
+    TmpFile g_counter{counter_file};
+    TmpFile g_ndl{ndl_file};
+    TmpDir  logs_root{std::filesystem::temp_directory_path() / "att_logs_sl_u001"};
+
+    // new-window writes session_limit; third Enter (continue Enter) writes ok.
+    // transcript.txt is left intact -- session resumes in place, no new transcript needed.
+    write_script(script, make_session_limit_script(
+        ndl_file.string(), counter_file.string(),
+        R"json({"status":"error","error_type":"session_limit","message":"session limit resets 12:00am (UTC)"})json",
+        3,
+        R"json({"status":"ok","message":"session resumed"})json"));
+
+    std::chrono::seconds slept{0};
+    ClaudeCodeTmuxBackend backend{script.string(), logs_root.path, 0, 0,
+                                  [&slept](std::chrono::seconds d) { slept = d; }};
+    Node node{};
+    node.id = NodeId{"n_sl1"};
+    Context ctx;
+    SNITCH_CHECK(ctx.next_execution_counter() == 1);
+
+    auto result = backend.run(node, PromptText{"hello"}, ctx);
+
+    SNITCH_REQUIRE(result.has_value());
+    SNITCH_CHECK(type_safe::get(*result) == "session resumed");
+    SNITCH_CHECK(slept.count() > 0);
+}
+
+SNITCH_TEST_CASE("[claude_tmux] session_limit exhausts retries and returns fail -- session-limit-U-002")
+{
+    auto script       = std::filesystem::temp_directory_path() / "att_tmux_sl_u002.sh";
+    auto counter_file = std::filesystem::temp_directory_path() / "att_tmux_sl_u002_count";
+    auto ndl_file     = std::filesystem::temp_directory_path() / "att_tmux_sl_u002_ndl";
+    TmpFile g_script{script};
+    TmpFile g_counter{counter_file};
+    TmpFile g_ndl{ndl_file};
+    TmpDir  logs_root{std::filesystem::temp_directory_path() / "att_logs_sl_u002"};
+
+    // Both the initial and resumed done.json report session_limit -- retries exhausted.
+    write_script(script, make_session_limit_script(
+        ndl_file.string(), counter_file.string(),
+        R"json({"status":"error","error_type":"session_limit","message":"still limited"})json",
+        3,
+        R"json({"status":"error","error_type":"session_limit","message":"still limited"})json"));
+
+    ClaudeCodeTmuxBackend backend{script.string(), logs_root.path, 0, 0,
+                                  [](std::chrono::seconds) {}};
+    Node node{};
+    node.id = NodeId{"n_sl2"};
+    Context ctx;
+    SNITCH_CHECK(ctx.next_execution_counter() == 1);
+
+    auto result = backend.run(node, PromptText{"hello"}, ctx);
+
+    SNITCH_REQUIRE_FALSE(result.has_value());
+    SNITCH_CHECK(result.error().status == StageStatus::fail);
+    const auto& reason = type_safe::get(result.error().failure_reason);
+    SNITCH_CHECK(reason.find("session_limit") != std::string::npos);
 }
