@@ -227,14 +227,15 @@ struct TmuxWindow {
     // tmux 3.0+ supports -e on new-window; injects ATTRACTOR_NODE_LOG_DIR and ATTRACTOR_CONTEXT_CRITICAL
     // shell_escape guards window name and log dir against paths with spaces or metacharacters
     TmuxWindow(std::string tmux_cmd, std::string session, std::string window, const std::string& node_log_dir,
-               int context_critical_pct)
+               int context_critical_pct, const std::string& scripts_dir)
         : m_tmux_cmd{std::move(tmux_cmd)}
         , m_session{std::move(session)}
         , m_window{std::move(window)}
     {
         tmux_system(std::format(
-            "{} new-window -t {} -n {} -e ATTRACTOR_NODE_LOG_DIR={} -e ATTRACTOR_CONTEXT_CRITICAL={}", m_tmux_cmd,
-            m_session, shell_escape(m_window), shell_escape(node_log_dir), context_critical_pct));
+            "{} new-window -t {} -n {} -e ATTRACTOR_NODE_LOG_DIR={} -e ATTRACTOR_CONTEXT_CRITICAL={} -e ATTRACTOR_SCRIPTS_DIR={}",
+            m_tmux_cmd, m_session, shell_escape(m_window), shell_escape(node_log_dir), context_critical_pct,
+            shell_escape(scripts_dir)));
     }
 
     ~TmuxWindow()
@@ -304,7 +305,7 @@ auto ClaudeCodeTmuxBackend::run(const Node& node, const PromptText& prompt, Cont
     const std::string window_name = std::format("{:03d}-{}", counter, type_safe::get(node.id));
 
     // RAII: destructor kills window on all exit paths
-    TmuxWindow window{m_tmux_bin, m_session_id, window_name, session_dir, m_context_critical_pct};
+    TmuxWindow window{m_tmux_bin, m_session_id, window_name, session_dir, m_context_critical_pct, m_scripts_dir};
 
     const std::string settings_path = m_scripts_dir + "/att-tmux-backend.settings.json";
     const std::string claude_cmd = "claude " + shell_escape(type_safe::get(prompt)) + " --settings " +

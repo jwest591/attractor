@@ -4,181 +4,181 @@
   "skipDangerousModePermissionPrompt": true,
   "statusLine": {
     "type": "command",
-    "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/att-status-line.sh'",
+    "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/att-status-line.sh'",
     "padding": 0
   },
   "hooks": {
     "SessionStart": [
-      { "matcher": "*",       "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh SessionStart star'" } ] },
+      { "matcher": "*",       "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh SessionStart star'" } ] },
       { "matcher": "startup", "hooks": [
-        { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/att-session-start.sh'", "timeout": 5000 },
-        { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh SessionStart startup'" }
+        { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/att-session-start.sh'", "timeout": 5000 },
+        { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh SessionStart startup'" }
       ]},
-      { "matcher": "resume",  "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh SessionStart resume'" } ] },
-      { "matcher": "clear",   "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh SessionStart clear'" } ] },
-      { "matcher": "compact", "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh SessionStart compact'" } ] }
+      { "matcher": "resume",  "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh SessionStart resume'" } ] },
+      { "matcher": "clear",   "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh SessionStart clear'" } ] },
+      { "matcher": "compact", "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh SessionStart compact'" } ] }
     ],
 
     "InstructionsLoaded": [
-      { "matcher": "*",                "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh InstructionsLoaded star'" } ] },
-      { "matcher": "session_start",    "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh InstructionsLoaded session_start'" } ] },
-      { "matcher": "nested_traversal", "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh InstructionsLoaded nested_traversal'" } ] },
-      { "matcher": "path_glob_match",  "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh InstructionsLoaded path_glob_match'" } ] },
-      { "matcher": "include",          "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh InstructionsLoaded include'" } ] },
-      { "matcher": "compact",          "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh InstructionsLoaded compact'" } ] }
+      { "matcher": "*",                "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh InstructionsLoaded star'" } ] },
+      { "matcher": "session_start",    "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh InstructionsLoaded session_start'" } ] },
+      { "matcher": "nested_traversal", "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh InstructionsLoaded nested_traversal'" } ] },
+      { "matcher": "path_glob_match",  "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh InstructionsLoaded path_glob_match'" } ] },
+      { "matcher": "include",          "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh InstructionsLoaded include'" } ] },
+      { "matcher": "compact",          "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh InstructionsLoaded compact'" } ] }
     ],
 
     "UserPromptSubmit": [
-      { "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh UserPromptSubmit'" } ] }
+      { "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh UserPromptSubmit'" } ] }
     ],
 
     "PreToolUse": [
       { "matcher": "*",         "hooks": [
-        { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh PreToolUse star'" },
-        { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/att-pretooluse.sh'", "timeout": 5000 }
+        { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh PreToolUse star'" },
+        { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/att-pretooluse.sh'", "timeout": 5000 }
       ]},
-      { "matcher": "TodoWrite", "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh PreToolUse TodoWrite'" } ] },
-      { "matcher": "Bash",      "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh PreToolUse Bash'" } ] },
-      { "matcher": "Task",      "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh PreToolUse Task'" } ] }
+      { "matcher": "TodoWrite", "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh PreToolUse TodoWrite'" } ] },
+      { "matcher": "Bash",      "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh PreToolUse Bash'" } ] },
+      { "matcher": "Task",      "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh PreToolUse Task'" } ] }
     ],
 
     "PermissionRequest": [
-      { "matcher": "*",     "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh PermissionRequest star'" } ] },
-      { "matcher": "Bash",  "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh PermissionRequest Bash'" } ] },
-      { "matcher": "Edit",  "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh PermissionRequest Edit'" } ] },
-      { "matcher": "Write", "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh PermissionRequest Write'" } ] },
-      { "matcher": "Task",  "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh PermissionRequest Task'" } ] }
+      { "matcher": "*",     "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh PermissionRequest star'" } ] },
+      { "matcher": "Bash",  "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh PermissionRequest Bash'" } ] },
+      { "matcher": "Edit",  "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh PermissionRequest Edit'" } ] },
+      { "matcher": "Write", "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh PermissionRequest Write'" } ] },
+      { "matcher": "Task",  "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh PermissionRequest Task'" } ] }
     ],
 
     "PermissionDenied": [
-      { "matcher": "*",     "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh PermissionDenied star'" } ] },
-      { "matcher": "Bash",  "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh PermissionDenied Bash'" } ] },
-      { "matcher": "Edit",  "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh PermissionDenied Edit'" } ] },
-      { "matcher": "Write", "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh PermissionDenied Write'" } ] },
-      { "matcher": "Task",  "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh PermissionDenied Task'" } ] }
+      { "matcher": "*",     "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh PermissionDenied star'" } ] },
+      { "matcher": "Bash",  "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh PermissionDenied Bash'" } ] },
+      { "matcher": "Edit",  "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh PermissionDenied Edit'" } ] },
+      { "matcher": "Write", "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh PermissionDenied Write'" } ] },
+      { "matcher": "Task",  "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh PermissionDenied Task'" } ] }
     ],
 
     "PostToolUse": [
-      { "matcher": "*",         "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh PostToolUse star'" } ] },
-      { "matcher": "TodoWrite", "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh PostToolUse TodoWrite'" } ] },
-      { "matcher": "Bash",      "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh PostToolUse Bash'" } ] },
-      { "matcher": "Task",      "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh PostToolUse Task'" } ] }
+      { "matcher": "*",         "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh PostToolUse star'" } ] },
+      { "matcher": "TodoWrite", "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh PostToolUse TodoWrite'" } ] },
+      { "matcher": "Bash",      "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh PostToolUse Bash'" } ] },
+      { "matcher": "Task",      "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh PostToolUse Task'" } ] }
     ],
 
     "PostToolUseFailure": [
-      { "matcher": "*",     "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh PostToolUseFailure star'" } ] },
-      { "matcher": "Bash",  "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh PostToolUseFailure Bash'" } ] },
-      { "matcher": "Edit",  "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh PostToolUseFailure Edit'" } ] },
-      { "matcher": "Write", "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh PostToolUseFailure Write'" } ] },
-      { "matcher": "Task",  "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh PostToolUseFailure Task'" } ] }
+      { "matcher": "*",     "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh PostToolUseFailure star'" } ] },
+      { "matcher": "Bash",  "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh PostToolUseFailure Bash'" } ] },
+      { "matcher": "Edit",  "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh PostToolUseFailure Edit'" } ] },
+      { "matcher": "Write", "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh PostToolUseFailure Write'" } ] },
+      { "matcher": "Task",  "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh PostToolUseFailure Task'" } ] }
     ],
 
     "Notification": [
-      { "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh Notification'" } ] }
+      { "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh Notification'" } ] }
     ],
 
     "SubagentStart": [
-      { "matcher": "*",               "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh SubagentStart star'" } ] },
-      { "matcher": "Explore",         "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh SubagentStart Explore'" } ] },
-      { "matcher": "Plan",            "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh SubagentStart Plan'" } ] },
-      { "matcher": "general-purpose", "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh SubagentStart general-purpose'" } ] }
+      { "matcher": "*",               "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh SubagentStart star'" } ] },
+      { "matcher": "Explore",         "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh SubagentStart Explore'" } ] },
+      { "matcher": "Plan",            "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh SubagentStart Plan'" } ] },
+      { "matcher": "general-purpose", "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh SubagentStart general-purpose'" } ] }
     ],
 
     "SubagentStop": [
-      { "matcher": "*",               "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh SubagentStop star'" } ] },
-      { "matcher": "Explore",         "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh SubagentStop Explore'" } ] },
-      { "matcher": "Plan",            "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh SubagentStop Plan'" } ] },
-      { "matcher": "general-purpose", "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh SubagentStop general-purpose'" } ] }
+      { "matcher": "*",               "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh SubagentStop star'" } ] },
+      { "matcher": "Explore",         "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh SubagentStop Explore'" } ] },
+      { "matcher": "Plan",            "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh SubagentStop Plan'" } ] },
+      { "matcher": "general-purpose", "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh SubagentStop general-purpose'" } ] }
     ],
 
     "TaskCreated": [
-      { "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh TaskCreated'" } ] }
+      { "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh TaskCreated'" } ] }
     ],
 
     "TaskCompleted": [
-      { "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh TaskCompleted'" } ] }
+      { "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh TaskCompleted'" } ] }
     ],
 
     "Stop": [
       { "hooks": [
-        { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh Stop'" },
-        { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/att-stop.sh'", "timeout": 5000 }
+        { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh Stop'" },
+        { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/att-stop.sh'", "timeout": 5000 }
       ]}
     ],
 
     "StopFailure": [
       { "matcher": "*",                     "hooks": [
-        { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh StopFailure star'" },
-        { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/att-stop.sh'", "timeout": 5000 }
+        { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh StopFailure star'" },
+        { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/att-stop.sh'", "timeout": 5000 }
       ]},
-      { "matcher": "rate_limit",            "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh StopFailure rate_limit'" } ] },
-      { "matcher": "overloaded",            "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh StopFailure overloaded'" } ] },
-      { "matcher": "authentication_failed", "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh StopFailure authentication_failed'" } ] },
-      { "matcher": "oauth_org_not_allowed", "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh StopFailure oauth_org_not_allowed'" } ] },
-      { "matcher": "billing_error",         "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh StopFailure billing_error'" } ] },
-      { "matcher": "invalid_request",       "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh StopFailure invalid_request'" } ] },
-      { "matcher": "model_not_found",       "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh StopFailure model_not_found'" } ] },
-      { "matcher": "server_error",          "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh StopFailure server_error'" } ] },
-      { "matcher": "max_output_tokens",     "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh StopFailure max_output_tokens'" } ] },
-      { "matcher": "unknown",               "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh StopFailure unknown'" } ] }
+      { "matcher": "rate_limit",            "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh StopFailure rate_limit'" } ] },
+      { "matcher": "overloaded",            "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh StopFailure overloaded'" } ] },
+      { "matcher": "authentication_failed", "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh StopFailure authentication_failed'" } ] },
+      { "matcher": "oauth_org_not_allowed", "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh StopFailure oauth_org_not_allowed'" } ] },
+      { "matcher": "billing_error",         "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh StopFailure billing_error'" } ] },
+      { "matcher": "invalid_request",       "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh StopFailure invalid_request'" } ] },
+      { "matcher": "model_not_found",       "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh StopFailure model_not_found'" } ] },
+      { "matcher": "server_error",          "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh StopFailure server_error'" } ] },
+      { "matcher": "max_output_tokens",     "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh StopFailure max_output_tokens'" } ] },
+      { "matcher": "unknown",               "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh StopFailure unknown'" } ] }
     ],
 
     "TeammateIdle": [
-      { "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh TeammateIdle'" } ] }
+      { "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh TeammateIdle'" } ] }
     ],
 
     "ConfigChange": [
-      { "matcher": "*",                "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh ConfigChange star'" } ] },
-      { "matcher": "user_settings",    "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh ConfigChange user_settings'" } ] },
-      { "matcher": "project_settings", "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh ConfigChange project_settings'" } ] },
-      { "matcher": "local_settings",   "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh ConfigChange local_settings'" } ] },
-      { "matcher": "policy_settings",  "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh ConfigChange policy_settings'" } ] },
-      { "matcher": "skills",           "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh ConfigChange skills'" } ] }
+      { "matcher": "*",                "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh ConfigChange star'" } ] },
+      { "matcher": "user_settings",    "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh ConfigChange user_settings'" } ] },
+      { "matcher": "project_settings", "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh ConfigChange project_settings'" } ] },
+      { "matcher": "local_settings",   "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh ConfigChange local_settings'" } ] },
+      { "matcher": "policy_settings",  "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh ConfigChange policy_settings'" } ] },
+      { "matcher": "skills",           "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh ConfigChange skills'" } ] }
     ],
 
     "CwdChanged": [
-      { "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh CwdChanged'" } ] }
+      { "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh CwdChanged'" } ] }
     ],
 
     "FileChanged": [
-      { "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh FileChanged'" } ] }
+      { "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh FileChanged'" } ] }
     ],
 
     "PreCompact": [
-      { "matcher": "manual", "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh PreCompact manual'" } ] },
-      { "matcher": "auto",   "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh PreCompact auto'" } ] }
+      { "matcher": "manual", "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh PreCompact manual'" } ] },
+      { "matcher": "auto",   "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh PreCompact auto'" } ] }
     ],
 
     "PostCompact": [
-      { "matcher": "*",      "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh PostCompact star'" } ] },
-      { "matcher": "manual", "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh PostCompact manual'" } ] },
-      { "matcher": "auto",   "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh PostCompact auto'" } ] }
+      { "matcher": "*",      "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh PostCompact star'" } ] },
+      { "matcher": "manual", "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh PostCompact manual'" } ] },
+      { "matcher": "auto",   "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh PostCompact auto'" } ] }
     ],
 
     "Elicitation": [
-      { "matcher": "*", "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh Elicitation star'" } ] }
+      { "matcher": "*", "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh Elicitation star'" } ] }
     ],
 
     "ElicitationResult": [
-      { "matcher": "*", "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh ElicitationResult star'" } ] }
+      { "matcher": "*", "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh ElicitationResult star'" } ] }
     ],
 
     "SessionEnd": [
-      { "matcher": "*",                           "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh SessionEnd star'" } ] },
-      { "matcher": "clear",                       "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh SessionEnd clear'" } ] },
-      { "matcher": "resume",                      "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh SessionEnd resume'" } ] },
-      { "matcher": "logout",                      "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh SessionEnd logout'" } ] },
-      { "matcher": "prompt_input_exit",           "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh SessionEnd prompt_input_exit'" } ] },
-      { "matcher": "bypass_permissions_disabled", "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh SessionEnd bypass_permissions_disabled'" } ] },
-      { "matcher": "other",                       "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh SessionEnd other'" } ] }
+      { "matcher": "*",                           "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh SessionEnd star'" } ] },
+      { "matcher": "clear",                       "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh SessionEnd clear'" } ] },
+      { "matcher": "resume",                      "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh SessionEnd resume'" } ] },
+      { "matcher": "logout",                      "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh SessionEnd logout'" } ] },
+      { "matcher": "prompt_input_exit",           "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh SessionEnd prompt_input_exit'" } ] },
+      { "matcher": "bypass_permissions_disabled", "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh SessionEnd bypass_permissions_disabled'" } ] },
+      { "matcher": "other",                       "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh SessionEnd other'" } ] }
     ],
 
     "WorktreeCreate": [
-      { "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh WorktreeCreate'" } ] }
+      { "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh WorktreeCreate'" } ] }
     ],
 
     "WorktreeRemove": [
-      { "hooks": [ { "type": "command", "command": "sh -c '$CLAUDE_PROJECT_DIR/cli/scripts/logger.sh WorktreeRemove'" } ] }
+      { "hooks": [ { "type": "command", "command": "sh -c '$ATTRACTOR_SCRIPTS_DIR/logger.sh WorktreeRemove'" } ] }
     ]
   }
 }

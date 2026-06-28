@@ -204,6 +204,8 @@ struct SubprocessResult {
 
         // NOLINTNEXTLINE(concurrency-mt-unsafe) -- child process only
         setenv("ATTRACTOR_NODE_LOG_DIR", node_log_dir_str.c_str(), 1);
+        // NOLINTNEXTLINE(concurrency-mt-unsafe) -- child process only
+        setenv("ATTRACTOR_SCRIPTS_DIR", scripts_dir.c_str(), 1);
 
         const std::string settings_path = scripts_dir + "/att-headless-backend.settings.json";
         const std::string shell_cmd =
