@@ -27,7 +27,7 @@
 # - Mark story 'done' after review passes; then move to next story
 
 generated: 2026-06-28
-last_updated: 2026-06-29  # 2-7-file-operations-new-open-and-save review
+last_updated: 2026-06-29  # 2-8-undo-and-redo review
 project: attractor-webui
 project_key: WEBUI
 tracking_system: file-system
@@ -51,7 +51,7 @@ development_status:
   2-5-property-panels-node-edge-graph-and-subgraph: review
   2-6-dot-text-pane-with-bidirectional-sync-and-parse-error-handling: review
   2-7-file-operations-new-open-and-save: review
-  2-8-undo-and-redo: backlog
+  2-8-undo-and-redo: review
   2-9-continuous-lint-canvas-markers-and-lint-gate-on-save: backlog
   epic-2-retrospective: optional
 
