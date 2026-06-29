@@ -27,7 +27,7 @@
 # - Mark story 'done' after review passes; then move to next story
 
 generated: 2026-06-28
-last_updated: 2026-06-29  # 2-5-property-panels-node-edge-graph-and-subgraph review
+last_updated: 2026-06-29  # 2-6-dot-text-pane-with-bidirectional-sync-and-parse-error-handling review
 project: attractor-webui
 project_key: WEBUI
 tracking_system: file-system
@@ -49,7 +49,7 @@ development_status:
   2-3-shape-palette-and-node-edge-creation-and-deletion: review
   2-4-auto-layout-and-subgraph-support: review
   2-5-property-panels-node-edge-graph-and-subgraph: review
-  2-6-dot-text-pane-with-bidirectional-sync-and-parse-error-handling: backlog
+  2-6-dot-text-pane-with-bidirectional-sync-and-parse-error-handling: review
   2-7-file-operations-new-open-and-save: backlog
   2-8-undo-and-redo: backlog
   2-9-continuous-lint-canvas-markers-and-lint-gate-on-save: backlog
