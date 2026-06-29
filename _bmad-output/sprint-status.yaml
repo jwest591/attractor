@@ -1,0 +1,69 @@
+# Sprint Status — attractor-webui
+# generated: 2026-06-28
+# last_updated: 2026-06-28
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created, ready for development
+#   - in-progress: Developer actively working on implementation
+#   - review: Implementation complete, ready for review
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Mark epic as 'in-progress' when starting work on its first story
+# - Dev moves story to 'review', then runs code-review (fresh context, ideally different LLM)
+# - Mark story 'done' after review passes; then move to next story
+
+generated: 2026-06-28
+last_updated: 2026-06-29  # 2-1-app-shell-and-split-pane-layout ready for review
+project: attractor-webui
+project_key: WEBUI
+tracking_system: file-system
+story_location: "_bmad-output/stories"
+
+development_status:
+  epic-1: in-progress
+  1-1-initialise-project-and-install-dependencies: done
+  1-2-core-typescript-types: done
+  1-3-zustand-stores: done
+  1-4-dot-parser: done
+  1-5-dot-serializer: done
+  1-6-lint-engine: done
+  epic-1-retrospective: optional
+
+  epic-2: in-progress
+  2-1-app-shell-and-split-pane-layout: review
+  2-2-react-flow-canvas-with-custom-node-renderers: backlog
+  2-3-shape-palette-and-node-edge-creation-and-deletion: backlog
+  2-4-auto-layout-and-subgraph-support: backlog
+  2-5-property-panels-node-edge-graph-and-subgraph: backlog
+  2-6-dot-text-pane-with-bidirectional-sync-and-parse-error-handling: backlog
+  2-7-file-operations-new-open-and-save: backlog
+  2-8-undo-and-redo: backlog
+  2-9-continuous-lint-canvas-markers-and-lint-gate-on-save: backlog
+  epic-2-retrospective: optional
+
+  epic-3: backlog
+  3-1-attractorclient-skeleton-connectionstore-wiring-and-health-check-hook: backlog
+  3-2-server-url-config-ui-and-connection-status-badge: backlog
+  epic-3-retrospective: optional
+
+  epic-4: backlog
+  4-1-run-button-lint-gated-pipeline-submission-and-monitor-mode-entry: backlog
+  4-2-live-execution-overlay-sse-event-stream-and-node-state-badges: backlog
+  4-3-node-inspection-panel-in-monitor-mode: backlog
+  4-4-session-history-past-runs-and-historical-inspection: backlog
+  4-5-edit-mode-return-after-session: backlog
+  epic-4-retrospective: optional
