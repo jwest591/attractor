@@ -1,6 +1,6 @@
 ---
 baseline_commit: 9bf4a543e88e80b782fd7eb24732a0b3be7dd50a
-status: review
+status: done
 ---
 
 # Story 2.1: App shell and split-pane layout
@@ -130,4 +130,4 @@ The right pane stacks DOT text area above property panel:
 
 ## Status
 
-review
+done
