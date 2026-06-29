@@ -1,27 +1,37 @@
 #!/usr/bin/env bash
 # next-story.sh -- Return the next incomplete story in a given epic.
 #
-# Usage: next-story.sh <epic_number> <sprint-status-file>
+# Usage: next-story.sh <epic_number> <sprint-status-file> [--dev]
 #
 # Scans development_status for keys of the form "<epic>-<N>" or
 # "<epic>-<N>-<rest>" (e.g. "1-3-zustand-stores" for epic 1), in document
 # order, and prints the key of the first entry whose status is not "done".
+#
+# With --dev: return the first story whose status is "backlog" or "ready-for-dev".
+# Without --dev: return the first story whose status is not "done".
 #
 # Epic-level keys ("epic-1") and retrospective keys ("epic-1-retrospective")
 # are skipped.
 #
 # Exit codes:
 #   0  story key printed to stdout
-#   1  no incomplete story found (all done or epic has no stories)
+#   1  no matching story found
 #   2  bad arguments
 
 set -u
 
 EPIC="${1:-}"
 SPRINT_FILE="${2:-}"
+DEV_FILTER="${3:-}"
 
 if [ -z "$EPIC" ] || [ -z "$SPRINT_FILE" ]; then
-    echo "usage: $0 <epic_number> <sprint-status-file>" >&2
+    echo "usage: $0 <epic_number> <sprint-status-file> [--dev]" >&2
+    exit 2
+fi
+
+if [ -n "$DEV_FILTER" ] && [ "$DEV_FILTER" != "--dev" ]; then
+    echo "error: unknown argument: $DEV_FILTER" >&2
+    echo "usage: $0 <epic_number> <sprint-status-file> [--dev]" >&2
     exit 2
 fi
 
@@ -40,7 +50,7 @@ fi
 # Story keys match: <epic>-<digit(s)> or <epic>-<digit(s)>-<anything>
 # Epic-level keys like "epic-1" and "epic-1-retrospective" are excluded by
 # requiring the prefix to start with a digit.
-result=$(awk -v epic="$EPIC" '
+result=$(awk -v epic="$EPIC" -v dev_filter="$DEV_FILTER" '
     {
         line = $0
         gsub(/^[[:space:]]+/, "", line)
@@ -66,9 +76,10 @@ result=$(awk -v epic="$EPIC" '
         # rest must start with a digit
         if (rest !~ /^[0-9]/) next
 
-        if (val != "done") {
-            print key
-            exit
+        if (dev_filter == "--dev") {
+            if (val == "backlog" || val == "ready-for-dev") { print key; exit }
+        } else {
+            if (val != "done") { print key; exit }
         }
     }
 ' "$SPRINT_FILE")
