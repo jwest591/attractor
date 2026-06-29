@@ -27,7 +27,7 @@
 # - Mark story 'done' after review passes; then move to next story
 
 generated: 2026-06-28
-last_updated: 2026-06-29  # 2-2-react-flow-canvas-with-custom-node-renderers review
+last_updated: 2026-06-29  # 2-3-shape-palette-and-node-edge-creation-and-deletion review
 project: attractor-webui
 project_key: WEBUI
 tracking_system: file-system
@@ -46,7 +46,7 @@ development_status:
   epic-2: in-progress
   2-1-app-shell-and-split-pane-layout: done
   2-2-react-flow-canvas-with-custom-node-renderers: review
-  2-3-shape-palette-and-node-edge-creation-and-deletion: backlog
+  2-3-shape-palette-and-node-edge-creation-and-deletion: review
   2-4-auto-layout-and-subgraph-support: backlog
   2-5-property-panels-node-edge-graph-and-subgraph: backlog
   2-6-dot-text-pane-with-bidirectional-sync-and-parse-error-handling: backlog
