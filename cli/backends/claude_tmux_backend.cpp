@@ -178,18 +178,29 @@ std::optional<std::string> extract_json_string(const std::string& json, const st
     -> std::chrono::seconds
 {
     try {
-        // Parse "H:MMam" / "H:MMpm" into a 24-hour hour + minute.
+        // Parse "H:MMam" / "H:MMpm" or "Ham" / "Hpm" into a 24-hour hour + minute.
         const auto colon = time_str.find(':');
+        int hour   = 0;
+        int minute = 0;
+        std::string suffix;
         if (colon == std::string::npos) {
-            return std::chrono::seconds{3600};
+            std::size_t hr_end = 0;
+            while (hr_end < time_str.size() && std::isdigit(static_cast<unsigned char>(time_str[hr_end]))) {
+                ++hr_end;
+            }
+            hour   = std::stoi(time_str.substr(0, hr_end));
+            minute = 0;
+            suffix = time_str.substr(hr_end);
         }
-        const int hour = std::stoi(time_str.substr(0, colon));
-        std::size_t min_end = colon + 1;
-        while (min_end < time_str.size() && std::isdigit(static_cast<unsigned char>(time_str[min_end]))) {
-            ++min_end;
+        else {
+            hour = std::stoi(time_str.substr(0, colon));
+            std::size_t min_end = colon + 1;
+            while (min_end < time_str.size() && std::isdigit(static_cast<unsigned char>(time_str[min_end]))) {
+                ++min_end;
+            }
+            minute = std::stoi(time_str.substr(colon + 1, min_end - colon - 1));
+            suffix = time_str.substr(min_end);
         }
-        const int minute  = std::stoi(time_str.substr(colon + 1, min_end - colon - 1));
-        const std::string suffix = time_str.substr(min_end);
 
         int hour24 = hour;
         if (suffix == "pm" || suffix == "PM") {

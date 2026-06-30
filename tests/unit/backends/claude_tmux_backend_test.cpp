@@ -314,6 +314,15 @@ SNITCH_TEST_CASE("[backend_utils] parse_rate_limit_reset returns nullopt for mes
     SNITCH_CHECK_FALSE(parse_rate_limit_reset("resets 8:30 (Europe/London)").has_value());
 }
 
+SNITCH_TEST_CASE("[backend_utils] parse_rate_limit_reset handles time without minutes component -- rate-limit-P-004")
+{
+    const auto result = parse_rate_limit_reset(
+        "You've hit your session limit resets 12am (Europe/London)");
+    SNITCH_REQUIRE(result.has_value());
+    SNITCH_CHECK(result->first == "12am");
+    SNITCH_CHECK(result->second == "Europe/London");
+}
+
 // ---------------------------------------------------------------------------
 // Rate limit recovery / exhaustion behavior tests
 //
