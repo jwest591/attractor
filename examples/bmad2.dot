@@ -1,0 +1,92 @@
+
+digraph BMAD_for_gui {
+
+    // ── Graph-level attributes ─────────────────────────────────────────────
+
+    graph [
+        goal             = "epic 2",
+        label            = "Complete a BMAD epic automatically",
+
+        // default_max_retries applies to every node that omits max_retries
+        default_max_retries = 1,
+
+        // default_fidelity: compact = structured bullet-point context summary
+        default_fidelity = "compact",
+
+        // model_stylesheet: CSS-like rules for LLM model/provider/effort.
+        //   *         → universal (lowest specificity)
+        //   .class    → class-name match (medium)
+        //   #node_id  → exact node ID (highest)
+        model_stylesheet = "
+            * { llm_model: claude-sonnet-4-6; llm_provider: anthropic; reasoning_effort: high; }
+            .fast    { llm_model: claude-haiku-4-5; reasoning_effort: low; }
+        "
+    ]
+
+    // Node and edge default blocks — apply to all subsequent declarations
+    // in this scope; individual nodes/edges may override.
+    node [shape=box, timeout="40m"]
+    edge [weight=0]
+
+
+    // ── Entry and exit ─────────────────────────────────────────────────────
+
+    start [shape=Mdiamond, label="Start"]
+    done  [shape=Msquare,  label="Done"]
+
+
+    // ── Routing ────────────────────────────────────────────
+
+    next_story [
+        shape=parallelogram,
+        label = "Get next story in epic",
+        type = "tool",
+        tool_command = "next-story.sh 2 /home/agent/bmad/polestar/attractor/_bmad-output/sprint-status.yaml --dev"
+    ]
+
+    get_status [
+        shape=parallelogram,
+        label = "Get story status",
+        type = "tool",
+        tool_command = "story-status.sh $context.story /home/agent/bmad/polestar/attractor/_bmad-output/sprint-status.yaml"
+    ]
+
+    // ── Implementation ────────────────────────────────────────────
+
+    dev [
+        label = "dev story",
+        prompt = "/bmad-dev-story current story - see context.story. There is no story file - see epics.md for story detail. You MUST update sprint status for the story once dev is complete. Commit changes when finished."
+    ]
+
+    review [
+        label = "review",
+        prompt = "/bmad-code-review current story - see context.story.  Save all user decisions to a code review file for the user to review offline - do not prompt the user. commit changes after a successful review."
+    ]
+
+    commit [
+        label = "commit changes",
+        prompt = "commit changes after review of last story"
+    ]
+
+    // ── Edges ──────────────────────────────────────────────────────────────
+
+    start -> next_story -> dev -> next_story
+
+    next_story -> done [condition="context.tool.output=UNKNOWN"]
+
+/*
+    next_story -> get_status
+    next_story -> done [condition="context.tool.output=UNKNOWN"]
+
+    get_status -> dev [condition="context.tool.output=backlog"]
+    get_status -> dev [condition="context.tool.output=ready_for_dev"]
+    dev -> get_status
+
+    get_status -> review [condition="context.tool.output=review"]
+    review -> next_story
+
+    get_status -> next_story [condition="context.tool.output=done"]
+    get_status -> done  // failure case
+    */
+
+}
